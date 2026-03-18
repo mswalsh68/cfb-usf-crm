@@ -48,7 +48,7 @@ app.get('/players', auth, rosterAccess, async (req, res) => {
       .input('PageSize',        sql.Int,      parseInt(pageSize))
       .output('TotalCount',     sql.Int)
       .execute('dbo.sp_GetPlayers');
-    return res.json({ success: true, data: r.recordsets[0], total: r.output.TotalCount, page: parseInt(page), pageSize: parseInt(pageSize) });
+    return res.json({ success: true, data: (r.recordsets as any)[0], total: r.output.TotalCount, page: parseInt(page), pageSize: parseInt(pageSize) });
   } catch (err) { console.error('[GET /players]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
@@ -61,7 +61,7 @@ app.get('/players/:id', auth, rosterAccess, async (req, res) => {
       .output('ErrorCode', sql.NVarChar(50))
       .execute('dbo.sp_GetPlayerById');
     if (r.output.ErrorCode) return res.status(404).json({ success: false, error: 'Player not found' });
-    return res.json({ success: true, data: { ...r.recordsets[0][0], stats: r.recordsets[1] } });
+    return res.json({ success: true, data: { ...(r.recordsets as any)[0][0], stats: (r.recordsets as any)[1] } });
   } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 

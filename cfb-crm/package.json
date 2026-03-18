@@ -5,15 +5,15 @@
     "apps/*",
     "packages/*"
   ],
-  "scripts": {
-    "mobile": "yarn workspace mobile start",
-    "global-api": "yarn workspace global-api dev",
-    "roster-api": "yarn workspace roster-api dev",
-    "alumni-api": "yarn workspace alumni-api dev",
-    "dev": "concurrently \"yarn global-api\" \"yarn roster-api\" \"yarn alumni-api\"",
-    "typecheck": "yarn workspaces run typecheck",
-    "lint": "yarn workspaces run lint"
-  },
+"scripts": {
+  "mobile": "npm run start --workspace=apps/mobile",
+  "global-api": "npm run dev --workspace=apps/global-api",
+  "roster-api": "npm run dev --workspace=apps/roster-api",
+  "alumni-api": "npm run dev --workspace=apps/alumni-api",
+  "dev": "concurrently \"npm run global-api\" \"npm run roster-api\" \"npm run alumni-api\"",
+  "typecheck": "npm run typecheck --workspaces --if-present",
+  "lint": "npm run lint --workspaces --if-present"
+},
   "devDependencies": {
     "concurrently": "^8.2.0",
     "typescript": "^5.3.3"

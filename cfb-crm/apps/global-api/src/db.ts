@@ -5,6 +5,7 @@ const config: sql.config = {
   database: process.env.GLOBAL_DB_NAME!,
   authentication: {
     type: 'azure-active-directory-default', // Uses managed identity in Azure
+    options: {},
   },
   options: {
     encrypt: true,          // Required for Azure SQL
