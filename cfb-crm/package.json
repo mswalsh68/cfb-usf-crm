@@ -1,0 +1,21 @@
+{
+  "name": "cfb-crm",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "mobile": "yarn workspace mobile start",
+    "global-api": "yarn workspace global-api dev",
+    "roster-api": "yarn workspace roster-api dev",
+    "alumni-api": "yarn workspace alumni-api dev",
+    "dev": "concurrently \"yarn global-api\" \"yarn roster-api\" \"yarn alumni-api\"",
+    "typecheck": "yarn workspaces run typecheck",
+    "lint": "yarn workspaces run lint"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "typescript": "^5.3.3"
+  }
+}

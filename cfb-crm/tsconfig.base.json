@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target":           "ES2020",
+    "module":           "commonjs",
+    "lib":              ["ES2020"],
+    "strict":           true,
+    "esModuleInterop":  true,
+    "skipLibCheck":     true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "outDir":           "./dist",
+    "rootDir":          "./src",
+    "declaration":      true,
+    "declarationMap":   true,
+    "sourceMap":        true,
+    "paths": {
+      "@cfb-crm/types": ["../../packages/types/index.ts"],
+      "@cfb-crm/auth":  ["../../packages/auth/index.ts"],
+      "@cfb-crm/ui":    ["../../packages/ui/index.ts"]
+    }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
