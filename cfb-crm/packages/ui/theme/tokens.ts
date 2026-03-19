@@ -5,30 +5,30 @@
 // ============================================================
 
 export const Colors = {
-  // ─── Brand ────────────────────────────────────────────────
-  primary:        '#1A3A6B',   // Deep navy
-  primaryLight:   '#2C5FA8',
-  primaryDark:    '#0F2244',
-  accent:         '#C8991A',   // Gold
-  accentLight:    '#E8B832',
-  accentDark:     '#9A7010',
+  // ─── USF Brand Colors ──────────────────────────────────────
+  primary:        '#006747',   // USF Green (official PMS 342)
+  primaryLight:   '#00855A',   // lighter green for hovers
+  primaryDark:    '#005432',   // Evergreen — darker accent
+  accent:         '#CFC493',   // USF Gold (official PMS 4535)
+  accentLight:    '#EDEBD1',   // Sand — lighter gold
+  accentDark:     '#A89C6A',   // darker gold for text on light bg
 
   // ─── App-specific tints ────────────────────────────────────
-  rosterTint:     '#1D6B3A',   // Green — Roster CRM
-  rosterLight:    '#D4EDDA',
-  alumniTint:     '#6B3A1D',   // Burnt orange — Alumni CRM
-  alumniLight:    '#F5DFD0',
-  adminTint:      '#1A3A6B',   // Same as primary
+  rosterTint:     '#006747',   // USF Green for Roster
+  rosterLight:    '#E0F0EA',   // light green surface
+  alumniTint:     '#005432',   // Evergreen for Alumni
+  alumniLight:    '#E0EDE8',   // light evergreen surface
+  adminTint:      '#006747',
 
   // ─── Status ────────────────────────────────────────────────
-  success:        '#1D8A4E',
-  successLight:   '#D4EDDA',
-  warning:        '#B97A10',
-  warningLight:   '#FFF3CD',
+  success:        '#006747',
+  successLight:   '#E0F0EA',
+  warning:        '#A89C6A',
+  warningLight:   '#F5F2E4',
   danger:         '#C0392B',
   dangerLight:    '#FDECEA',
-  info:           '#1565C0',
-  infoLight:      '#E3F0FF',
+  info:           '#005432',
+  infoLight:      '#E0EDE8',
 
   // ─── Neutral ───────────────────────────────────────────────
   white:          '#FFFFFF',
@@ -47,7 +47,7 @@ export const Colors = {
   // ─── Surfaces ──────────────────────────────────────────────
   background:     '#F5F6FA',
   surface:        '#FFFFFF',
-  surfaceAlt:     '#F0F2F8',
+  surfaceAlt:     '#F0F5F2',
   border:         '#E5E7EB',
   borderStrong:   '#D1D5DB',
 
@@ -56,7 +56,7 @@ export const Colors = {
   textSecondary:  '#4B5563',
   textTertiary:   '#9CA3AF',
   textInverse:    '#FFFFFF',
-  textLink:       '#2C5FA8',
+  textLink:       '#006747',
 } as const;
 
 export const Typography = {
