@@ -9,31 +9,39 @@ import { getDb, sql } from './db';
 
 const app  = express();
 const PORT = process.env.PORT || 3002;
-app.use(helmet()); app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(','), credentials: true }));
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 })); app.use(express.json({ limit: '10kb' }));
+
+app.use(helmet());
+app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(','), credentials: true }));
+app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
+app.use(express.json({ limit: '10kb' }));
+
 declare global { namespace Express { interface Request { user?: AuthTokenPayload } } }
 
 function auth(req: express.Request, res: express.Response, next: express.NextFunction) {
   const token = extractBearerToken(req.headers.authorization);
   if (!token) return res.status(401).json({ success: false, error: 'Authentication required' });
-  try { req.user = verifyAccessToken(token); next(); } catch { return res.status(401).json({ success: false, error: 'Invalid token' }); }
+  try { req.user = verifyAccessToken(token); next(); }
+  catch { return res.status(401).json({ success: false, error: 'Invalid token' }); }
 }
+
 function rosterAccess(req: express.Request, res: express.Response, next: express.NextFunction) {
   if (!req.user || !hasAppAccess(req.user, 'roster')) return res.status(403).json({ success: false, error: 'Roster access required' });
   next();
 }
+
 function rosterWrite(req: express.Request, res: express.Response, next: express.NextFunction) {
   const role = req.user ? getAppRole(req.user, 'roster') : null;
   if (!role || !['global_admin','app_admin','coach_staff'].includes(role)) return res.status(403).json({ success: false, error: 'Write access required' });
   next();
 }
+
 function rosterAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const role = req.user ? getAppRole(req.user, 'roster') : null;
   if (!role || !isAdmin(role)) return res.status(403).json({ success: false, error: 'Admin access required' });
   next();
 }
 
-// GET /players — sp_GetPlayers
+// GET /players
 app.get('/players', auth, rosterAccess, async (req, res) => {
   const { search, status, position, academicYear, recruitingClass, page = '1', pageSize = '50' } = req.query as Record<string, string>;
   try {
@@ -52,12 +60,12 @@ app.get('/players', auth, rosterAccess, async (req, res) => {
   } catch (err) { console.error('[GET /players]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
-// GET /players/:id — sp_GetPlayerById
+// GET /players/:id
 app.get('/players/:id', auth, rosterAccess, async (req, res) => {
   try {
     const db = await getDb();
     const r = await db.request()
-      .input('PlayerId',  sql.UniqueIdentifier, req.params.id)
+      .input('PlayerId',   sql.UniqueIdentifier, req.params.id)
       .output('ErrorCode', sql.NVarChar(50))
       .execute('dbo.sp_GetPlayerById');
     if (r.output.ErrorCode) return res.status(404).json({ success: false, error: 'Player not found' });
@@ -65,7 +73,7 @@ app.get('/players/:id', auth, rosterAccess, async (req, res) => {
   } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
-// POST /players — sp_CreatePlayer
+// POST /players
 app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
   const b = req.body;
   try {
@@ -93,14 +101,14 @@ app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
       .output('NewPlayerId',          sql.UniqueIdentifier)
       .output('ErrorCode',            sql.NVarChar(50))
       .execute('dbo.sp_CreatePlayer');
-    if (r.output.ErrorCode === 'JERSEY_NUMBER_IN_USE')          return res.status(409).json({ success: false, error: 'Jersey number already in use by an active player' });
+    if (r.output.ErrorCode === 'JERSEY_NUMBER_IN_USE')           return res.status(409).json({ success: false, error: 'Jersey number already in use' });
     if (r.output.ErrorCode === 'PLAYER_ALREADY_EXISTS_FOR_USER') return res.status(409).json({ success: false, error: 'Player already exists for this user' });
     if (r.output.ErrorCode) return res.status(400).json({ success: false, error: r.output.ErrorCode });
     return res.status(201).json({ success: true, data: { id: r.output.NewPlayerId } });
   } catch (err) { console.error('[POST /players]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
-// PATCH /players/:id — sp_UpdatePlayer
+// PATCH /players/:id
 app.patch('/players/:id', auth, rosterAccess, rosterWrite, async (req, res) => {
   const b = req.body;
   try {
@@ -127,7 +135,7 @@ app.patch('/players/:id', auth, rosterAccess, rosterWrite, async (req, res) => {
   } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
-// POST /players/graduate — sp_GraduatePlayer (distributed transaction)
+// POST /players/graduate
 app.post('/players/graduate', auth, rosterAccess, rosterAdmin, async (req, res) => {
   const { playerIds, graduationYear, graduationSemester, notes } = req.body;
   if (!playerIds?.length) return res.status(400).json({ success: false, error: 'playerIds array is required' });
@@ -155,16 +163,16 @@ app.post('/players/graduate', auth, rosterAccess, rosterAdmin, async (req, res) 
   } catch (err) { console.error('[POST /players/graduate]', err); return res.status(500).json({ success: false, error: 'Graduation failed. No changes were made.' }); }
 });
 
-// POST /players/:id/stats — sp_UpsertPlayerStats
+// POST /players/:id/stats
 app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res) => {
   const { seasonYear, gamesPlayed, statsJson } = req.body;
   try {
     const db = await getDb();
     const r = await db.request()
-      .input('PlayerId',    sql.UniqueIdentifier, req.params.id)
-      .input('SeasonYear',  sql.SmallInt,         seasonYear)
-      .input('GamesPlayed', sql.TinyInt,          gamesPlayed ?? null)
-      .input('StatsJson',   sql.NVarChar(sql.MAX),statsJson   ? JSON.stringify(statsJson) : null)
+      .input('PlayerId',    sql.UniqueIdentifier,  req.params.id)
+      .input('SeasonYear',  sql.SmallInt,          seasonYear)
+      .input('GamesPlayed', sql.TinyInt,           gamesPlayed ?? null)
+      .input('StatsJson',   sql.NVarChar(sql.MAX), statsJson ? JSON.stringify(statsJson) : null)
       .output('ErrorCode',  sql.NVarChar(50))
       .execute('dbo.sp_UpsertPlayerStats');
     if (r.output.ErrorCode) return res.status(400).json({ success: false, error: r.output.ErrorCode });
@@ -174,8 +182,13 @@ app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res)
 
 // Health
 app.get('/health', async (_req, res) => {
-  try { const db = await getDb(); await db.request().query('SELECT 1'); res.json({ success: true, service: 'roster-api', db: 'connected' }); }
-  catch { res.status(503).json({ success: false, service: 'roster-api', db: 'disconnected' }); }
+  try {
+    const db = await getDb();
+    await db.request().query('SELECT 1');
+    res.json({ success: true, service: 'roster-api', db: 'connected' });
+  } catch {
+    res.status(503).json({ success: false, service: 'roster-api', db: 'disconnected' });
+  }
 });
 
 app.listen(PORT, () => console.log(`[Roster API] Running on port ${PORT}`));

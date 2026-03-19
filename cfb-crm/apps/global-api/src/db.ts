@@ -8,9 +8,9 @@ const config: sql.config = {
     options: {},
   },
   options: {
-    encrypt: true,          // Required for Azure SQL
-    trustServerCertificate: false,
-    enableArithAbort: true,
+    encrypt:              process.env.GLOBAL_DB_ENCRYPT === 'true',
+    trustServerCertificate: process.env.GLOBAL_DB_TRUST_CERT === 'true',
+    enableArithAbort:     true,
   },
   pool: {
     max: 10,
