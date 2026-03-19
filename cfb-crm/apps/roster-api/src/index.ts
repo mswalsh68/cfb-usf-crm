@@ -180,6 +180,36 @@ app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res)
   } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
+// ─── POST /players/bulk ──────────────────────────────────────
+app.post('/players/bulk', auth, rosterAccess, rosterWrite, async (req, res) => {
+  const { players } = req.body;
+  if (!Array.isArray(players) || players.length === 0)
+    return res.status(400).json({ success: false, error: 'players array is required' });
+  if (players.length > 500)
+    return res.status(400).json({ success: false, error: 'Maximum 500 players per upload' });
+  try {
+    const db = await getDb();
+    const r = await db.request()
+      .input('PlayersJson',   sql.NVarChar(sql.MAX), JSON.stringify(players))
+      .input('CreatedBy',     sql.UniqueIdentifier,  req.user!.sub)
+      .output('SuccessCount', sql.Int)
+      .output('SkippedCount', sql.Int)
+      .output('ErrorJson',    sql.NVarChar(sql.MAX))
+      .execute('dbo.sp_BulkCreatePlayers');
+    return res.json({
+      success: true,
+      data: {
+        inserted: r.output.SuccessCount,
+        skipped:  r.output.SkippedCount,
+        errors:   JSON.parse(r.output.ErrorJson || '[]'),
+      },
+    });
+  } catch (err) {
+    console.error('[POST /players/bulk]', err);
+    return res.status(500).json({ success: false, error: 'Bulk insert failed' });
+  }
+});
+
 // Health
 app.get('/health', async (_req, res) => {
   try {

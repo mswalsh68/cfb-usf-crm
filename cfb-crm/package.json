@@ -2,9 +2,12 @@
   "name": "cfb-crm",
   "private": true,
   "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
+  "apps/global-api",
+  "apps/roster-api", 
+  "apps/alumni-api",
+  "apps/mobile",
+  "packages/*"
+],
 "scripts": {
   "mobile": "npm run start --workspace=apps/mobile",
   "global-api": "npm run dev --workspace=apps/global-api",

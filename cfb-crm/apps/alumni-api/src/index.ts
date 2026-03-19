@@ -159,16 +159,40 @@ app.get('/stats', auth, alumniAccess, async (_req, res) => {
   } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
-// Health
-app.get('/health', async (_req, res) => {
+
+app.post('/alumni/bulk', auth, alumniAccess, alumniWrite, async (req, res) => {
+  const { alumni } = req.body;
+  if (!Array.isArray(alumni) || alumni.length === 0)
+    return res.status(400).json({ success: false, error: 'alumni array is required' });
+  if (alumni.length > 500)
+    return res.status(400).json({ success: false, error: 'Maximum 500 alumni per upload' });
   try {
     const db = await getDb();
-    await db.request().query('SELECT 1');
-    res.json({ success: true, service: 'alumni-api', db: 'connected' });
-  } catch {
-    res.status(503).json({ success: false, service: 'alumni-api', db: 'disconnected' });
-  }
-});
+    const r = await db.request()
+    .input('AlumniJson',    sql.NVarChar(sql.MAX), JSON.stringify(alumni))
+      .input('CreatedBy',     sql.UniqueIdentifier,  req.user!.sub)
+      .output('SuccessCount', sql.Int)
+      .output('SkippedCount', sql.Int)
+      .output('ErrorJson',    sql.NVarChar(sql.MAX))
+      .execute('dbo.sp_BulkCreateAlumni');
+      return res.json({ success: true, data: { inserted: r.output.SuccessCount, skipped: r.output.SkippedCount, errors: JSON.parse(r.output.ErrorJson || '[]') } });
+    } catch (err) {
+      console.error('[POST /alumni/bulk]', err);
+      return res.status(500).json({ success: false, error: 'Bulk insert failed' });
+    }
+  });
+  
+  // Health
+  app.get('/health', async (_req, res) => {
+    try {
+      const db = await getDb();
+      await db.request().query('SELECT 1');
+      res.json({ success: true, service: 'alumni-api', db: 'connected' });
+    } catch {
+      res.status(503).json({ success: false, service: 'alumni-api', db: 'disconnected' });
+    }
+  });
 
+  
 app.listen(PORT, () => console.log(`[Alumni API] Running on port ${PORT}`));
 export default app;
