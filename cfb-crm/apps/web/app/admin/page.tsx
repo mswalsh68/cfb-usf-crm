@@ -139,7 +139,10 @@ export default function AdminPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>User Management</h1>
           <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>{users.length} total users</p>
         </div>
-        <Button label="+ New User" onClick={() => setShowCreate(true)} />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Button label="Team Settings" variant="outline" onClick={() => router.push('/admin/settings')} />
+          <Button label="+ New User" onClick={() => setShowCreate(true)} />
+        </div>
       </div>
 
       {/* Alerts */}

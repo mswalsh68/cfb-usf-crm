@@ -119,6 +119,33 @@ app.post('/alumni/:id/interactions', auth, alumniAccess, alumniWrite, async (req
   } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
+// ─── POST /alumni ─────────────────────────────────────────────
+app.post('/alumni',  auth, alumniAccess , async (req, res) => {
+  const b = req.body;
+  try {
+    const db = await getDb();
+    const result = await db.request()
+      .input('UserId',             sql.UniqueIdentifier, b.userId             ?? null)
+      .input('SourcePlayerId',     sql.UniqueIdentifier, b.sourcePlayerId     ?? null)
+      .input('FirstName',          sql.NVarChar,         b.firstName)
+      .input('LastName',           sql.NVarChar,         b.lastName)
+      .input('GraduationYear',     sql.SmallInt,         b.graduationYear)
+      .input('GraduationSemester', sql.NVarChar,         b.graduationSemester ?? 'spring')
+      .input('Position',           sql.NVarChar,         b.position           ?? null)
+      .input('RecruitingClass',    sql.SmallInt,         b.recruitingClass    ?? null)
+      .output('NewAlumniId',       sql.UniqueIdentifier)
+      .output('ErrorCode',         sql.NVarChar(50))
+      .execute('dbo.sp_CreateAlumniFromPlayer');
+    // ALUMNI_ALREADY_EXISTS is idempotent — treat as success
+    if (result.output.ErrorCode && result.output.ErrorCode !== 'ALUMNI_ALREADY_EXISTS')
+      return res.status(400).json({ success: false, error: result.output.ErrorCode });
+    return res.status(201).json({ success: true, data: { id: result.output.NewAlumniId } });
+  } catch (err) {
+    console.error('[POST /alumni]', err);
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
 // GET /campaigns
 app.get('/campaigns', auth, alumniAccess, async (_req, res) => {
   try {

@@ -6,6 +6,7 @@ import rateLimit from 'express-rate-limit';
 import { authRouter } from './routes/auth';
 import { usersRouter, permissionsRouter } from './routes/users';
 import { healthRouter } from './routes/health';
+import { configRouter } from './routes/config';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,6 +24,7 @@ app.use(globalLimiter);
 app.use(express.json({ limit: '10kb' }));
 
 app.use('/health',      healthRouter);
+app.use('/config',      configRouter);
 app.use('/auth',        authLimiter, authRouter);
 app.use('/users',       usersRouter);
 app.use('/permissions', permissionsRouter);

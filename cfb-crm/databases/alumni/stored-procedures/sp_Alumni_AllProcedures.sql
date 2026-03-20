@@ -19,24 +19,28 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreateAlumniFromPlayer
   @GraduationSemester NVARCHAR(10),
   @Position           NVARCHAR(10),
   @RecruitingClass    SMALLINT,
-  @ErrorCode          NVARCHAR(50) OUTPUT
+  @NewAlumniId        UNIQUEIDENTIFIER OUTPUT,
+  @ErrorCode          NVARCHAR(50)     OUTPUT
 AS
 BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
 
-  -- Idempotent: already exists is not an error
+  -- Idempotent: already exists — return the existing ID
   IF EXISTS (SELECT 1 FROM dbo.alumni WHERE source_player_id = @SourcePlayerId)
   BEGIN
+    SELECT @NewAlumniId = id FROM dbo.alumni WHERE source_player_id = @SourcePlayerId;
     SET @ErrorCode = 'ALUMNI_ALREADY_EXISTS';
     RETURN;
   END
 
+  SET @NewAlumniId = NEWID();
+
   INSERT INTO dbo.alumni
-    (user_id, source_player_id, first_name, last_name,
+    (id, user_id, source_player_id, first_name, last_name,
      graduation_year, graduation_semester, position, recruiting_class, status)
   VALUES
-    (@UserId, @SourcePlayerId, @FirstName, @LastName,
+    (@NewAlumniId, @UserId, @SourcePlayerId, @FirstName, @LastName,
      @GraduationYear, @GraduationSemester, @Position, @RecruitingClass, 'active');
 END;
 GO
