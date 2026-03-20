@@ -1,20 +1,20 @@
 // ============================================================
 // THEME — CSS Variable References
-// All values use CSS custom properties defined in globals.css.
-// To white-label: swap the CSS variables, not this file.
+// All values point to CSS custom properties in globals.css.
+// To white-label: update .env.local only. No code changes needed.
 // ============================================================
 
-export const USF = {
-  // ─── Primary ──────────────────────────────────────────────
-  green:        'var(--color-primary)',
-  evergreen:    'var(--color-primary-dark)',
-  greenLight:   'var(--color-primary-light)',
-  greenHover:   'var(--color-primary-hover)',
+export const theme = {
+  // ─── Primary brand ────────────────────────────────────────
+  primary:      'var(--color-primary)',
+  primaryDark:  'var(--color-primary-dark)',
+  primaryLight: 'var(--color-primary-light)',
+  primaryHover: 'var(--color-primary-hover)',
 
   // ─── Accent ───────────────────────────────────────────────
-  gold:         'var(--color-accent)',
-  goldDark:     'var(--color-accent-dark)',
-  sand:         'var(--color-accent-light)',
+  accent:       'var(--color-accent)',
+  accentDark:   'var(--color-accent-dark)',
+  accentLight:  'var(--color-accent-light)',
 
   // ─── Status ───────────────────────────────────────────────
   success:      'var(--color-success)',
@@ -27,37 +27,20 @@ export const USF = {
   infoLight:    'var(--color-info-light)',
 
   // ─── Neutrals ─────────────────────────────────────────────
-  white:    'var(--color-white)',
-  gray50:   'var(--color-gray-50)',
-  gray100:  'var(--color-gray-100)',
-  gray200:  'var(--color-gray-200)',
-  gray300:  'var(--color-gray-300)',
-  gray400:  'var(--color-gray-400)',
-  gray500:  'var(--color-gray-500)',
-  gray600:  'var(--color-gray-600)',
-  gray700:  'var(--color-gray-700)',
-  gray800:  'var(--color-gray-800)',
-  gray900:  'var(--color-gray-900)',
+  white:   'var(--color-white)',
+  gray50:  'var(--color-gray-50)',
+  gray100: 'var(--color-gray-100)',
+  gray200: 'var(--color-gray-200)',
+  gray300: 'var(--color-gray-300)',
+  gray400: 'var(--color-gray-400)',
+  gray500: 'var(--color-gray-500)',
+  gray600: 'var(--color-gray-600)',
+  gray700: 'var(--color-gray-700)',
+  gray800: 'var(--color-gray-800)',
+  gray900: 'var(--color-gray-900)',
 
   // ─── Surfaces ─────────────────────────────────────────────
   pageBg:     'var(--color-page-bg)',
   cardBg:     'var(--color-card-bg)',
   cardBorder: 'var(--color-card-border)',
-} as const;
-
-export const cardStyle = {
-  backgroundColor: USF.cardBg,
-  border:          `1px solid ${USF.cardBorder}`,
-  borderRadius:    'var(--radius-lg)',
-  boxShadow:       'var(--shadow-sm)',
-} as const;
-
-export const navStyle = {
-  backgroundColor: USF.green,
-} as const;
-
-export const primaryBtnStyle = {
-  backgroundColor: USF.green,
-  color:           USF.white,
-  borderRadius:    'var(--radius-md)',
 } as const;

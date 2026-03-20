@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { rosterApi } from '@/lib/api';
-import { USF } from '@/lib/theme';
+import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Alert, Card } from '@/components';
 
 const POSITION_OPTIONS = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'].map(p => ({ value: p, label: p }));
@@ -81,7 +81,7 @@ export default function PlayerDetailPage() {
 
   if (loading) return (
     <PageLayout currentPage="Roster">
-      <div style={{ textAlign: 'center', padding: 80, color: USF.gray400 }}>Loading...</div>
+      <div style={{ textAlign: 'center', padding: 80, color: theme.gray400 }}>Loading...</div>
     </PageLayout>
   );
 
@@ -116,21 +116,21 @@ export default function PlayerDetailPage() {
       <Card style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', gap: 20 }}>
           {/* Jersey bubble */}
-          <div style={{ width: 72, height: 72, borderRadius: 14, backgroundColor: USF.green, display: 'flex', alignItems: 'center', justifyContent: 'center', color: USF.white, fontSize: 26, fontWeight: 700, flexShrink: 0 }}>
+          <div style={{ width: 72, height: 72, borderRadius: 14, backgroundColor: theme.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.white, fontSize: 26, fontWeight: 700, flexShrink: 0 }}>
             {player.jerseyNumber ?? '—'}
           </div>
 
           {/* Name + meta */}
           <div style={{ flex: 1 }}>
-            <h1 style={{ fontSize: 26, fontWeight: 700, color: USF.gray900, margin: 0 }}>
+            <h1 style={{ fontSize: 26, fontWeight: 700, color: theme.gray900, margin: 0 }}>
               {player.firstName} {player.lastName}
             </h1>
             <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: USF.green }}>{player.position}</span>
-              <span style={{ color: USF.gray300 }}>·</span>
-              <span style={{ fontSize: 14, color: USF.gray600, textTransform: 'capitalize' }}>{player.academicYear ?? '—'}</span>
-              <span style={{ color: USF.gray300 }}>·</span>
-              <span style={{ fontSize: 14, color: USF.gray600 }}>Class of {player.recruitingClass}</span>
+              <span style={{ fontSize: 15, fontWeight: 700, color: theme.primary }}>{player.position}</span>
+              <span style={{ color: theme.gray300 }}>·</span>
+              <span style={{ fontSize: 14, color: theme.gray600, textTransform: 'capitalize' }}>{player.academicYear ?? '—'}</span>
+              <span style={{ color: theme.gray300 }}>·</span>
+              <span style={{ fontSize: 14, color: theme.gray600 }}>Class of {player.recruitingClass}</span>
               <Badge label={player.status} variant={STATUS_BADGE[player.status] ?? 'gray'} />
             </div>
           </div>
@@ -143,8 +143,8 @@ export default function PlayerDetailPage() {
               { label: 'GPA',    value: player.gpa != null ? player.gpa.toFixed(2) : '—' },
             ].map(({ label, value }) => (
               <div key={label} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 20, fontWeight: 700, color: USF.gray900 }}>{value}</div>
-                <div style={{ fontSize: 12, color: USF.gray400, marginTop: 2 }}>{label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: theme.gray900 }}>{value}</div>
+                <div style={{ fontSize: 12, color: theme.gray400, marginTop: 2 }}>{label}</div>
               </div>
             ))}
           </div>
@@ -155,7 +155,7 @@ export default function PlayerDetailPage() {
 
         {/* Academic */}
         <Card>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: USF.gray900, marginBottom: 16, marginTop: 0 }}>Academic</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: theme.gray900, marginBottom: 16, marginTop: 0 }}>Academic</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {editing ? (
               <>
@@ -177,7 +177,7 @@ export default function PlayerDetailPage() {
 
         {/* Contact */}
         <Card>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: USF.gray900, marginBottom: 16, marginTop: 0 }}>Contact</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: theme.gray900, marginBottom: 16, marginTop: 0 }}>Contact</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {editing ? (
               <>
@@ -197,7 +197,7 @@ export default function PlayerDetailPage() {
 
         {/* Status */}
         <Card>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: USF.gray900, marginBottom: 16, marginTop: 0 }}>Status & Details</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: theme.gray900, marginBottom: 16, marginTop: 0 }}>Status & Details</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {editing ? (
               <>
@@ -218,16 +218,16 @@ export default function PlayerDetailPage() {
 
         {/* Notes */}
         <Card>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: USF.gray900, marginBottom: 16, marginTop: 0 }}>Notes</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: theme.gray900, marginBottom: 16, marginTop: 0 }}>Notes</h2>
           {editing ? (
             <textarea
               value={form.notes ?? ''}
               onChange={(e) => setForm((p: any) => ({ ...p, notes: e.target.value }))}
               rows={6}
-              style={{ width: '100%', border: `1.5px solid ${USF.gray200}`, borderRadius: 10, padding: '10px 14px', fontSize: 14, color: USF.gray900, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+              style={{ width: '100%', border: `1.5px solid ${theme.gray200}`, borderRadius: 10, padding: '10px 14px', fontSize: 14, color: theme.gray900, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
             />
           ) : (
-            <p style={{ fontSize: 14, color: player.notes ? USF.gray700 : USF.gray400, lineHeight: 1.6, margin: 0 }}>
+            <p style={{ fontSize: 14, color: player.notes ? theme.gray700 : theme.gray400, lineHeight: 1.6, margin: 0 }}>
               {player.notes || 'No notes.'}
             </p>
           )}
@@ -238,20 +238,20 @@ export default function PlayerDetailPage() {
       {/* Season Stats */}
       {stats.length > 0 && (
         <Card style={{ marginTop: 20 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 600, color: USF.gray900, marginBottom: 16, marginTop: 0 }}>Season Stats</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: theme.gray900, marginBottom: 16, marginTop: 0 }}>Season Stats</h2>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
             <thead>
-              <tr style={{ borderBottom: `1px solid ${USF.gray200}` }}>
+              <tr style={{ borderBottom: `1px solid ${theme.gray200}` }}>
                 {['Season', 'Games Played'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600, color: USF.gray500, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                  <th key={h} style={{ textAlign: 'left', padding: '8px 0', fontWeight: 600, color: theme.gray500, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {stats.map((s: any) => (
-                <tr key={s.seasonYear} style={{ borderBottom: `1px solid ${USF.gray100}` }}>
-                  <td style={{ padding: '10px 0', color: USF.gray900, fontWeight: 500 }}>{s.seasonYear}</td>
-                  <td style={{ padding: '10px 0', color: USF.gray600 }}>{s.gamesPlayed ?? '—'}</td>
+                <tr key={s.seasonYear} style={{ borderBottom: `1px solid ${theme.gray100}` }}>
+                  <td style={{ padding: '10px 0', color: theme.gray900, fontWeight: 500 }}>{s.seasonYear}</td>
+                  <td style={{ padding: '10px 0', color: theme.gray600 }}>{s.gamesPlayed ?? '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -267,8 +267,8 @@ export default function PlayerDetailPage() {
 function InfoRow({ label, value, capitalize }: { label: string; value?: string | number | null; capitalize?: boolean }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center' }}>
-      <span style={{ width: 150, fontSize: 13, color: USF.gray400, fontWeight: 500, flexShrink: 0 }}>{label}</span>
-      <span style={{ fontSize: 14, color: USF.gray900, textTransform: capitalize ? 'capitalize' : 'none' }}>
+      <span style={{ width: 150, fontSize: 13, color: theme.gray400, fontWeight: 500, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontSize: 14, color: theme.gray900, textTransform: capitalize ? 'capitalize' : 'none' }}>
         {value ?? '—'}
       </span>
     </div>

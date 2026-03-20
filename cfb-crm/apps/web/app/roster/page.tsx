@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { hasAppAccess, isGlobalAdmin } from '@/lib/auth';
 import { rosterApi } from '@/lib/api';
-import { USF } from '@/lib/theme';
+import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Alert } from '@/components';
 
 const POSITIONS = ['All','QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'];
@@ -80,10 +80,14 @@ export default function RosterPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: USF.gray900, margin: 0 }}>Roster</h1>
-          <p style={{ fontSize: 14, color: USF.gray500, marginTop: 4 }}>{total} players</p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>Roster</h1>
+          <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>{total} players</p>
         </div>
-        <Button label="+ Add Player" onClick={() => router.push('/roster/add')} />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Button label="Upload Players" variant="outline" onClick={() => router.push('/roster/upload')} />
+          <Button label="Transfer to Alumni" variant="outline" onClick={() => router.push('/roster/transfer')} />
+          <Button label="+ Add Player" onClick={() => router.push('/roster/add')} />
+        </div>
       </div>
 
       {error && <Alert message={error} variant="error" onClose={() => setError('')} />}
@@ -113,12 +117,12 @@ export default function RosterPage() {
       </div>
 
       {/* Player table */}
-      <div style={{ backgroundColor: USF.white, borderRadius: 16, border: `1px solid ${USF.cardBorder}`, overflow: 'hidden' }}>
+      <div style={{ backgroundColor: theme.white, borderRadius: 16, border: `1px solid ${theme.cardBorder}`, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ backgroundColor: USF.gray50, borderBottom: `1px solid ${USF.gray200}` }}>
+            <tr style={{ backgroundColor: theme.gray50, borderBottom: `1px solid ${theme.gray200}` }}>
               {['#', 'Name', 'Position', 'Year', 'Status', 'GPA', ''].map((h) => (
-                <th key={h} style={{ textAlign: 'left', padding: '12px 20px', fontSize: 11, fontWeight: 600, color: USF.gray500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th key={h} style={{ textAlign: 'left', padding: '12px 20px', fontSize: 11, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   {h}
                 </th>
               ))}
@@ -126,46 +130,46 @@ export default function RosterPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 48, color: USF.gray400 }}>Loading...</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 48, color: theme.gray400 }}>Loading...</td></tr>
             ) : players.length === 0 ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 48, color: USF.gray400 }}>No players found</td></tr>
+              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 48, color: theme.gray400 }}>No players found</td></tr>
             ) : players.map((player, i) => (
               <tr
                 key={player.id}
                 onClick={() => router.push(`/roster/${player.id}`)}
                 style={{
-                  borderBottom: `1px solid ${USF.gray100}`,
-                  backgroundColor: i % 2 === 0 ? USF.white : USF.gray50,
+                  borderBottom: `1px solid ${theme.gray100}`,
+                  backgroundColor: i % 2 === 0 ? theme.white : theme.gray50,
                   cursor: 'pointer',
                   transition: 'background-color 0.1s',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.backgroundColor = USF.greenLight)}
-                onMouseLeave={e => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? USF.white : USF.gray50)}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = theme.primaryLight)}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = i % 2 === 0 ? theme.white : theme.gray50)}
               >
                 {/* Jersey */}
                 <td style={{ padding: '12px 20px' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: USF.green, display: 'flex', alignItems: 'center', justifyContent: 'center', color: USF.white, fontSize: 13, fontWeight: 700 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: theme.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.white, fontSize: 13, fontWeight: 700 }}>
                     {player.jerseyNumber ?? '—'}
                   </div>
                 </td>
 
                 {/* Name */}
                 <td style={{ padding: '12px 20px' }}>
-                  <span style={{ fontWeight: 600, fontSize: 14, color: USF.gray900 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: theme.gray900 }}>
                     {player.lastName}, {player.firstName}
                   </span>
                   {player.major && (
-                    <div style={{ fontSize: 12, color: USF.gray400, marginTop: 2 }}>{player.major}</div>
+                    <div style={{ fontSize: 12, color: theme.gray400, marginTop: 2 }}>{player.major}</div>
                   )}
                 </td>
 
                 {/* Position */}
                 <td style={{ padding: '12px 20px' }}>
-                  <span style={{ fontWeight: 700, fontSize: 13, color: USF.green }}>{player.position}</span>
+                  <span style={{ fontWeight: 700, fontSize: 13, color: theme.primary }}>{player.position}</span>
                 </td>
 
                 {/* Year */}
-                <td style={{ padding: '12px 20px', fontSize: 13, color: USF.gray600, textTransform: 'capitalize' }}>
+                <td style={{ padding: '12px 20px', fontSize: 13, color: theme.gray600, textTransform: 'capitalize' }}>
                   {player.academicYear ?? '—'}
                 </td>
 
@@ -175,12 +179,12 @@ export default function RosterPage() {
                 </td>
 
                 {/* GPA */}
-                <td style={{ padding: '12px 20px', fontSize: 13, color: USF.gray600 }}>
+                <td style={{ padding: '12px 20px', fontSize: 13, color: theme.gray600 }}>
                   {player.gpa != null ? player.gpa.toFixed(2) : '—'}
                 </td>
 
                 {/* Arrow */}
-                <td style={{ padding: '12px 20px', color: USF.gray300, fontSize: 18 }}>›</td>
+                <td style={{ padding: '12px 20px', color: theme.gray300, fontSize: 18 }}>›</td>
               </tr>
             ))}
           </tbody>
@@ -190,7 +194,7 @@ export default function RosterPage() {
       {/* Pagination */}
       {total > 50 && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16 }}>
-          <span style={{ fontSize: 13, color: USF.gray500 }}>
+          <span style={{ fontSize: 13, color: theme.gray500 }}>
             Showing {(page - 1) * 50 + 1}–{Math.min(page * 50, total)} of {total}
           </span>
           <div style={{ display: 'flex', gap: 8 }}>

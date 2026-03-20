@@ -4,7 +4,7 @@ import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import { rosterApi } from '@/lib/api';
-import { USF } from '@/lib/theme';
+import { theme } from '@/lib/theme';
 import { PageLayout, Button, Alert, Badge } from '@/components';
 
 // ─── Template columns ─────────────────────────────────────────
@@ -157,8 +157,8 @@ export default function RosterUploadPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: USF.gray900, margin: 0 }}>Bulk Player Upload</h1>
-          <p style={{ fontSize: 14, color: USF.gray500, marginTop: 4 }}>Upload an Excel file to import multiple players at once</p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>Bulk Player Upload</h1>
+          <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>Upload an Excel file to import multiple players at once</p>
         </div>
         <Button label="← Back to Roster" variant="outline" onClick={() => router.push('/roster')} />
       </div>
@@ -166,12 +166,12 @@ export default function RosterUploadPage() {
       {alert && <Alert message={alert.msg} variant={alert.type} onClose={() => setAlert(null)} />}
 
       {/* Step 1: Download template */}
-      <div style={{ backgroundColor: USF.white, borderRadius: 16, border: `1px solid ${USF.cardBorder}`, padding: 24, marginBottom: 20 }}>
+      <div style={{ backgroundColor: theme.white, borderRadius: 16, border: `1px solid ${theme.cardBorder}`, padding: 24, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: USF.greenLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>1️⃣</div>
+          <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: theme.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>1️⃣</div>
           <div style={{ flex: 1 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: USF.gray900, margin: 0 }}>Download the template</h2>
-            <p style={{ fontSize: 13, color: USF.gray500, marginTop: 4 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: theme.gray900, margin: 0 }}>Download the template</h2>
+            <p style={{ fontSize: 13, color: theme.gray500, marginTop: 4 }}>
               Fill in the Excel template with your player data. Required columns: firstName, lastName, position, recruitingClass.
             </p>
           </div>
@@ -179,16 +179,16 @@ export default function RosterUploadPage() {
         </div>
 
         {/* Column reference */}
-        <div style={{ marginTop: 16, padding: 16, backgroundColor: USF.gray50, borderRadius: 10 }}>
-          <p style={{ fontSize: 12, fontWeight: 600, color: USF.gray500, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Column reference</p>
+        <div style={{ marginTop: 16, padding: 16, backgroundColor: theme.gray50, borderRadius: 10 }}>
+          <p style={{ fontSize: 12, fontWeight: 600, color: theme.gray500, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Column reference</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {TEMPLATE_HEADERS.map((h) => (
-              <span key={h} style={{ fontSize: 12, padding: '3px 8px', backgroundColor: USF.white, border: `1px solid ${USF.gray200}`, borderRadius: 6, color: USF.gray700, fontFamily: 'monospace' }}>
+              <span key={h} style={{ fontSize: 12, padding: '3px 8px', backgroundColor: theme.white, border: `1px solid ${theme.gray200}`, borderRadius: 6, color: theme.gray700, fontFamily: 'monospace' }}>
                 {h}
               </span>
             ))}
           </div>
-          <p style={{ fontSize: 12, color: USF.gray400, marginTop: 8 }}>
+          <p style={{ fontSize: 12, color: theme.gray400, marginTop: 8 }}>
             Position must be one of: {VALID_POSITIONS.join(', ')} &nbsp;|&nbsp;
             Academic year: {VALID_YEARS.join(', ')}
           </p>
@@ -196,34 +196,34 @@ export default function RosterUploadPage() {
       </div>
 
       {/* Step 2: Upload file */}
-      <div style={{ backgroundColor: USF.white, borderRadius: 16, border: `1px solid ${USF.cardBorder}`, padding: 24, marginBottom: 20 }}>
+      <div style={{ backgroundColor: theme.white, borderRadius: 16, border: `1px solid ${theme.cardBorder}`, padding: 24, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: USF.greenLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>2️⃣</div>
+          <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: theme.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>2️⃣</div>
           <div>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: USF.gray900, margin: 0 }}>Upload your file</h2>
-            <p style={{ fontSize: 13, color: USF.gray500, marginTop: 4 }}>Select your filled-in Excel file (.xlsx)</p>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: theme.gray900, margin: 0 }}>Upload your file</h2>
+            <p style={{ fontSize: 13, color: theme.gray500, marginTop: 4 }}>Select your filled-in Excel file (.xlsx)</p>
           </div>
         </div>
 
         <div
           onClick={() => fileRef.current?.click()}
           style={{
-            border: `2px dashed ${USF.gray300}`,
+            border: `2px dashed ${theme.gray300}`,
             borderRadius: 12,
             padding: 40,
             textAlign: 'center',
             cursor: 'pointer',
             transition: 'border-color 0.15s',
-            backgroundColor: USF.gray50,
+            backgroundColor: theme.gray50,
           }}
-          onMouseEnter={e => (e.currentTarget.style.borderColor = USF.green)}
-          onMouseLeave={e => (e.currentTarget.style.borderColor = USF.gray300)}
+          onMouseEnter={e => (e.currentTarget.style.borderColor = theme.primary)}
+          onMouseLeave={e => (e.currentTarget.style.borderColor = theme.gray300)}
         >
           <div style={{ fontSize: 36, marginBottom: 12 }}>📊</div>
-          <p style={{ fontSize: 15, fontWeight: 600, color: USF.gray700, margin: 0 }}>
+          <p style={{ fontSize: 15, fontWeight: 600, color: theme.gray700, margin: 0 }}>
             {fileName ? fileName : 'Click to select your Excel file'}
           </p>
-          <p style={{ fontSize: 13, color: USF.gray400, marginTop: 6 }}>
+          <p style={{ fontSize: 13, color: theme.gray400, marginTop: 6 }}>
             .xlsx files only — max 500 players per upload
           </p>
           <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} style={{ display: 'none' }} />
@@ -232,13 +232,13 @@ export default function RosterUploadPage() {
 
       {/* Step 3: Review & upload */}
       {(preview.length > 0 || errors.length > 0) && (
-        <div style={{ backgroundColor: USF.white, borderRadius: 16, border: `1px solid ${USF.cardBorder}`, padding: 24, marginBottom: 20 }}>
+        <div style={{ backgroundColor: theme.white, borderRadius: 16, border: `1px solid ${theme.cardBorder}`, padding: 24, marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: USF.greenLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>3️⃣</div>
+              <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: theme.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>3️⃣</div>
               <div>
-                <h2 style={{ fontSize: 16, fontWeight: 600, color: USF.gray900, margin: 0 }}>Review & confirm</h2>
-                <p style={{ fontSize: 13, color: USF.gray500, marginTop: 4 }}>
+                <h2 style={{ fontSize: 16, fontWeight: 600, color: theme.gray900, margin: 0 }}>Review & confirm</h2>
+                <p style={{ fontSize: 13, color: theme.gray500, marginTop: 4 }}>
                   {preview.length} valid · {errors.length} with errors
                 </p>
               </div>
@@ -254,13 +254,13 @@ export default function RosterUploadPage() {
           {/* Error rows */}
           {errors.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <p style={{ fontSize: 12, fontWeight: 600, color: USF.danger, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: theme.danger, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
                 Rows with errors (will be skipped)
               </p>
               {errors.map((e) => (
-                <div key={e.rowNum} style={{ backgroundColor: USF.dangerLight, borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontSize: 13 }}>
-                  <span style={{ fontWeight: 600, color: USF.danger }}>Row {e.rowNum} — {e.name}: </span>
-                  <span style={{ color: USF.danger }}>{e.errors.join(', ')}</span>
+                <div key={e.rowNum} style={{ backgroundColor: theme.dangerLight, borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontSize: 13 }}>
+                  <span style={{ fontWeight: 600, color: theme.danger }}>Row {e.rowNum} — {e.name}: </span>
+                  <span style={{ color: theme.danger }}>{e.errors.join(', ')}</span>
                 </div>
               ))}
             </div>
@@ -271,28 +271,28 @@ export default function RosterUploadPage() {
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
-                  <tr style={{ backgroundColor: USF.gray50, borderBottom: `1px solid ${USF.gray200}` }}>
+                  <tr style={{ backgroundColor: theme.gray50, borderBottom: `1px solid ${theme.gray200}` }}>
                     {['Row', 'Name', 'Jersey', 'Position', 'Year', 'Class', 'Hometown'].map(h => (
-                      <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: USF.gray500, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
+                      <th key={h} style={{ textAlign: 'left', padding: '8px 12px', fontWeight: 600, color: theme.gray500, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {preview.slice(0, 20).map((p, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${USF.gray100}`, backgroundColor: i % 2 === 0 ? USF.white : USF.gray50 }}>
-                      <td style={{ padding: '7px 12px', color: USF.gray400 }}>{p._rowNum}</td>
-                      <td style={{ padding: '7px 12px', fontWeight: 500, color: USF.gray900 }}>{p.lastName}, {p.firstName}</td>
-                      <td style={{ padding: '7px 12px', color: USF.gray600 }}>{p.jerseyNumber ?? '—'}</td>
+                    <tr key={i} style={{ borderBottom: `1px solid ${theme.gray100}`, backgroundColor: i % 2 === 0 ? theme.white : theme.gray50 }}>
+                      <td style={{ padding: '7px 12px', color: theme.gray400 }}>{p._rowNum}</td>
+                      <td style={{ padding: '7px 12px', fontWeight: 500, color: theme.gray900 }}>{p.lastName}, {p.firstName}</td>
+                      <td style={{ padding: '7px 12px', color: theme.gray600 }}>{p.jerseyNumber ?? '—'}</td>
                       <td style={{ padding: '7px 12px' }}><Badge label={p.position} variant="green" /></td>
-                      <td style={{ padding: '7px 12px', color: USF.gray600, textTransform: 'capitalize' }}>{p.academicYear ?? '—'}</td>
-                      <td style={{ padding: '7px 12px', color: USF.gray600 }}>{p.recruitingClass}</td>
-                      <td style={{ padding: '7px 12px', color: USF.gray600 }}>{p.homeTown && p.homeState ? `${p.homeTown}, ${p.homeState}` : '—'}</td>
+                      <td style={{ padding: '7px 12px', color: theme.gray600, textTransform: 'capitalize' }}>{p.academicYear ?? '—'}</td>
+                      <td style={{ padding: '7px 12px', color: theme.gray600 }}>{p.recruitingClass}</td>
+                      <td style={{ padding: '7px 12px', color: theme.gray600 }}>{p.homeTown && p.homeState ? `${p.homeTown}, ${p.homeState}` : '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
               {preview.length > 20 && (
-                <p style={{ fontSize: 13, color: USF.gray400, textAlign: 'center', padding: 12 }}>
+                <p style={{ fontSize: 13, color: theme.gray400, textAlign: 'center', padding: 12 }}>
                   Showing first 20 of {preview.length} players
                 </p>
               )}
@@ -303,23 +303,23 @@ export default function RosterUploadPage() {
 
       {/* Result */}
       {result && (
-        <div style={{ backgroundColor: USF.white, borderRadius: 16, border: `1px solid ${USF.cardBorder}`, padding: 24 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 600, color: USF.gray900, marginBottom: 16 }}>Upload Result</h2>
+        <div style={{ backgroundColor: theme.white, borderRadius: 16, border: `1px solid ${theme.cardBorder}`, padding: 24 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 600, color: theme.gray900, marginBottom: 16 }}>Upload Result</h2>
           <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
-            <div style={{ flex: 1, backgroundColor: USF.greenLight, borderRadius: 12, padding: 16, textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 700, color: USF.green }}>{result.inserted}</div>
-              <div style={{ fontSize: 13, color: USF.evergreen }}>Players imported</div>
+            <div style={{ flex: 1, backgroundColor: theme.primaryLight, borderRadius: 12, padding: 16, textAlign: 'center' }}>
+              <div style={{ fontSize: 32, fontWeight: 700, color: theme.primary }}>{result.inserted}</div>
+              <div style={{ fontSize: 13, color: theme.primaryDark }}>Players imported</div>
             </div>
-            <div style={{ flex: 1, backgroundColor: USF.dangerLight, borderRadius: 12, padding: 16, textAlign: 'center' }}>
-              <div style={{ fontSize: 32, fontWeight: 700, color: USF.danger }}>{result.skipped}</div>
-              <div style={{ fontSize: 13, color: USF.danger }}>Skipped</div>
+            <div style={{ flex: 1, backgroundColor: theme.dangerLight, borderRadius: 12, padding: 16, textAlign: 'center' }}>
+              <div style={{ fontSize: 32, fontWeight: 700, color: theme.danger }}>{result.skipped}</div>
+              <div style={{ fontSize: 13, color: theme.danger }}>Skipped</div>
             </div>
           </div>
           {result.errors?.length > 0 && (
             <>
-              <p style={{ fontSize: 12, fontWeight: 600, color: USF.danger, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Skip reasons</p>
+              <p style={{ fontSize: 12, fontWeight: 600, color: theme.danger, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Skip reasons</p>
               {result.errors.map((e: any, i: number) => (
-                <div key={i} style={{ backgroundColor: USF.dangerLight, borderRadius: 8, padding: '6px 12px', marginBottom: 4, fontSize: 13, color: USF.danger }}>
+                <div key={i} style={{ backgroundColor: theme.dangerLight, borderRadius: 8, padding: '6px 12px', marginBottom: 4, fontSize: 13, color: theme.danger }}>
                   Row {e.rowNum}: {e.reason}
                 </div>
               ))}

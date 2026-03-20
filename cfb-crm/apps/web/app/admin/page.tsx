@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isGlobalAdmin } from '@/lib/auth';
 import { globalApi } from '@/lib/api';
-import { USF } from '@/lib/theme';
+import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Modal, Alert } from '@/components';
 
 const ROLE_OPTIONS = [
@@ -136,8 +136,8 @@ export default function AdminPage() {
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: USF.gray900, margin: 0 }}>User Management</h1>
-          <p style={{ fontSize: 14, color: USF.gray500, marginTop: 4 }}>{users.length} total users</p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>User Management</h1>
+          <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>{users.length} total users</p>
         </div>
         <Button label="+ New User" onClick={() => setShowCreate(true)} />
       </div>
@@ -152,12 +152,12 @@ export default function AdminPage() {
       </div>
 
       {/* User table */}
-      <div style={{ backgroundColor: USF.white, borderRadius: 16, border: `1px solid ${USF.cardBorder}`, overflow: 'hidden' }}>
+      <div style={{ backgroundColor: theme.white, borderRadius: 16, border: `1px solid ${theme.cardBorder}`, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr style={{ backgroundColor: USF.gray50, borderBottom: `1px solid ${USF.gray200}` }}>
+            <tr style={{ backgroundColor: theme.gray50, borderBottom: `1px solid ${theme.gray200}` }}>
               {['Name', 'Email', 'Role', 'Status', 'Actions'].map((h) => (
-                <th key={h} style={{ textAlign: 'left', padding: '12px 24px', fontSize: 11, fontWeight: 600, color: USF.gray500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th key={h} style={{ textAlign: 'left', padding: '12px 24px', fontSize: 11, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   {h}
                 </th>
               ))}
@@ -165,30 +165,30 @@ export default function AdminPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={5} style={{ textAlign: 'center', padding: 48, color: USF.gray400 }}>Loading...</td></tr>
+              <tr><td colSpan={5} style={{ textAlign: 'center', padding: 48, color: theme.gray400 }}>Loading...</td></tr>
             ) : users.length === 0 ? (
-              <tr><td colSpan={5} style={{ textAlign: 'center', padding: 48, color: USF.gray400 }}>No users found</td></tr>
+              <tr><td colSpan={5} style={{ textAlign: 'center', padding: 48, color: theme.gray400 }}>No users found</td></tr>
             ) : users.map((user, i) => (
               <React.Fragment key={user.id}>
                 <tr
                   onClick={() => selectUser(user)}
                   style={{
-                    borderBottom: `1px solid ${USF.gray100}`,
-                    backgroundColor: selectedUser?.id === user.id ? USF.greenLight : (i % 2 === 0 ? USF.white : USF.gray50),
+                    borderBottom: `1px solid ${theme.gray100}`,
+                    backgroundColor: selectedUser?.id === user.id ? theme.primaryLight : (i % 2 === 0 ? theme.white : theme.gray50),
                     cursor: 'pointer',
                   }}
                 >
                   <td style={{ padding: '14px 24px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 34, height: 34, borderRadius: '50%', backgroundColor: USF.green, display: 'flex', alignItems: 'center', justifyContent: 'center', color: USF.white, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
+                      <div style={{ width: 34, height: 34, borderRadius: '50%', backgroundColor: theme.primary, display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.white, fontSize: 13, fontWeight: 600, flexShrink: 0 }}>
                         {user.first_name?.[0]}{user.last_name?.[0]}
                       </div>
-                      <span style={{ fontWeight: 500, fontSize: 14, color: USF.gray900 }}>
+                      <span style={{ fontWeight: 500, fontSize: 14, color: theme.gray900 }}>
                         {user.first_name} {user.last_name}
                       </span>
                     </div>
                   </td>
-                  <td style={{ padding: '14px 24px', fontSize: 14, color: USF.gray600 }}>{user.email}</td>
+                  <td style={{ padding: '14px 24px', fontSize: 14, color: theme.gray600 }}>{user.email}</td>
                   <td style={{ padding: '14px 24px' }}>
                     <Badge label={user.globalRole?.replace('_', ' ')} variant={user.globalRole === 'global_admin' ? 'green' : 'gray'} />
                   </td>
@@ -206,17 +206,17 @@ export default function AdminPage() {
                 </tr>
 
                 {selectedUser?.id === user.id && (
-                  <tr style={{ backgroundColor: '#F0F9F5', borderBottom: `1px solid ${USF.gray200}` }}>
+                  <tr style={{ backgroundColor: '#F0F9F5', borderBottom: `1px solid ${theme.gray200}` }}>
                     <td colSpan={5} style={{ padding: '16px 24px' }}>
-                      <p style={{ fontSize: 11, fontWeight: 600, color: USF.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
+                      <p style={{ fontSize: 11, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12 }}>
                         App Permissions
                       </p>
                       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                         {(['roster', 'alumni', 'global-admin'] as const).map((app) => {
                           const existing = activePerms.find((p: any) => p.appName === app);
                           return (
-                            <div key={app} style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: USF.white, border: `1px solid ${USF.gray200}`, borderRadius: 10, padding: '8px 14px' }}>
-                              <span style={{ fontSize: 13, fontWeight: 500, color: USF.gray800, textTransform: 'capitalize' }}>{app}</span>
+                            <div key={app} style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: theme.white, border: `1px solid ${theme.gray200}`, borderRadius: 10, padding: '8px 14px' }}>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: theme.gray800, textTransform: 'capitalize' }}>{app}</span>
                               {existing ? (
                                 <>
                                   <Badge label={existing.role} variant="green" />
