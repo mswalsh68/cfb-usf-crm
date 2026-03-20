@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { hasAppAccess, isGlobalAdmin } from '@/lib/auth';
 import { alumniApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
+import { useTeamConfig } from '@/lib/teamConfig';
 import { PageLayout, Button, Input, Select, Badge, Alert } from '@/components';
 
 const STATUS_OPTIONS = [
@@ -13,11 +14,6 @@ const STATUS_OPTIONS = [
   { value: 'lostContact',  label: 'Lost Contact'  },
   { value: 'doNotContact', label: 'Do Not Contact'},
   { value: 'deceased',     label: 'Deceased'      },
-];
-
-const POSITION_OPTIONS = [
-  { value: '', label: 'All Positions' },
-  ...['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'].map(p => ({ value: p, label: p })),
 ];
 
 const statusBadge = (status: string): 'green' | 'warning' | 'danger' | 'gray' => {
@@ -29,6 +25,11 @@ const statusBadge = (status: string): 'green' | 'warning' | 'danger' | 'gray' =>
 
 export default function AlumniPage() {
   const router = useRouter();
+  const { positions, alumniLabel } = useTeamConfig();
+  const POSITION_OPTIONS = [
+    { value: '', label: 'All Positions' },
+    ...positions.map(p => ({ value: p, label: p })),
+  ];
   const [alumni,    setAlumni]    = useState<any[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
@@ -66,17 +67,17 @@ export default function AlumniPage() {
   };
 
   return (
-    <PageLayout currentPage="Alumni CRM">
+    <PageLayout currentPage={alumniLabel}>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>Alumni</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>{alumniLabel}</h1>
           <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>{total} records</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <Button label="Upload Alumni" variant="outline" onClick={() => router.push('/alumni/upload')} />
-          <Button label="+ Add Alumni"  onClick={() => router.push('/alumni/add')} />
+          <Button label={`Upload ${alumniLabel}`} variant="outline" onClick={() => router.push('/alumni/upload')} />
+          <Button label={`+ Add ${alumniLabel}`}  onClick={() => router.push('/alumni/add')} />
         </div>
       </div>
 

@@ -4,16 +4,9 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { rosterApi, globalApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
+import { useTeamConfig } from '@/lib/teamConfig';
 import { PageLayout, Button, Input, Select, Alert } from '@/components';
 
-const POSITION_OPTIONS = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'].map(p => ({ value: p, label: p }));
-const YEAR_OPTIONS = [
-  { value: 'freshman',  label: 'Freshman'  },
-  { value: 'sophomore', label: 'Sophomore' },
-  { value: 'junior',    label: 'Junior'    },
-  { value: 'senior',    label: 'Senior'    },
-  { value: 'graduate',  label: 'Graduate'  },
-];
 const ROLE_OPTIONS = [
   { value: 'player',   label: 'Player (roster access only)' },
   { value: 'readonly', label: 'Read Only'                   },
@@ -40,6 +33,9 @@ function SectionHeader({ title }: { title: string }) {
 
 export default function AddPlayerPage() {
   const router = useRouter();
+  const { positions, academicYears, rosterLabel, classLabel } = useTeamConfig();
+  const POSITION_OPTIONS = positions.map(p => ({ value: p, label: p }));
+  const YEAR_OPTIONS     = academicYears;
   const [saving, setSaving] = useState(false);
   const [alert,  setAlert]  = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
@@ -147,8 +143,8 @@ export default function AddPlayerPage() {
               <Select label="Position *" value={form.position} onChange={set('position')} options={POSITION_OPTIONS} />
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-              <Select label="Academic Year"    value={form.academicYear}    onChange={set('academicYear')}    options={YEAR_OPTIONS}   />
-              <Select label="Recruiting Class" value={form.recruitingClass} onChange={set('recruitingClass')} options={CLASS_OPTIONS}  />
+              <Select label="Academic Year" value={form.academicYear}    onChange={set('academicYear')}    options={YEAR_OPTIONS}  />
+              <Select label={classLabel}    value={form.recruitingClass} onChange={set('recruitingClass')} options={CLASS_OPTIONS} />
             </div>
           </div>
 
