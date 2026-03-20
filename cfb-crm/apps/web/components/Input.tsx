@@ -1,6 +1,6 @@
 'use client';
 
-import { USF } from '@/lib/theme';
+import React from 'react';
 
 interface InputProps {
   label?:       string;
@@ -21,8 +21,8 @@ export default function Input({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {label && (
-        <label style={{ fontSize: 13, fontWeight: 500, color: USF.gray600 }}>
-          {label}{required && <span style={{ color: USF.danger }}> *</span>}
+        <label style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-gray-600)' }}>
+          {label}{required && <span style={{ color: 'var(--color-danger)' }}> *</span>}
         </label>
       )}
       <input
@@ -33,19 +33,22 @@ export default function Input({
         required={required}
         disabled={disabled}
         style={{
-          border: `1.5px solid ${error ? USF.danger : USF.gray200}`,
-          borderRadius: 10,
-          padding: '10px 14px',
-          fontSize: 14,
-          color: USF.gray900,
-          backgroundColor: disabled ? USF.gray50 : USF.white,
-          outline: 'none',
-          width: '100%',
-          boxSizing: 'border-box',
+          border:          `1.5px solid ${error ? 'var(--color-danger)' : 'var(--color-gray-200)'}`,
+          borderRadius:    'var(--radius-sm)',
+          padding:         '10px 14px',
+          fontSize:        14,
+          color:           'var(--color-gray-900)',
+          backgroundColor: disabled ? 'var(--color-gray-50)' : 'var(--color-card-bg)',
+          outline:         'none',
+          width:           '100%',
+          boxSizing:       'border-box',
+          transition:      'border-color 0.15s',
         }}
+        onFocus={e => { if (!error) e.target.style.borderColor = 'var(--color-primary)'; }}
+        onBlur={e  => { if (!error) e.target.style.borderColor = 'var(--color-gray-200)'; }}
       />
-      {error  && <span style={{ fontSize: 12, color: USF.danger }}>{error}</span>}
-      {helper && !error && <span style={{ fontSize: 12, color: USF.gray400 }}>{helper}</span>}
+      {error  && <span style={{ fontSize: 12, color: 'var(--color-danger)' }}>{error}</span>}
+      {helper && !error && <span style={{ fontSize: 12, color: 'var(--color-gray-400)' }}>{helper}</span>}
     </div>
   );
 }

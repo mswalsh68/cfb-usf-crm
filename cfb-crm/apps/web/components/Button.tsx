@@ -1,7 +1,5 @@
 'use client';
 
-import { USF } from '@/lib/theme';
-
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
 type Size    = 'sm' | 'md' | 'lg';
 
@@ -16,43 +14,44 @@ interface ButtonProps {
   fullWidth?: boolean;
 }
 
-const variantStyles: Record<Variant, { backgroundColor: string; color: string; border?: string }> = {
-  primary:   { backgroundColor: USF.green,       color: USF.white },
-  secondary: { backgroundColor: USF.gold,        color: USF.green },
-  danger:    { backgroundColor: USF.dangerLight,  color: USF.danger },
-  ghost:     { backgroundColor: 'transparent',   color: USF.green },
-  outline:   { backgroundColor: 'transparent',   color: USF.green, border: `1.5px solid ${USF.green}` },
+const variantStyles: Record<Variant, React.CSSProperties> = {
+  primary:   { backgroundColor: 'var(--color-primary)',       color: '#fff', border: 'none' },
+  secondary: { backgroundColor: 'var(--color-accent)',        color: 'var(--color-primary)', border: 'none' },
+  danger:    { backgroundColor: 'var(--color-danger-light)',  color: 'var(--color-danger)',  border: 'none' },
+  ghost:     { backgroundColor: 'transparent',                color: 'var(--color-primary)', border: 'none' },
+  outline:   { backgroundColor: 'transparent',                color: 'var(--color-primary)', border: '1.5px solid var(--color-primary)' },
 };
 
-const sizeStyles: Record<Size, { padding: string; fontSize: string; borderRadius: string }> = {
-  sm: { padding: '6px 14px',  fontSize: '12px', borderRadius: '8px'  },
-  md: { padding: '10px 20px', fontSize: '14px', borderRadius: '10px' },
-  lg: { padding: '12px 24px', fontSize: '15px', borderRadius: '12px' },
+const sizeStyles: Record<Size, React.CSSProperties> = {
+  sm: { padding: '5px 12px',  fontSize: 12, borderRadius: 'var(--radius-sm)' },
+  md: { padding: '9px 18px',  fontSize: 14, borderRadius: 'var(--radius-md)' },
+  lg: { padding: '12px 24px', fontSize: 15, borderRadius: 'var(--radius-md)' },
 };
+
+import React from 'react';
 
 export default function Button({
   label, onClick, type = 'button', variant = 'primary',
   size = 'md', disabled = false, loading = false, fullWidth = false,
 }: ButtonProps) {
-  const vStyle = variantStyles[variant];
-  const sStyle = sizeStyles[size];
-
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
       style={{
-        ...vStyle,
-        ...sStyle,
-        fontWeight: 600,
-        cursor: disabled || loading ? 'not-allowed' : 'pointer',
-        opacity: disabled || loading ? 0.5 : 1,
-        width: fullWidth ? '100%' : undefined,
-        transition: 'opacity 0.15s',
-        display: 'inline-flex',
-        alignItems: 'center',
+        ...variantStyles[variant],
+        ...sizeStyles[size],
+        fontWeight:     600,
+        cursor:         disabled || loading ? 'not-allowed' : 'pointer',
+        opacity:        disabled || loading ? 0.5 : 1,
+        width:          fullWidth ? '100%' : undefined,
+        transition:     'opacity 0.15s, background-color 0.15s',
+        display:        'inline-flex',
+        alignItems:     'center',
         justifyContent: 'center',
+        whiteSpace:     'nowrap',
+        boxSizing:      'border-box',
       }}
     >
       {loading ? 'Loading...' : label}

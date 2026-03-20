@@ -1,6 +1,6 @@
 'use client';
 
-import { USF } from '@/lib/theme';
+import React from 'react';
 
 type BadgeVariant = 'green' | 'gold' | 'danger' | 'warning' | 'gray';
 
@@ -9,24 +9,23 @@ interface BadgeProps {
   variant?: BadgeVariant;
 }
 
-const badgeStyles: Record<BadgeVariant, { backgroundColor: string; color: string }> = {
-  green:   { backgroundColor: USF.greenLight, color: USF.evergreen },
-  gold:    { backgroundColor: USF.sand,       color: USF.goldDark  },
-  danger:  { backgroundColor: USF.dangerLight, color: USF.danger   },
-  warning: { backgroundColor: USF.sandLight,  color: USF.goldDark  },
-  gray:    { backgroundColor: USF.gray100,    color: USF.gray600   },
+const badgeStyles: Record<BadgeVariant, React.CSSProperties> = {
+  green:   { backgroundColor: 'var(--color-primary-light)', color: 'var(--color-primary-dark)' },
+  gold:    { backgroundColor: 'var(--color-accent-light)',  color: 'var(--color-accent-dark)'  },
+  danger:  { backgroundColor: 'var(--color-danger-light)',  color: 'var(--color-danger)'       },
+  warning: { backgroundColor: 'var(--color-warning-light)', color: 'var(--color-warning)'      },
+  gray:    { backgroundColor: 'var(--color-gray-100)',      color: 'var(--color-gray-600)'     },
 };
 
 export default function Badge({ label, variant = 'gray' }: BadgeProps) {
-  const style = badgeStyles[variant];
   return (
     <span style={{
-      ...style,
+      ...badgeStyles[variant],
       display:       'inline-block',
       padding:       '3px 10px',
-      borderRadius:  9999,
+      borderRadius:  'var(--radius-full)',
       fontSize:      11,
-      fontWeight:    600,
+      fontWeight:    700,
       textTransform: 'uppercase',
       letterSpacing: '0.4px',
       whiteSpace:    'nowrap',

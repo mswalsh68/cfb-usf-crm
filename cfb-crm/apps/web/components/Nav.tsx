@@ -2,11 +2,13 @@
 
 import { useRouter } from 'next/navigation';
 import { clearTokens } from '@/lib/auth';
-import { USF } from '@/lib/theme';
 
 interface NavProps {
   currentPage?: string;
 }
+
+const teamAbbr = process.env.NEXT_PUBLIC_TEAM_ABBR ?? 'USF';
+const teamName = process.env.NEXT_PUBLIC_TEAM_NAME ?? 'Bulls Team Portal';
 
 export default function Nav({ currentPage }: NavProps) {
   const router = useRouter();
@@ -17,25 +19,68 @@ export default function Nav({ currentPage }: NavProps) {
   };
 
   return (
-    <nav className="px-6 py-4 flex items-center justify-between" style={{ backgroundColor: USF.green }}>
-      <div className="flex items-center gap-3">
-        <button onClick={() => router.push('/dashboard')} className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ backgroundColor: USF.gold }}>
-            <span className="text-xs font-bold" style={{ color: USF.green }}>USF</span>
+    <nav style={{
+      backgroundColor: 'var(--color-primary)',
+      padding:         '0 24px',
+      height:          56,
+      display:         'flex',
+      alignItems:      'center',
+      justifyContent:  'space-between',
+      position:        'sticky',
+      top:             0,
+      zIndex:          100,
+      boxShadow:       '0 1px 4px rgba(0,0,0,0.15)',
+    }}>
+      {/* Left: logo + breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          onClick={() => router.push('/dashboard')}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          {/* Team logo badge */}
+          <div style={{
+            width:           36,
+            height:          36,
+            borderRadius:    8,
+            backgroundColor: 'var(--color-accent)',
+            display:         'flex',
+            alignItems:      'center',
+            justifyContent:  'center',
+            flexShrink:      0,
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)' }}>
+              {teamAbbr}
+            </span>
           </div>
-          <span className="font-semibold text-lg text-white">Bulls Team Portal</span>
+          <span style={{ fontSize: 16, fontWeight: 600, color: '#ffffff' }}>{teamName}</span>
         </button>
+
         {currentPage && (
           <>
-            <span className="text-white/40 mx-1">/</span>
-            <span className="text-white font-medium">{currentPage}</span>
+            <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: 18 }}>/</span>
+            <span style={{ fontSize: 15, fontWeight: 500, color: 'rgba(255,255,255,0.85)' }}>
+              {currentPage}
+            </span>
           </>
         )}
       </div>
+
+      {/* Right: sign out */}
       <button
         onClick={handleLogout}
-        className="px-4 py-1.5 rounded-lg text-sm text-white transition-colors"
-        style={{ backgroundColor: 'rgba(255,255,255,0.15)' }}
+        style={{
+          backgroundColor: 'rgba(255,255,255,0.15)',
+          color:           '#ffffff',
+          border:          'none',
+          borderRadius:    8,
+          padding:         '6px 16px',
+          fontSize:        13,
+          fontWeight:      500,
+          cursor:          'pointer',
+          transition:      'background-color 0.15s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.25)')}
+        onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.15)')}
       >
         Sign Out
       </button>

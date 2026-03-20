@@ -1,6 +1,6 @@
 'use client';
 
-import { USF } from '@/lib/theme';
+import React from 'react';
 
 interface AlertProps {
   message:  string;
@@ -8,29 +8,27 @@ interface AlertProps {
   onClose?: () => void;
 }
 
-const alertStyles = {
-  success: { backgroundColor: USF.greenLight, color: USF.evergreen, borderColor: '#b7dfc9' },
-  error:   { backgroundColor: USF.dangerLight, color: USF.danger,   borderColor: '#f5c6c6' },
-  warning: { backgroundColor: USF.sandLight,  color: USF.goldDark,  borderColor: '#e8dfa8' },
+const alertStyles: Record<string, React.CSSProperties> = {
+  success: { backgroundColor: 'var(--color-success-light)', color: 'var(--color-primary-dark)',  border: '1px solid var(--color-primary-light)' },
+  error:   { backgroundColor: 'var(--color-danger-light)',  color: 'var(--color-danger)',        border: '1px solid var(--color-danger-light)'  },
+  warning: { backgroundColor: 'var(--color-warning-light)', color: 'var(--color-warning)',       border: '1px solid var(--color-accent-light)'  },
 };
 
 export default function Alert({ message, variant, onClose }: AlertProps) {
-  const style = alertStyles[variant];
   return (
     <div style={{
-      ...style,
-      border:       `1px solid ${style.borderColor}`,
-      borderRadius: 12,
-      padding:      '12px 16px',
-      fontSize:     14,
-      display:      'flex',
-      alignItems:   'center',
+      ...alertStyles[variant],
+      borderRadius:   'var(--radius-md)',
+      padding:        '12px 16px',
+      fontSize:       14,
+      display:        'flex',
+      alignItems:     'center',
       justifyContent: 'space-between',
-      marginBottom: 16,
+      marginBottom:   16,
     }}>
       <span>{message}</span>
       {onClose && (
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: style.color, fontWeight: 700, fontSize: 18, lineHeight: 1, marginLeft: 12 }}>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 18, lineHeight: 1, marginLeft: 12, color: 'inherit' }}>
           ×
         </button>
       )}

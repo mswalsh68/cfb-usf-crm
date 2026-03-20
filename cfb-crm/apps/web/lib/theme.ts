@@ -1,74 +1,63 @@
 // ============================================================
-// USF BULLS — Official Brand Colors
-// Source: usf.edu/ucm/marketing/colors.aspx
+// THEME — CSS Variable References
+// All values use CSS custom properties defined in globals.css.
+// To white-label: swap the CSS variables, not this file.
 // ============================================================
 
 export const USF = {
-  // ─── Primary Brand ────────────────────────────────────────
-  green:       '#006747',   // USF Green  — PMS 342
-  gold:        '#CFC493',   // USF Gold   — PMS 4535
-  evergreen:   '#005432',   // Evergreen  — PMS 3435 (darker green)
-  sand:        '#EDEBD1',   // Sand       — PMS 614  (lighter gold)
-  white:       '#FFFFFF',
+  // ─── Primary ──────────────────────────────────────────────
+  green:        'var(--color-primary)',
+  evergreen:    'var(--color-primary-dark)',
+  greenLight:   'var(--color-primary-light)',
+  greenHover:   'var(--color-primary-hover)',
 
   // ─── Accent ───────────────────────────────────────────────
-  goldDark:    '#A89C6A',   // darker gold for text on light bg
-  greenLight:  '#E0F0EA',   // light green surface / badge bg
-  sandLight:   '#F5F2E4',   // light sand surface
+  gold:         'var(--color-accent)',
+  goldDark:     'var(--color-accent-dark)',
+  sand:         'var(--color-accent-light)',
 
-  // ─── UI Semantic ──────────────────────────────────────────
-  danger:      '#C0392B',
-  dangerLight: '#FDECEA',
-  warning:     '#A89C6A',
-  warningLight:'#F5F2E4',
+  // ─── Status ───────────────────────────────────────────────
+  success:      'var(--color-success)',
+  successLight: 'var(--color-success-light)',
+  warning:      'var(--color-warning)',
+  warningLight: 'var(--color-warning-light)',
+  danger:       'var(--color-danger)',
+  dangerLight:  'var(--color-danger-light)',
+  info:         'var(--color-info)',
+  infoLight:    'var(--color-info-light)',
 
-  // ─── Neutral ──────────────────────────────────────────────
-  gray50:      '#F9FAFB',
-  gray100:     '#F3F4F6',
-  gray200:     '#E5E7EB',
-  gray300:     '#D1D5DB',
-  gray400:     '#9CA3AF',
-  gray500:     '#6B7280',
-  gray600:     '#4B5563',
-  gray700:     '#374151',
-  gray800:     '#1F2937',
-  gray900:     '#111827',
+  // ─── Neutrals ─────────────────────────────────────────────
+  white:    'var(--color-white)',
+  gray50:   'var(--color-gray-50)',
+  gray100:  'var(--color-gray-100)',
+  gray200:  'var(--color-gray-200)',
+  gray300:  'var(--color-gray-300)',
+  gray400:  'var(--color-gray-400)',
+  gray500:  'var(--color-gray-500)',
+  gray600:  'var(--color-gray-600)',
+  gray700:  'var(--color-gray-700)',
+  gray800:  'var(--color-gray-800)',
+  gray900:  'var(--color-gray-900)',
 
   // ─── Surfaces ─────────────────────────────────────────────
-  pageBg:      '#F5F6FA',
-  cardBg:      '#FFFFFF',
-  cardBorder:  '#E5E7EB',
-} as const;
-
-// ─── Reusable style objects ───────────────────────────────────
-
-export const navStyle = {
-  backgroundColor: USF.green,
-} as const;
-
-export const primaryButtonStyle = {
-  backgroundColor: USF.green,
-  color:           USF.white,
-} as const;
-
-export const secondaryButtonStyle = {
-  backgroundColor: USF.gold,
-  color:           USF.green,
-} as const;
-
-export const badgeGreenStyle = {
-  backgroundColor: USF.greenLight,
-  color:           USF.evergreen,
-} as const;
-
-export const badgeGoldStyle = {
-  backgroundColor: USF.sand,
-  color:           USF.goldDark,
+  pageBg:     'var(--color-page-bg)',
+  cardBg:     'var(--color-card-bg)',
+  cardBorder: 'var(--color-card-border)',
 } as const;
 
 export const cardStyle = {
   backgroundColor: USF.cardBg,
   border:          `1px solid ${USF.cardBorder}`,
-  borderRadius:    16,
-  boxShadow:       '0 1px 3px rgba(0,0,0,0.06)',
+  borderRadius:    'var(--radius-lg)',
+  boxShadow:       'var(--shadow-sm)',
+} as const;
+
+export const navStyle = {
+  backgroundColor: USF.green,
+} as const;
+
+export const primaryBtnStyle = {
+  backgroundColor: USF.green,
+  color:           USF.white,
+  borderRadius:    'var(--radius-md)',
 } as const;
