@@ -1,8 +1,7 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { hasAppAccess, isGlobalAdmin } from '@/lib/auth';
 import * as XLSX from 'xlsx';
 import { rosterApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
@@ -28,10 +27,6 @@ const VALID_YEARS     = ['freshman','sophomore','junior','senior','graduate'];
 export default function RosterUploadPage() {
   const router  = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!hasAppAccess('roster') && !isGlobalAdmin()) { router.push('/dashboard'); }
-  }, []);
 
   const [preview,  setPreview]  = useState<any[]>([]);
   const [errors,   setErrors]   = useState<any[]>([]);

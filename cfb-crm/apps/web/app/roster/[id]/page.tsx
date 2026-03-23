@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { hasAppAccess, isGlobalAdmin } from '@/lib/auth';
 import { rosterApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Alert, Card } from '@/components';
@@ -38,10 +37,7 @@ export default function PlayerDetailPage() {
   const [alert,   setAlert]   = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [form,    setForm]    = useState<any>({});
 
-  useEffect(() => {
-    if (!hasAppAccess('roster') && !isGlobalAdmin()) { router.push('/dashboard'); return; }
-    if (id) fetchPlayer();
-  }, [id]);
+  useEffect(() => { if (id) fetchPlayer(); }, [id]);
 
   const fetchPlayer = async () => {
     try {

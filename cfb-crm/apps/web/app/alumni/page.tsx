@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { hasAppAccess, isGlobalAdmin } from '@/lib/auth';
 import { alumniApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Alert } from '@/components';
@@ -40,10 +39,6 @@ export default function AlumniPage() {
   const [page,      setPage]      = useState(1);
 
   useEffect(() => {
-    if (!hasAppAccess('alumni') && !isGlobalAdmin()) {
-      router.push('/dashboard');
-      return;
-    }
     fetchAlumni();
   }, [search, status, position, isDonor, page]);
 
