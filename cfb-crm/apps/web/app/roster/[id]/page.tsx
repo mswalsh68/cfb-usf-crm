@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { rosterApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
+import { getUser, isGlobalAdmin } from '@/lib/auth';
 import { PageLayout, Button, Input, Select, Badge, Alert, Card } from '@/components';
 
 const POSITION_OPTIONS = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'].map(p => ({ value: p, label: p }));
@@ -85,6 +86,8 @@ export default function PlayerDetailPage() {
     </PageLayout>
   );
 
+  const canEdit = isGlobalAdmin() || getUser()?.userId === player?.userId;
+
   if (!player) return (
     <PageLayout currentPage="Roster">
       <Alert message="Player not found" variant="error" />
@@ -99,14 +102,14 @@ export default function PlayerDetailPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <Button label="← Back to Roster" variant="outline" onClick={() => router.push('/roster')} />
         <div style={{ display: 'flex', gap: 10 }}>
-          {editing ? (
+          {canEdit && (editing ? (
             <>
               <Button label="Cancel" variant="ghost" onClick={() => { setEditing(false); setForm(player); }} />
               <Button label="Save Changes" loading={saving} onClick={handleSave} />
             </>
           ) : (
             <Button label="Edit Player" variant="outline" onClick={() => setEditing(true)} />
-          )}
+          ))}
         </div>
       </div>
 

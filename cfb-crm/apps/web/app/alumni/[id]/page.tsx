@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { alumniApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
+import { getUser, isGlobalAdmin } from '@/lib/auth';
 import { useTeamConfig } from '@/lib/teamConfig';
 import { PageLayout, Button, Input, Select, Badge, Alert, Modal, Card } from '@/components';
 
@@ -187,7 +188,9 @@ export default function AlumniDetailPage() {
             </div>
           </div>
         </div>
-        <Button label="Edit Profile" onClick={() => setShowEdit(true)} />
+        {(isGlobalAdmin() || getUser()?.userId === alumni.userId) && (
+          <Button label="Edit Profile" onClick={() => setShowEdit(true)} />
+        )}
       </div>
 
       {error   && <Alert message={error}   variant="error"   onClose={() => setError('')}   />}

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { isGlobalAdmin } from '@/lib/auth';
 import { rosterApi, globalApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { useTeamConfig } from '@/lib/teamConfig';
@@ -34,6 +35,10 @@ function SectionHeader({ title }: { title: string }) {
 export default function AddPlayerPage() {
   const router = useRouter();
   const { positions, academicYears, rosterLabel, classLabel } = useTeamConfig();
+
+  useEffect(() => {
+    if (!isGlobalAdmin()) router.push('/unauthorized');
+  }, []);
   const POSITION_OPTIONS = positions.map(p => ({ value: p, label: p }));
   const YEAR_OPTIONS     = academicYears;
   const [saving, setSaving] = useState(false);
