@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isGlobalAdmin } from '@/lib/auth';
 import { rosterApi, globalApi } from '@/lib/api';
@@ -32,21 +32,54 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
+function InviteBanner({ inviteUrl, onDone }: { inviteUrl: string; onDone: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div style={{ backgroundColor: theme.cardBg, border: `2px solid ${theme.primary}`, borderRadius: 'var(--radius-lg)', padding: 28, textAlign: 'center' }}>
+      <div style={{ fontSize: 36, marginBottom: 12 }}>🎉</div>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: theme.gray900, margin: '0 0 8px' }}>Player added to roster!</h2>
+      <p style={{ fontSize: 14, color: theme.gray600, marginBottom: 20 }}>
+        Share this invite link so they can set their password and log in for the first time.
+        <br /><strong>Expires in 72 hours.</strong>
+      </p>
+      <div style={{
+        backgroundColor: theme.gray50, border: `1px solid ${theme.gray200}`,
+        borderRadius: 8, padding: '10px 14px',
+        fontSize: 13, color: theme.gray700,
+        wordBreak: 'break-all', marginBottom: 16, textAlign: 'left',
+      }}>
+        {inviteUrl}
+      </div>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+        <Button label={copied ? 'Copied!' : 'Copy Invite Link'} onClick={copy} />
+        <Button label="Add Another" variant="outline" onClick={onDone} />
+        <Button label="Back to Roster" variant="ghost" onClick={() => window.location.href = '/roster'} />
+      </div>
+    </div>
+  );
+}
+
 export default function AddPlayerPage() {
   const router = useRouter();
   const { positions, academicYears, rosterLabel, classLabel } = useTeamConfig();
+
+  useEffect(() => {
+    if (!isGlobalAdmin()) router.push('/unauthorized');
+  }, []);
+
   const POSITION_OPTIONS = positions.map(p => ({ value: p, label: p }));
   const YEAR_OPTIONS     = academicYears;
-  const [saving, setSaving] = useState(false);
+  const [saving,    setSaving]    = useState(false);
+  const [alert,     setAlert]     = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
+  const [inviteUrl, setInviteUrl] = useState('');
 
-  if (!isGlobalAdmin()) {
-    router.push('/dashboard');
-    return null;
-  }
-  const [alert,  setAlert]  = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
-
-  const [form, setForm] = useState({
-    email: '', password: '', globalRole: 'player',
+  const emptyForm = {
+    email: '', globalRole: 'player',
     firstName: '', lastName: '', jerseyNumber: '',
     position: 'QB', academicYear: 'freshman',
     recruitingClass: String(currentYear),
@@ -55,10 +88,9 @@ export default function AddPlayerPage() {
     major: '', gpa: '', phone: '',
     emergencyContactName: '', emergencyContactPhone: '',
     notes: '',
-  });
-
-  const set = (key: keyof typeof form) => (val: string) =>
-    setForm(p => ({ ...p, [key]: val }));
+  };
+  const [form, setForm] = useState(emptyForm);
+  const set = (key: keyof typeof form) => (val: string) => setForm(p => ({ ...p, [key]: val }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,22 +98,24 @@ export default function AddPlayerPage() {
       setAlert({ msg: 'First and last name are required.', type: 'warning' });
       return;
     }
-    if (!form.email.trim() || !form.password.trim()) {
-      setAlert({ msg: 'Email and password are required to create a login account.', type: 'warning' });
+    if (!form.email.trim()) {
+      setAlert({ msg: 'Email is required to create a login account.', type: 'warning' });
       return;
     }
     setSaving(true);
     try {
+      // 1. Create global user account — API returns an invite token automatically
       const userRes = await globalApi.post('/users', {
         email:        form.email.trim().toLowerCase(),
-        password:     form.password,
         firstName:    form.firstName.trim(),
         lastName:     form.lastName.trim(),
         globalRole:   form.globalRole,
         grantAppName: 'roster',
         grantAppRole: 'player',
       });
-      const userId = userRes.data.data.id;
+      const { id: userId, inviteToken } = userRes.data.data;
+
+      // 2. Create roster record
       const heightInches = form.heightFeet && form.heightInches
         ? parseInt(form.heightFeet) * 12 + parseInt(form.heightInches)
         : undefined;
@@ -105,8 +139,8 @@ export default function AddPlayerPage() {
         emergencyContactPhone:form.emergencyContactPhone  || undefined,
         notes:                form.notes           || undefined,
       });
-      setAlert({ msg: `${form.firstName} ${form.lastName} added to roster successfully.`, type: 'success' });
-      setTimeout(() => router.push('/roster'), 1500);
+
+      setInviteUrl(`${window.location.origin}/invite/${inviteToken}`);
     } catch (err: any) {
       setAlert({ msg: err?.response?.data?.error ?? 'Failed to create player.', type: 'error' });
     } finally {
@@ -114,12 +148,22 @@ export default function AddPlayerPage() {
     }
   };
 
+  if (inviteUrl) {
+    return (
+      <PageLayout currentPage={`${rosterLabel} / Add`}>
+        <div style={{ maxWidth: 560, margin: '40px auto' }}>
+          <InviteBanner inviteUrl={inviteUrl} onDone={() => { setInviteUrl(''); setForm(emptyForm); setAlert(null); }} />
+        </div>
+      </PageLayout>
+    );
+  }
+
   return (
-    <PageLayout currentPage="Add Player">
+    <PageLayout currentPage={`${rosterLabel} / Add`}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>Add Player</h1>
-          <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>Create a player account and roster record</p>
+          <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>An invite link will be generated for first-time login</p>
         </div>
         <Button label="← Back to Roster" variant="outline" onClick={() => router.push('/roster')} />
       </div>
@@ -132,8 +176,7 @@ export default function AddPlayerPage() {
           <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
             <SectionHeader title="Login Account" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <Input label="Email *"    type="email"    value={form.email}    onChange={set('email')}    placeholder="player@email.com" required />
-              <Input label="Password *" type="password" value={form.password} onChange={set('password')} placeholder="Min 10 characters" required helper="Player will use this to log in" />
+              <Input label="Email *" type="email" value={form.email} onChange={set('email')} placeholder="player@email.com" required />
               <Select label="Portal Role" value={form.globalRole} onChange={set('globalRole')} options={ROLE_OPTIONS} />
             </div>
           </div>

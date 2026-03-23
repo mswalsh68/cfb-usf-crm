@@ -508,6 +508,97 @@ END;
 GO
 
 -- ============================================================
+-- sp_CreateInviteToken
+-- Invalidates any existing unused invite for a user, then inserts
+-- a new one. Caller passes the sha256 hash of the raw token.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_CreateInviteToken
+  @UserId    UNIQUEIDENTIFIER,
+  @TokenHash VARCHAR(128),
+  @ExpiresAt DATETIME2
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  -- Expire any previous unused invite tokens for this user
+  UPDATE dbo.invite_tokens
+  SET    used_at = SYSUTCDATETIME()
+  WHERE  user_id = @UserId AND used_at IS NULL;
+
+  INSERT INTO dbo.invite_tokens (user_id, token_hash, expires_at)
+  VALUES (@UserId, @TokenHash, @ExpiresAt);
+END;
+GO
+
+-- ============================================================
+-- sp_ValidateInviteToken
+-- Returns the user's first name and email if the token is valid
+-- (unused, not expired). Returns empty set if invalid.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_ValidateInviteToken
+  @TokenHash VARCHAR(128)
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  SELECT u.first_name AS firstName, u.last_name AS lastName, u.email
+  FROM   dbo.invite_tokens it
+  JOIN   dbo.users u ON u.id = it.user_id
+  WHERE  it.token_hash = @TokenHash
+    AND  it.used_at    IS NULL
+    AND  it.expires_at  > SYSUTCDATETIME();
+END;
+GO
+
+-- ============================================================
+-- sp_RedeemInviteToken
+-- Validates the token, sets the user's password hash, activates
+-- the account, and marks the token used — all in one transaction.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_RedeemInviteToken
+  @TokenHash    VARCHAR(128),
+  @PasswordHash VARCHAR(255),
+  @ErrorCode    NVARCHAR(50) OUTPUT,
+  @UserId       UNIQUEIDENTIFIER OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET @ErrorCode = NULL;
+  SET @UserId    = NULL;
+
+  SELECT @UserId = it.user_id
+  FROM   dbo.invite_tokens it
+  WHERE  it.token_hash = @TokenHash
+    AND  it.used_at    IS NULL
+    AND  it.expires_at  > SYSUTCDATETIME();
+
+  IF @UserId IS NULL
+  BEGIN
+    SET @ErrorCode = 'INVALID_OR_EXPIRED';
+    RETURN;
+  END
+
+  BEGIN TRANSACTION;
+  BEGIN TRY
+    UPDATE dbo.users
+    SET    password_hash = @PasswordHash,
+           is_active     = 1
+    WHERE  id = @UserId;
+
+    UPDATE dbo.invite_tokens
+    SET    used_at = SYSUTCDATETIME()
+    WHERE  token_hash = @TokenHash;
+
+    COMMIT TRANSACTION;
+  END TRY
+  BEGIN CATCH
+    ROLLBACK TRANSACTION;
+    SET @ErrorCode = 'TRANSACTION_FAILED';
+  END CATCH
+END;
+GO
+
+-- ============================================================
 -- sp_CleanExpiredTokens
 -- Housekeeping — run on a schedule (e.g. Azure SQL Agent, daily).
 -- ============================================================
