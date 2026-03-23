@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { hasAppAccess, isGlobalAdmin } from '@/lib/auth';
 import { rosterApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Alert } from '@/components';
@@ -49,10 +48,6 @@ export default function RosterPage() {
   const [page,     setPage]     = useState(1);
 
   useEffect(() => {
-    if (!hasAppAccess('roster') && !isGlobalAdmin()) {
-      router.push('/dashboard');
-      return;
-    }
     fetchPlayers();
   }, [search, position, status, year, page]);
 

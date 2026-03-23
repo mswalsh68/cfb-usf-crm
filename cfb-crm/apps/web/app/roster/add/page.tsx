@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isGlobalAdmin } from '@/lib/auth';
 import { rosterApi, globalApi } from '@/lib/api';
@@ -39,9 +39,10 @@ export default function AddPlayerPage() {
   const YEAR_OPTIONS     = academicYears;
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (!isGlobalAdmin()) { router.push('/dashboard'); }
-  }, []);
+  if (!isGlobalAdmin()) {
+    router.push('/dashboard');
+    return null;
+  }
   const [alert,  setAlert]  = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
   const [form, setForm] = useState({
