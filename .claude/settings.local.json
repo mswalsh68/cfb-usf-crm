@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr:*)",
+      "Bash(where gh:*)",
+      "Read(//c/Program Files/**)",
+      "Bash(curl --version)",
+      "Read(//c/Users/mikew/.claude/**)",
+      "Read(//c/Users/mikew/.config/gh/**)",
+      "Bash(git remote:*)"
+    ]
+  }
+}
