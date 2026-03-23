@@ -209,6 +209,7 @@ GO
 CREATE OR ALTER PROCEDURE dbo.sp_UpdatePlayer
   @PlayerId              UNIQUEIDENTIFIER,
   @JerseyNumber          TINYINT          = NULL,
+  @Position              NVARCHAR(10)     = NULL,
   @AcademicYear          NVARCHAR(20)     = NULL,
   @Status                NVARCHAR(20)     = NULL,
   @HeightInches          TINYINT          = NULL,
@@ -258,6 +259,7 @@ BEGIN
 
   UPDATE dbo.players SET
     jersey_number           = COALESCE(@JerseyNumber,          jersey_number),
+    position                = COALESCE(@Position,              position),
     academic_year           = COALESCE(@AcademicYear,          academic_year),
     status                  = COALESCE(@Status,                status),
     height_inches           = COALESCE(@HeightInches,          height_inches),

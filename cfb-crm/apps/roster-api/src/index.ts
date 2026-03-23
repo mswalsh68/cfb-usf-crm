@@ -134,6 +134,7 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
       .input('PlayerId',              sql.UniqueIdentifier, req.params.id)
       // Admin-only fields — players send null for these so SP leaves them unchanged
       .input('JerseyNumber',          sql.TinyInt,          isWriter ? (b.jerseyNumber ?? null) : null)
+      .input('Position',              sql.NVarChar,         isWriter ? (b.position     ?? null) : null)
       .input('AcademicYear',          sql.NVarChar,         isWriter ? (b.academicYear ?? null) : null)
       .input('Status',                sql.NVarChar,         isWriter ? (b.status       ?? null) : null)
       .input('HeightInches',          sql.TinyInt,          isWriter ? (b.heightInches ?? null) : null)

@@ -58,6 +58,7 @@ export default function PlayerDetailPage() {
     try {
       await rosterApi.patch(`/players/${id}`, {
         jerseyNumber:           form.jerseyNumber   ? parseInt(form.jerseyNumber) : undefined,
+        position:               form.position       || undefined,
         academicYear:           form.academicYear   || undefined,
         status:                 form.status         || undefined,
         gpa:                    form.gpa            ? parseFloat(form.gpa) : undefined,
@@ -86,7 +87,9 @@ export default function PlayerDetailPage() {
     </PageLayout>
   );
 
-  const canEdit = isGlobalAdmin() || getUser()?.sub === player?.userId;
+  const user        = getUser();
+  const isWriter    = isGlobalAdmin() || user?.appPermissions?.some((p: any) => p.app === 'roster' && ['global_admin','app_admin','coach_staff'].includes(p.role));
+  const canEdit     = isWriter || user?.sub === player?.userId;
 
   if (!player) return (
     <PageLayout currentPage="Roster">
@@ -104,8 +107,8 @@ export default function PlayerDetailPage() {
         <div style={{ display: 'flex', gap: 10 }}>
           {canEdit && (editing ? (
             <>
-              <Button label="Cancel" variant="ghost" onClick={() => { setEditing(false); setForm(player); }} />
-              <Button label="Save Changes" loading={saving} onClick={handleSave} />
+              <Button label="Cancel"       variant="ghost"   onClick={() => { setEditing(false); setForm(player); }} />
+              <Button label="Save Changes" loading={saving}  onClick={handleSave} />
             </>
           ) : (
             <Button label="Edit Player" variant="outline" onClick={() => setEditing(true)} />
@@ -204,6 +207,9 @@ export default function PlayerDetailPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {editing ? (
               <>
+                {isWriter && (
+                  <Select label="Position"  value={form.position ?? ''} onChange={set('position')} options={POSITION_OPTIONS} />
+                )}
                 <Select label="Status"       value={form.status ?? ''}      onChange={set('status')}      options={STATUS_OPTIONS} />
                 <Input  label="Jersey #"     value={form.jerseyNumber?.toString() ?? ''} onChange={set('jerseyNumber')} type="number" />
                 <Input  label="Weight (lbs)" value={form.weightLbs?.toString() ?? ''} onChange={set('weightLbs')} type="number" />
