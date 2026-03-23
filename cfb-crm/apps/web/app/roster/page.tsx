@@ -15,6 +15,7 @@ const STATUSES  = [
   { value: 'suspended',  label: 'Suspended'    },
   { value: 'transferred',label: 'Transferred'  },
   { value: 'walkOn',     label: 'Walk-On'      },
+  { value: 'graduated',  label: 'Graduated'    },
 ];
 const YEARS = [
   { value: '',           label: 'All Years'   },
@@ -43,7 +44,7 @@ export default function RosterPage() {
   const [error,    setError]    = useState('');
   const [search,   setSearch]   = useState('');
   const [position, setPosition] = useState('All');
-  const [status,   setStatus]   = useState('');
+  const [status,   setStatus]   = useState('active');
   const [year,     setYear]     = useState('');
   const [total,    setTotal]    = useState(0);
   const [page,     setPage]     = useState(1);

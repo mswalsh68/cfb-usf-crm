@@ -64,6 +64,10 @@ export default function PlayerDetailPage() {
         gpa:                    form.gpa            ? parseFloat(form.gpa) : undefined,
         major:                  form.major          || undefined,
         phone:                  form.phone          || undefined,
+        email:                  form.email          || undefined,
+        instagram:              form.instagram       || undefined,
+        twitter:                form.twitter         || undefined,
+        snapchat:               form.snapchat        || undefined,
         weightLbs:              form.weightLbs      ? parseInt(form.weightLbs) : undefined,
         emergencyContactName:   form.emergencyContactName  || undefined,
         emergencyContactPhone:  form.emergencyContactPhone || undefined,
@@ -188,12 +192,14 @@ export default function PlayerDetailPage() {
             {editing ? (
               <>
                 <Input label="Phone" value={form.phone ?? ''} onChange={set('phone')} type="tel" />
+                <Input label="Email" type="email" value={form.email ?? ''} onChange={set('email')} />
                 <Input label="Emergency Contact" value={form.emergencyContactName ?? ''} onChange={set('emergencyContactName')} />
                 <Input label="Emergency Phone"   value={form.emergencyContactPhone ?? ''} onChange={set('emergencyContactPhone')} type="tel" />
               </>
             ) : (
               <>
                 <InfoRow label="Phone"             value={player.phone}                />
+                <InfoRow label="Email"             value={player.email}                />
                 <InfoRow label="Emergency Contact" value={player.emergencyContactName} />
                 <InfoRow label="Emergency Phone"   value={player.emergencyContactPhone} />
               </>
@@ -240,6 +246,26 @@ export default function PlayerDetailPage() {
               {player.notes || 'No notes.'}
             </p>
           )}
+        </Card>
+
+        {/* Social Media */}
+        <Card>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: theme.gray900, marginBottom: 16, marginTop: 0 }}>Social Media</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {editing ? (
+              <>
+                <Input label="Instagram" value={form.instagram ?? ''} onChange={set('instagram')} placeholder="@username" />
+                <Input label="Twitter / X" value={form.twitter ?? ''} onChange={set('twitter')} placeholder="@username" />
+                <Input label="Snapchat" value={form.snapchat ?? ''} onChange={set('snapchat')} placeholder="username" />
+              </>
+            ) : (
+              <>
+                <InfoRow label="Instagram"  value={player.instagram} />
+                <InfoRow label="Twitter / X" value={player.twitter} />
+                <InfoRow label="Snapchat"   value={player.snapchat} />
+              </>
+            )}
+          </div>
         </Card>
 
       </div>
