@@ -1,11 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { alumniApi } from '@/lib/api';
+import { isGlobalAdmin } from '@/lib/auth';
+import { globalApi, alumniApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { useTeamConfig } from '@/lib/teamConfig';
 import { PageLayout, Button, Input, Select, Alert } from '@/components';
+
+const ROLE_OPTIONS = [
+  { value: 'readonly',    label: 'Read Only'     },
+  { value: 'coach_staff', label: 'Coach / Staff' },
+];
 
 const SEMESTER_OPTIONS = [
   { value: 'spring', label: 'Spring' },
@@ -32,38 +38,62 @@ function SectionHeader({ title }: { title: string }) {
   );
 }
 
+function InviteBanner({ inviteUrl, onDone }: { inviteUrl: string; onDone: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(inviteUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <div style={{ backgroundColor: theme.cardBg, border: `2px solid ${theme.primary}`, borderRadius: 'var(--radius-lg)', padding: 28, textAlign: 'center' }}>
+      <div style={{ fontSize: 36, marginBottom: 12 }}>🎉</div>
+      <h2 style={{ fontSize: 18, fontWeight: 700, color: theme.gray900, margin: '0 0 8px' }}>Alumni added!</h2>
+      <p style={{ fontSize: 14, color: theme.gray600, marginBottom: 20 }}>
+        Share this invite link so they can set their password and log in for the first time.
+        <br /><strong>Expires in 72 hours.</strong>
+      </p>
+      <div style={{
+        backgroundColor: theme.gray50, border: `1px solid ${theme.gray200}`,
+        borderRadius: 8, padding: '10px 14px',
+        fontSize: 13, color: theme.gray700,
+        wordBreak: 'break-all', marginBottom: 16, textAlign: 'left',
+      }}>
+        {inviteUrl}
+      </div>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+        <Button label={copied ? 'Copied!' : 'Copy Invite Link'} onClick={copy} />
+        <Button label="Done" variant="outline" onClick={onDone} />
+      </div>
+    </div>
+  );
+}
+
 export default function AddAlumniPage() {
   const router = useRouter();
-  const { positions, academicYears, alumniLabel, classLabel } = useTeamConfig();
+  const { positions, classLabel, alumniLabel } = useTeamConfig();
+  const POSITION_OPTIONS = [{ value: '', label: 'No Position' }, ...positions.map(p => ({ value: p, label: p }))];
 
-  const POSITION_OPTIONS = [
-    { value: '', label: 'Select Position' },
-    ...positions.map(p => ({ value: p, label: p })),
-  ];
+  useEffect(() => {
+    if (!isGlobalAdmin()) router.push('/unauthorized');
+  }, []);
 
-  const [saving, setSaving] = useState(false);
-  const [alert,  setAlert]  = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
+  const [saving,    setSaving]    = useState(false);
+  const [alert,     setAlert]     = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
+  const [inviteUrl, setInviteUrl] = useState('');
 
   const [form, setForm] = useState({
-    firstName:          '',
-    lastName:           '',
-    graduationYear:     String(currentYear),
-    graduationSemester: 'spring',
-    position:           '',
-    recruitingClass:    String(currentYear),
-    personalEmail:      '',
-    phone:              '',
-    linkedInUrl:        '',
-    currentEmployer:    '',
-    currentJobTitle:    '',
-    currentCity:        '',
-    currentState:       '',
-    isDonor:            false,
-    notes:              '',
+    email: '', globalRole: 'readonly',
+    firstName: '', lastName: '',
+    position: '', recruitingClass: String(currentYear),
+    graduationYear: String(currentYear), graduationSemester: 'spring',
+    personalEmail: '', phone: '',
+    currentEmployer: '', currentJobTitle: '',
+    currentCity: '', currentState: '',
+    notes: '',
   });
 
-  const set = (key: keyof typeof form) => (val: string | boolean) =>
-    setForm(p => ({ ...p, [key]: val }));
+  const set = (key: keyof typeof form) => (val: string) => setForm(p => ({ ...p, [key]: val }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,122 +101,128 @@ export default function AddAlumniPage() {
       setAlert({ msg: 'First and last name are required.', type: 'warning' });
       return;
     }
+    if (!form.email.trim()) {
+      setAlert({ msg: 'Email is required to create a login account.', type: 'warning' });
+      return;
+    }
     setSaving(true);
     try {
+      // 1. Create global user account + invite token
+      const userRes = await globalApi.post('/users', {
+        email:        form.email.trim().toLowerCase(),
+        firstName:    form.firstName.trim(),
+        lastName:     form.lastName.trim(),
+        globalRole:   form.globalRole,
+        grantAppName: 'alumni',
+        grantAppRole: 'readonly',
+      });
+      const { id: userId, inviteToken } = userRes.data.data;
+
+      // 2. Create alumni record
       await alumniApi.post('/alumni', {
+        userId,
         firstName:          form.firstName.trim(),
         lastName:           form.lastName.trim(),
+        position:           form.position           || undefined,
+        recruitingClass:    parseInt(form.recruitingClass),
         graduationYear:     parseInt(form.graduationYear),
         graduationSemester: form.graduationSemester,
-        position:           form.position  || undefined,
-        recruitingClass:    parseInt(form.recruitingClass),
-        personalEmail:      form.personalEmail   || undefined,
-        phone:              form.phone           || undefined,
-        linkedInUrl:        form.linkedInUrl     || undefined,
-        currentEmployer:    form.currentEmployer || undefined,
-        currentJobTitle:    form.currentJobTitle || undefined,
-        currentCity:        form.currentCity     || undefined,
-        currentState:       form.currentState    || undefined,
-        isDonor:            form.isDonor,
-        notes:              form.notes           || undefined,
+        personalEmail:      form.personalEmail       || undefined,
+        phone:              form.phone               || undefined,
+        currentEmployer:    form.currentEmployer     || undefined,
+        currentJobTitle:    form.currentJobTitle     || undefined,
+        currentCity:        form.currentCity         || undefined,
+        currentState:       form.currentState        || undefined,
+        notes:              form.notes               || undefined,
       });
-      setAlert({ msg: `${form.firstName} ${form.lastName} added to ${alumniLabel} successfully.`, type: 'success' });
-      setTimeout(() => router.push('/alumni'), 1500);
+
+      setInviteUrl(`${window.location.origin}/invite/${inviteToken}`);
     } catch (err: any) {
-      setAlert({ msg: err?.response?.data?.error ?? `Failed to add ${alumniLabel.toLowerCase()}.`, type: 'error' });
+      setAlert({ msg: err?.response?.data?.error ?? 'Failed to create alumni.', type: 'error' });
     } finally {
       setSaving(false);
     }
   };
 
-  return (
-    <PageLayout currentPage={`Add ${alumniLabel}`}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>Add {alumniLabel}</h1>
-          <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>Manually add a record without transferring from the roster</p>
+  if (inviteUrl) {
+    return (
+      <PageLayout currentPage={`${alumniLabel} / Add`}>
+        <div style={{ maxWidth: 560, margin: '40px auto' }}>
+          <InviteBanner inviteUrl={inviteUrl} onDone={() => router.push('/alumni')} />
         </div>
+      </PageLayout>
+    );
+  }
+
+  const cardStyle = { backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' };
+
+  return (
+    <PageLayout currentPage={`${alumniLabel} / Add`}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <Button label={`← Back to ${alumniLabel}`} variant="outline" onClick={() => router.push('/alumni')} />
       </div>
 
       {alert && <Alert message={alert.msg} variant={alert.type} onClose={() => setAlert(null)} />}
 
       <form onSubmit={handleSubmit}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginBottom: 20 }}>
+
+          {/* Login Account */}
+          <div style={cardStyle}>
+            <SectionHeader title="Login Account" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <Input label="Email *" type="email" value={form.email} onChange={set('email')} required />
+              <Select label="Global Role" value={form.globalRole} onChange={set('globalRole')} options={ROLE_OPTIONS} />
+            </div>
+          </div>
 
           {/* Identity */}
-          <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+          <div style={cardStyle}>
             <SectionHeader title="Identity" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <Input label="First Name *" value={form.firstName} onChange={set('firstName')} required />
                 <Input label="Last Name *"  value={form.lastName}  onChange={set('lastName')}  required />
               </div>
-              <Select label="Position"  value={form.position} onChange={set('position')} options={POSITION_OPTIONS} />
-            </div>
-          </div>
-
-          {/* Graduation info */}
-          <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
-            <SectionHeader title="Graduation" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <Select label="Year"     value={form.graduationYear}     onChange={set('graduationYear')}     options={YEAR_OPTIONS}    />
-                <Select label="Semester" value={form.graduationSemester} onChange={set('graduationSemester')} options={SEMESTER_OPTIONS} />
-              </div>
+              <Select label="Position"  value={form.position}        onChange={set('position')}        options={POSITION_OPTIONS} />
               <Select label={classLabel} value={form.recruitingClass} onChange={set('recruitingClass')} options={YEAR_OPTIONS} />
             </div>
           </div>
 
+          {/* Graduation */}
+          <div style={cardStyle}>
+            <SectionHeader title="Graduation" />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <Select label="Graduation Year"     value={form.graduationYear}     onChange={set('graduationYear')}     options={YEAR_OPTIONS} />
+              <Select label="Graduation Semester" value={form.graduationSemester} onChange={set('graduationSemester')} options={SEMESTER_OPTIONS} />
+            </div>
+          </div>
+
           {/* Contact */}
-          <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+          <div style={cardStyle}>
             <SectionHeader title="Contact" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <Input label="Personal Email" type="email" value={form.personalEmail} onChange={set('personalEmail')} />
-              <Input label="Phone" type="tel" value={form.phone} onChange={set('phone')} />
-              <Input label="LinkedIn URL" value={form.linkedInUrl} onChange={set('linkedInUrl')} placeholder="https://linkedin.com/in/..." />
+              <Input label="Phone"          type="tel"  value={form.phone}          onChange={set('phone')} />
             </div>
           </div>
 
           {/* Career */}
-          <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
-            <SectionHeader title="Career" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <Input label="Employer" value={form.currentEmployer} onChange={set('currentEmployer')} />
+          <div style={{ ...cardStyle, gridColumn: '1 / -1' }}>
+            <SectionHeader title="Career (optional)" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <Input label="Employer"  value={form.currentEmployer} onChange={set('currentEmployer')} />
               <Input label="Job Title" value={form.currentJobTitle} onChange={set('currentJobTitle')} />
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-                <Input label="City" value={form.currentCity} onChange={set('currentCity')} />
-                <Input label="State" value={form.currentState} onChange={set('currentState')} placeholder="FL" />
-              </div>
+              <Input label="City"      value={form.currentCity}     onChange={set('currentCity')} />
+              <Input label="State"     value={form.currentState}    onChange={set('currentState')} />
             </div>
           </div>
 
-          {/* Notes */}
-          <div style={{ gridColumn: '1 / -1', backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
-            <SectionHeader title="Notes" />
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-              <input
-                type="checkbox"
-                id="isDonor"
-                checked={form.isDonor}
-                onChange={e => set('isDonor')(e.target.checked)}
-                style={{ width: 16, height: 16 }}
-              />
-              <label htmlFor="isDonor" style={{ fontSize: 14, color: theme.gray700, fontWeight: 500 }}>Mark as Donor</label>
-            </div>
-            <textarea
-              value={form.notes}
-              onChange={e => setForm(p => ({ ...p, notes: e.target.value }))}
-              rows={3}
-              placeholder="Any additional notes..."
-              style={{ width: '100%', border: `1.5px solid ${theme.gray200}`, borderRadius: 'var(--radius-sm)', padding: '10px 14px', fontSize: 14, color: theme.gray900, resize: 'vertical', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
-            />
-          </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 24 }}>
-          <Button label="Cancel"        variant="ghost"   onClick={() => router.push('/alumni')} />
-          <Button label={`Add ${alumniLabel}`} variant="primary" type="submit" loading={saving} />
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+          <Button label="Cancel"           variant="ghost"   onClick={() => router.push('/alumni')} />
+          <Button label={saving ? 'Adding…' : `Add ${alumniLabel}`} type="submit" loading={saving} />
         </div>
       </form>
     </PageLayout>
