@@ -74,13 +74,34 @@ app.get('/alumni/:id', auth, alumniAccess, async (req, res) => {
 });
 
 // PATCH /alumni/:id
-app.patch('/alumni/:id', auth, alumniAccess, alumniWrite, async (req, res) => {
-  const b = req.body;
+// Admins/coaches can update all fields including status and donor info.
+// Alumni can only update their own record and only personal/contact fields.
+app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
+  const b    = req.body;
+  const role = req.user ? getAppRole(req.user, 'alumni') : null;
+  const isWriter = role && ['global_admin', 'app_admin', 'coach_staff'].includes(role);
+
   try {
     const db = await getDb();
+
+    // If not a writer, verify the caller owns this alumni record
+    if (!isWriter) {
+      const check = await db.request()
+        .input('AlumniId', sql.UniqueIdentifier, req.params.id)
+        .query('SELECT userId FROM dbo.alumni WHERE id = @AlumniId');
+      const row = check.recordset[0];
+      if (!row) return res.status(404).json({ success: false, error: 'Alumni not found' });
+      if (row.userId !== req.user!.sub) return res.status(403).json({ success: false, error: 'You can only edit your own profile' });
+    }
+
     const r = await db.request()
       .input('AlumniId',         sql.UniqueIdentifier, req.params.id)
-      .input('Status',           sql.NVarChar,         b.status           ?? null)
+      // Admin-only fields — alumni send null so SP leaves them unchanged
+      .input('Status',           sql.NVarChar,         isWriter ? (b.status           ?? null) : null)
+      .input('IsDonor',          sql.Bit,              isWriter ? (b.isDonor          ?? null) : null)
+      .input('LastDonationDate', sql.Date,             isWriter && b.lastDonationDate ? new Date(b.lastDonationDate) : null)
+      .input('TotalDonations',   sql.Decimal(10,2),    isWriter ? (b.totalDonations   ?? null) : null)
+      // Personal fields — alumni can update their own
       .input('PersonalEmail',    sql.NVarChar,         b.personalEmail    ?? null)
       .input('Phone',            sql.NVarChar,         b.phone            ?? null)
       .input('LinkedInUrl',      sql.NVarChar,         b.linkedInUrl      ?? null)
@@ -88,9 +109,6 @@ app.patch('/alumni/:id', auth, alumniAccess, alumniWrite, async (req, res) => {
       .input('CurrentJobTitle',  sql.NVarChar,         b.currentJobTitle  ?? null)
       .input('CurrentCity',      sql.NVarChar,         b.currentCity      ?? null)
       .input('CurrentState',     sql.NVarChar,         b.currentState     ?? null)
-      .input('IsDonor',          sql.Bit,              b.isDonor          ?? null)
-      .input('LastDonationDate', sql.Date,             b.lastDonationDate ? new Date(b.lastDonationDate) : null)
-      .input('TotalDonations',   sql.Decimal(10,2),    b.totalDonations   ?? null)
       .input('Notes',            sql.NVarChar,         b.notes            ?? null)
       .input('UpdatedBy',        sql.UniqueIdentifier, req.user!.sub)
       .output('ErrorCode',       sql.NVarChar(50))
