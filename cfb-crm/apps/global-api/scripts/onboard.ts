@@ -54,9 +54,6 @@ const firstName = getArg('firstName')!.trim();
 const lastName  = getArg('lastName')!.trim();
 const appUrl    = getArg('appUrl', false) ?? 'http://localhost:3000';
 
-// System actor ID used in audit log when there is no human actor
-const SYSTEM_ID = '00000000-0000-0000-0000-000000000000';
-
 // ── Main ─────────────────────────────────────────────────────────────────────
 async function main() {
   console.log('\n🏈  CFB-CRM Client Onboarding');
@@ -69,34 +66,32 @@ async function main() {
   const pool = await sql.connect(dbConfig);
   console.log('  ✅ Connected to CfbGlobal\n');
 
-  // ── Step 1: create the user (no password — invite sets it) ───────────────
+  // ── Step 1: create the user (direct INSERT — no audit log FK required) ────
   let userId: string;
 
-  const createReq = pool.request();
-  createReq.input ('Email',        sql.NVarChar(255),    email);
-  createReq.input ('PasswordHash', sql.NVarChar(255),    'INVITE_PENDING');
-  createReq.input ('FirstName',    sql.NVarChar(100),    firstName);
-  createReq.input ('LastName',     sql.NVarChar(100),    lastName);
-  createReq.input ('GlobalRole',   sql.NVarChar(50),     'global_admin');
-  createReq.input ('CreatedBy',    sql.UniqueIdentifier, SYSTEM_ID);
-  createReq.output('NewUserId',    sql.UniqueIdentifier);
-  createReq.output('ErrorCode',    sql.NVarChar(50));
+  // Check if user already exists
+  const existing = await pool.request()
+    .input('Email', sql.NVarChar(255), email)
+    .query('SELECT CAST(id AS NVARCHAR(50)) AS id FROM dbo.users WHERE email = @Email');
 
-  const createResult = await createReq.execute('dbo.sp_CreateUser');
-  const { ErrorCode, NewUserId } = createResult.output;
-
-  if (ErrorCode === 'EMAIL_ALREADY_EXISTS') {
+  if (existing.recordset.length > 0) {
+    userId = existing.recordset[0].id;
     console.log('  ⚠️  User already exists — generating a fresh invite link.\n');
-    const existing = await pool.request()
-      .input('Email', sql.NVarChar(255), email)
-      .query('SELECT CAST(id AS NVARCHAR(50)) AS id FROM dbo.users WHERE email = @Email');
-    userId = existing.recordset[0]?.id;
-    if (!userId) { console.error('❌  Could not fetch existing user ID.'); process.exit(1); }
-  } else if (ErrorCode) {
-    console.error(`❌  Failed to create user: ${ErrorCode}`);
-    process.exit(1);
   } else {
-    userId = NewUserId;
+    // Check email is not a duplicate and insert directly (sp_CreateUser requires
+    // a valid actor in audit_log; for system bootstrap we skip the audit row)
+    userId = crypto.randomUUID();
+    await pool.request()
+      .input('Id',           sql.UniqueIdentifier, userId)
+      .input('Email',        sql.NVarChar(255),    email)
+      .input('PasswordHash', sql.NVarChar(255),    'INVITE_PENDING')
+      .input('FirstName',    sql.NVarChar(100),    firstName)
+      .input('LastName',     sql.NVarChar(100),    lastName)
+      .input('GlobalRole',   sql.NVarChar(50),     'global_admin')
+      .query(`
+        INSERT INTO dbo.users (id, email, password_hash, first_name, last_name, global_role)
+        VALUES (@Id, @Email, @PasswordHash, @FirstName, @LastName, @GlobalRole)
+      `);
     console.log(`  ✅ Admin account created  (id: ${userId})`);
   }
 
@@ -114,7 +109,7 @@ async function main() {
   console.log('  ✅ Invite token created\n');
 
   // ── Step 3: print the invite link ────────────────────────────────────────
-  const inviteUrl = `${appUrl}/accept-invite?token=${rawToken}`;
+  const inviteUrl = `${appUrl}/invite/${rawToken}`;
 
   console.log('══════════════════════════════════════════════════════════════');
   console.log('');

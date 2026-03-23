@@ -188,7 +188,7 @@ export default function AlumniDetailPage() {
             </div>
           </div>
         </div>
-        {(isGlobalAdmin() || getUser()?.userId === alumni.userId) && (
+        {(isGlobalAdmin() || getUser()?.sub === alumni.userId) && (
           <Button label="Edit Profile" onClick={() => setShowEdit(true)} />
         )}
       </div>
