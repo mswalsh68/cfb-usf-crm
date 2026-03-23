@@ -108,17 +108,37 @@ app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
 });
 
 // ─── PATCH /players/:id ───────────────────────────────────────
-app.patch('/players/:id', auth, rosterAccess, rosterWrite, async (req, res) => {
-  const b = req.body;
+// Admins/coaches can update all fields.
+// Players can only update their own record, and only personal fields
+// (GPA, major, phone, emergency contact, notes — not status/jersey).
+app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
+  const b    = req.body;
+  const role = req.user ? getAppRole(req.user, 'roster') : null;
+  const isWriter = role && ['global_admin', 'app_admin', 'coach_staff'].includes(role);
+
   try {
     const db = await getDb();
+
+    // If not a writer, verify the caller owns this player record
+    if (!isWriter) {
+      const check = await db.request()
+        .input('PlayerId', sql.UniqueIdentifier, req.params.id)
+        .output('ErrorCode', sql.NVarChar(50))
+        .execute('dbo.sp_GetPlayerById');
+      const playerRow = (check.recordsets as any)[0]?.[0];
+      if (!playerRow) return res.status(404).json({ success: false, error: 'Player not found' });
+      if (playerRow.userId !== req.user!.sub) return res.status(403).json({ success: false, error: 'You can only edit your own profile' });
+    }
+
     const r = await db.request()
       .input('PlayerId',              sql.UniqueIdentifier, req.params.id)
-      .input('JerseyNumber',          sql.TinyInt,          b.jerseyNumber          ?? null)
-      .input('AcademicYear',          sql.NVarChar,         b.academicYear          ?? null)
-      .input('Status',                sql.NVarChar,         b.status                ?? null)
-      .input('HeightInches',          sql.TinyInt,          b.heightInches          ?? null)
-      .input('WeightLbs',             sql.SmallInt,         b.weightLbs             ?? null)
+      // Admin-only fields — players send null for these so SP leaves them unchanged
+      .input('JerseyNumber',          sql.TinyInt,          isWriter ? (b.jerseyNumber ?? null) : null)
+      .input('AcademicYear',          sql.NVarChar,         isWriter ? (b.academicYear ?? null) : null)
+      .input('Status',                sql.NVarChar,         isWriter ? (b.status       ?? null) : null)
+      .input('HeightInches',          sql.TinyInt,          isWriter ? (b.heightInches ?? null) : null)
+      .input('WeightLbs',             sql.SmallInt,         isWriter ? (b.weightLbs    ?? null) : null)
+      // Personal fields — any player can update their own
       .input('Gpa',                   sql.Decimal(3,2),     b.gpa                   ?? null)
       .input('Major',                 sql.NVarChar,         b.major                 ?? null)
       .input('Phone',                 sql.NVarChar,         b.phone                 ?? null)
