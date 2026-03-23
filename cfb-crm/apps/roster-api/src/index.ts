@@ -93,6 +93,10 @@ app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
       .input('Gpa',                   sql.Decimal(3,2),     b.gpa                   ?? null)
       .input('Major',                 sql.NVarChar,         b.major                 ?? null)
       .input('Phone',                 sql.NVarChar,         b.phone                 ?? null)
+      .input('Email',                 sql.NVarChar,         b.email                 ?? null)
+      .input('Instagram',             sql.NVarChar,         b.instagram             ?? null)
+      .input('Twitter',               sql.NVarChar,         b.twitter               ?? null)
+      .input('Snapchat',              sql.NVarChar,         b.snapchat              ?? null)
       .input('EmergencyContactName',  sql.NVarChar,         b.emergencyContactName  ?? null)
       .input('EmergencyContactPhone', sql.NVarChar,         b.emergencyContactPhone ?? null)
       .input('Notes',                 sql.NVarChar,         b.notes                 ?? null)
@@ -134,6 +138,7 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
       .input('PlayerId',              sql.UniqueIdentifier, req.params.id)
       // Admin-only fields — players send null for these so SP leaves them unchanged
       .input('JerseyNumber',          sql.TinyInt,          isWriter ? (b.jerseyNumber ?? null) : null)
+      .input('Position',              sql.NVarChar,         isWriter ? (b.position     ?? null) : null)
       .input('AcademicYear',          sql.NVarChar,         isWriter ? (b.academicYear ?? null) : null)
       .input('Status',                sql.NVarChar,         isWriter ? (b.status       ?? null) : null)
       .input('HeightInches',          sql.TinyInt,          isWriter ? (b.heightInches ?? null) : null)
@@ -142,6 +147,10 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
       .input('Gpa',                   sql.Decimal(3,2),     b.gpa                   ?? null)
       .input('Major',                 sql.NVarChar,         b.major                 ?? null)
       .input('Phone',                 sql.NVarChar,         b.phone                 ?? null)
+      .input('Email',                 sql.NVarChar,         b.email                 ?? null)
+      .input('Instagram',             sql.NVarChar,         b.instagram             ?? null)
+      .input('Twitter',               sql.NVarChar,         b.twitter               ?? null)
+      .input('Snapchat',              sql.NVarChar,         b.snapchat              ?? null)
       .input('EmergencyContactName',  sql.NVarChar,         b.emergencyContactName  ?? null)
       .input('EmergencyContactPhone', sql.NVarChar,         b.emergencyContactPhone ?? null)
       .input('Notes',                 sql.NVarChar,         b.notes                 ?? null)
@@ -192,6 +201,8 @@ app.post('/players/transfer', auth, rosterAccess, rosterAdmin, async (req, res) 
           position:           p.position,
           recruitingClass:    p.recruitingClass,
           departureReason:    transferReason,
+          phone:              p.phone   ?? undefined,
+          personalEmail:      p.email   ?? undefined,
           notes,
         }, {
           headers: { Authorization: req.headers.authorization },

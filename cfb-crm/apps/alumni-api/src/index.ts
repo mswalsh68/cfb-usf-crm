@@ -151,6 +151,8 @@ app.post('/alumni',  auth, alumniAccess , async (req, res) => {
       .input('GraduationSemester', sql.NVarChar,         b.graduationSemester ?? 'spring')
       .input('Position',           sql.NVarChar,         b.position           ?? null)
       .input('RecruitingClass',    sql.SmallInt,         b.recruitingClass    ?? null)
+      .input('Phone',              sql.NVarChar,         b.phone              ?? null)
+      .input('PersonalEmail',      sql.NVarChar,         b.personalEmail      ?? null)
       .output('NewAlumniId',       sql.UniqueIdentifier)
       .output('ErrorCode',         sql.NVarChar(50))
       .execute('dbo.sp_CreateAlumniFromPlayer');

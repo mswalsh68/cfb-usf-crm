@@ -19,6 +19,8 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreateAlumniFromPlayer
   @GraduationSemester NVARCHAR(10),
   @Position           NVARCHAR(10),
   @RecruitingClass    SMALLINT,
+  @Phone              NVARCHAR(20)     = NULL,
+  @PersonalEmail      NVARCHAR(255)    = NULL,
   @NewAlumniId        UNIQUEIDENTIFIER OUTPUT,
   @ErrorCode          NVARCHAR(50)     OUTPUT
 AS
@@ -38,10 +40,12 @@ BEGIN
 
   INSERT INTO dbo.alumni
     (id, user_id, source_player_id, first_name, last_name,
-     graduation_year, graduation_semester, position, recruiting_class, status)
+     graduation_year, graduation_semester, position, recruiting_class,
+     phone, personal_email, status)
   VALUES
     (@NewAlumniId, @UserId, @SourcePlayerId, @FirstName, @LastName,
-     @GraduationYear, @GraduationSemester, @Position, @RecruitingClass, 'active');
+     @GraduationYear, @GraduationSemester, @Position, @RecruitingClass,
+     @Phone, @PersonalEmail, 'active');
 END;
 GO
 
