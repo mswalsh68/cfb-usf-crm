@@ -67,7 +67,6 @@ export default function PlayerDetailPage() {
         email:                  form.email          || undefined,
         instagram:              form.instagram       || undefined,
         twitter:                form.twitter         || undefined,
-        snapchat:               form.snapchat        || undefined,
         weightLbs:              form.weightLbs      ? parseInt(form.weightLbs) : undefined,
         emergencyContactName:   form.emergencyContactName  || undefined,
         emergencyContactPhone:  form.emergencyContactPhone || undefined,
@@ -256,13 +255,11 @@ export default function PlayerDetailPage() {
               <>
                 <Input label="Instagram" value={form.instagram ?? ''} onChange={set('instagram')} placeholder="@username" />
                 <Input label="Twitter / X" value={form.twitter ?? ''} onChange={set('twitter')} placeholder="@username" />
-                <Input label="Snapchat" value={form.snapchat ?? ''} onChange={set('snapchat')} placeholder="username" />
               </>
             ) : (
               <>
                 <InfoRow label="Instagram"  value={player.instagram} />
                 <InfoRow label="Twitter / X" value={player.twitter} />
-                <InfoRow label="Snapchat"   value={player.snapchat} />
               </>
             )}
           </div>

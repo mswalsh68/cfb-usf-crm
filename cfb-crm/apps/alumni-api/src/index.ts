@@ -105,6 +105,7 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
       .input('PersonalEmail',    sql.NVarChar,         b.personalEmail    ?? null)
       .input('Phone',            sql.NVarChar,         b.phone            ?? null)
       .input('LinkedInUrl',      sql.NVarChar,         b.linkedInUrl      ?? null)
+      .input('TwitterUrl',       sql.NVarChar,         b.twitterUrl       ?? null)
       .input('CurrentEmployer',  sql.NVarChar,         b.currentEmployer  ?? null)
       .input('CurrentJobTitle',  sql.NVarChar,         b.currentJobTitle  ?? null)
       .input('CurrentCity',      sql.NVarChar,         b.currentCity      ?? null)
