@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { rosterApi } from '@/lib/api';
+import { isGlobalAdmin } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Alert } from '@/components';
 
@@ -78,11 +79,13 @@ export default function RosterPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>Roster</h1>
           <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>{total} players</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Button label="Upload Players" variant="outline" onClick={() => router.push('/roster/upload')} />
-          <Button label="Transfer to Alumni" variant="outline" onClick={() => router.push('/roster/transfer')} />
-          <Button label="+ Add Player" onClick={() => router.push('/roster/add')} />
-        </div>
+        {isGlobalAdmin() && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Button label="Upload Players"    variant="outline" onClick={() => router.push('/roster/upload')}   />
+            <Button label="Transfer to Alumni" variant="outline" onClick={() => router.push('/roster/transfer')} />
+            <Button label="+ Add Player"                        onClick={() => router.push('/roster/add')}      />
+          </div>
+        )}
       </div>
 
       {error && <Alert message={error} variant="error" onClose={() => setError('')} />}

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { alumniApi } from '@/lib/api';
+import { isGlobalAdmin } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { useTeamConfig } from '@/lib/teamConfig';
 import { PageLayout, Button, Input, Select, Badge, Alert } from '@/components';
@@ -70,10 +71,12 @@ export default function AlumniPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>{alumniLabel}</h1>
           <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>{total} records</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Button label={`Upload ${alumniLabel}`} variant="outline" onClick={() => router.push('/alumni/upload')} />
-          <Button label={`+ Add ${alumniLabel}`}  onClick={() => router.push('/alumni/add')} />
-        </div>
+        {isGlobalAdmin() && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Button label={`Upload ${alumniLabel}`} variant="outline" onClick={() => router.push('/alumni/upload')} />
+            <Button label={`+ Add ${alumniLabel}`}                    onClick={() => router.push('/alumni/add')}    />
+          </div>
+        )}
       </div>
 
       {error && <Alert message={error} variant="error" onClose={() => setError('')} />}

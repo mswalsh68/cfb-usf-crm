@@ -3,12 +3,16 @@ import type { NextRequest } from 'next/server';
 
 // Routes that do NOT require authentication
 const PUBLIC_PATHS = ['/'];
+const PUBLIC_PREFIXES = ['/invite', '/accept-invite', '/unauthorized'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths
   if (PUBLIC_PATHS.includes(pathname)) return NextResponse.next();
+
+  // Allow public path prefixes (accept-invite, unauthorized)
+  if (PUBLIC_PREFIXES.some(p => pathname.startsWith(p))) return NextResponse.next();
 
   // Allow Next.js internals and static assets
   if (

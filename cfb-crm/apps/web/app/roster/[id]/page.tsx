@@ -86,7 +86,7 @@ export default function PlayerDetailPage() {
     </PageLayout>
   );
 
-  const canEdit = isGlobalAdmin() || getUser()?.userId === player?.userId;
+  const canEdit = isGlobalAdmin() || getUser()?.sub === player?.userId;
 
   if (!player) return (
     <PageLayout currentPage="Roster">
