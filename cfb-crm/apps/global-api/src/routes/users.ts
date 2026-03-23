@@ -18,7 +18,7 @@ usersRouter.get('/', requireGlobalAdmin, async (req, res) => {
       .input('Search',     sql.NVarChar, search    || null)
       .input('GlobalRole', sql.NVarChar, role      || null)
       .input('Page',       sql.Int,      parseInt(page))
-      .input('PageSize',   sql.Int,      parseInt(pageSize))
+      .input('PageSize',   sql.Int,      Math.min(parseInt(pageSize) || 50, 200))
       .output('TotalCount', sql.Int)
       .execute('dbo.sp_GetUsers');
     return res.json({ success: true, data: r.recordset, total: r.output.TotalCount, page: parseInt(page), pageSize: parseInt(pageSize) });
