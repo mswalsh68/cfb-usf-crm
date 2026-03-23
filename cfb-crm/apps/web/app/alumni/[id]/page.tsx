@@ -56,7 +56,7 @@ export default function AlumniDetailPage() {
 
   // Edit form state
   const [edit, setEdit] = useState({
-    status: '', personalEmail: '', phone: '', linkedInUrl: '',
+    status: '', personalEmail: '', phone: '', linkedInUrl: '', twitterUrl: '',
     currentEmployer: '', currentJobTitle: '', currentCity: '', currentState: '',
     isDonor: false, lastDonationDate: '', totalDonations: '', notes: '',
   });
@@ -79,6 +79,7 @@ export default function AlumniDetailPage() {
         personalEmail:   a.personalEmail   ?? '',
         phone:           a.phone           ?? '',
         linkedInUrl:     a.linkedInUrl     ?? '',
+        twitterUrl:      a.twitterUrl      ?? '',
         currentEmployer: a.currentEmployer ?? '',
         currentJobTitle: a.currentJobTitle ?? '',
         currentCity:     a.currentCity     ?? '',
@@ -104,6 +105,7 @@ export default function AlumniDetailPage() {
         personalEmail:   edit.personalEmail   || undefined,
         phone:           edit.phone           || undefined,
         linkedInUrl:     edit.linkedInUrl     || undefined,
+        twitterUrl:      edit.twitterUrl      || undefined,
         currentEmployer: edit.currentEmployer || undefined,
         currentJobTitle: edit.currentJobTitle || undefined,
         currentCity:     edit.currentCity     || undefined,
@@ -231,7 +233,8 @@ export default function AlumniDetailPage() {
               {[
                 ['Email',    alumni.personalEmail, `mailto:${alumni.personalEmail}`],
                 ['Phone',    alumni.phone,         `tel:${alumni.phone}`],
-                ['LinkedIn', alumni.linkedInUrl,   alumni.linkedInUrl],
+                ['LinkedIn',   alumni.linkedInUrl, alumni.linkedInUrl],
+                ['Twitter / X', alumni.twitterUrl, alumni.twitterUrl ? `https://twitter.com/${alumni.twitterUrl.replace(/^@/, '')}` : undefined],
               ].map(([label, value, href]) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 12, color: theme.gray400, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</span>
@@ -365,6 +368,7 @@ export default function AlumniDetailPage() {
               <Input label="Phone" type="tel" value={edit.phone} onChange={v => setEdit(p => ({ ...p, phone: v }))} />
             </div>
             <Input label="LinkedIn URL" value={edit.linkedInUrl} onChange={v => setEdit(p => ({ ...p, linkedInUrl: v }))} />
+            <Input label="Twitter / X" value={edit.twitterUrl} onChange={v => setEdit(p => ({ ...p, twitterUrl: v }))} placeholder="@username" />
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Input label="Employer" value={edit.currentEmployer} onChange={v => setEdit(p => ({ ...p, currentEmployer: v }))} />
