@@ -1,7 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { isGlobalAdmin } from '@/lib/auth';
 import { rosterApi, globalApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Alert } from '@/components';
@@ -41,6 +42,10 @@ function SectionHeader({ title }: { title: string }) {
 export default function AddPlayerPage() {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!isGlobalAdmin()) { router.push('/dashboard'); }
+  }, []);
   const [alert,  setAlert]  = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
   const [form, setForm] = useState({

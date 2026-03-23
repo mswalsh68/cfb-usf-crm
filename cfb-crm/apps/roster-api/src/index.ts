@@ -53,7 +53,7 @@ app.get('/players', auth, rosterAccess, async (req, res) => {
       .input('AcademicYear',    sql.NVarChar, academicYear     || null)
       .input('RecruitingClass', sql.SmallInt, recruitingClass ? parseInt(recruitingClass) : null)
       .input('Page',            sql.Int,      parseInt(page))
-      .input('PageSize',        sql.Int,      parseInt(pageSize))
+      .input('PageSize',        sql.Int,      Math.min(parseInt(pageSize) || 50, 200))
       .output('TotalCount',     sql.Int)
       .execute('dbo.sp_GetPlayers');
     return res.json({ success: true, data: (r.recordsets as any)[0], total: r.output.TotalCount, page: parseInt(page), pageSize: parseInt(pageSize) });
