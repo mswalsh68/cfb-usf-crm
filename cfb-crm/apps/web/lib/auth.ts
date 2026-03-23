@@ -6,11 +6,16 @@ export function getAccessToken(): string | null {
 export function setTokens(accessToken: string, refreshToken: string) {
   localStorage.setItem('cfb_access_token', accessToken);
   localStorage.setItem('cfb_refresh_token', refreshToken);
+  // Set a cookie so Next.js middleware can detect auth state server-side.
+  // The cookie value is intentionally non-sensitive — real JWT verification
+  // is enforced by the API layer.
+  document.cookie = 'cfb_access_token=1; path=/; SameSite=Strict';
 }
 
 export function clearTokens() {
   localStorage.removeItem('cfb_access_token');
   localStorage.removeItem('cfb_refresh_token');
+  document.cookie = 'cfb_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict';
 }
 
 export function getUser() {

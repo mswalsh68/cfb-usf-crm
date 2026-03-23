@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isGlobalAdmin } from '@/lib/auth';
 import { globalApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Modal, Alert } from '@/components';
@@ -39,7 +38,6 @@ export default function AdminPage() {
   const [inviteUrl, setInviteUrl] = useState('');
 
   useEffect(() => {
-    if (!isGlobalAdmin()) { router.push('/dashboard'); return; }
     fetchUsers();
   }, []);
 
