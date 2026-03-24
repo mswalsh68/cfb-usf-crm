@@ -58,7 +58,28 @@ usersRouter.post('/', requireGlobalAdmin, async (req, res) => {
       .output('NewUserId',   sql.UniqueIdentifier)
       .output('ErrorCode',   sql.NVarChar(50))
       .execute('dbo.sp_CreateUser');
-    if (r.output.ErrorCode === 'EMAIL_ALREADY_EXISTS') return res.status(409).json({ success: false, error: 'Email already in use' });
+    if (r.output.ErrorCode === 'EMAIL_ALREADY_EXISTS') {
+      // User already exists — fetch their ID and issue a fresh invite so the
+      // caller can still get a valid invite link (idempotent create).
+      const existing = await db.request()
+        .input('Search',     sql.NVarChar, email.trim().toLowerCase())
+        .input('GlobalRole', sql.NVarChar, null)
+        .input('Page',       sql.Int,      1)
+        .input('PageSize',   sql.Int,      1)
+        .output('TotalCount', sql.Int)
+        .execute('dbo.sp_GetUsers');
+      const existingUser = existing.recordset?.[0];
+      if (!existingUser) return res.status(409).json({ success: false, error: 'Email already in use' });
+      const rawToken  = crypto.randomBytes(32).toString('hex');
+      const tokenHash = sha256(rawToken);
+      const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+      await db.request()
+        .input('UserId',    sql.UniqueIdentifier, existingUser.id)
+        .input('TokenHash', sql.NVarChar,         tokenHash)
+        .input('ExpiresAt', sql.DateTime2,        expiresAt)
+        .execute('dbo.sp_CreateInviteToken');
+      return res.status(200).json({ success: true, data: { id: existingUser.id, inviteToken: rawToken }, alreadyExisted: true });
+    }
     if (r.output.ErrorCode) return res.status(400).json({ success: false, error: r.output.ErrorCode });
 
     const newUserId = r.output.NewUserId;

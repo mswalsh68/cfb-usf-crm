@@ -157,13 +157,6 @@ BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
 
-  -- Validate position
-  IF @Position NOT IN ('QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH')
-  BEGIN
-    SET @ErrorCode = 'INVALID_POSITION';
-    RETURN;
-  END
-
   -- Validate academic year
   IF @AcademicYear NOT IN ('freshman','sophomore','junior','senior','graduate')
   BEGIN
