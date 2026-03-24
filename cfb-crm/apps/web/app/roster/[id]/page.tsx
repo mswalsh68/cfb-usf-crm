@@ -6,15 +6,8 @@ import { rosterApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { getUser, isGlobalAdmin } from '@/lib/auth';
 import { PageLayout, Button, Input, Select, Badge, Alert, Card } from '@/components';
+import { useTeamConfig } from '@/lib/teamConfig';
 
-const POSITION_OPTIONS = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'].map(p => ({ value: p, label: p }));
-const YEAR_OPTIONS = [
-  { value: 'freshman',  label: 'Freshman'  },
-  { value: 'sophomore', label: 'Sophomore' },
-  { value: 'junior',    label: 'Junior'    },
-  { value: 'senior',    label: 'Senior'    },
-  { value: 'graduate',  label: 'Graduate'  },
-];
 const STATUS_OPTIONS = [
   { value: 'active',      label: 'Active'      },
   { value: 'injured',     label: 'Injured'     },
@@ -29,6 +22,7 @@ const STATUS_BADGE: Record<string, 'green' | 'warning' | 'danger' | 'gray' | 'go
 export default function PlayerDetailPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const { positions, academicYears } = useTeamConfig();
 
   const [player,  setPlayer]  = useState<any>(null);
   const [stats,   setStats]   = useState<any[]>([]);
@@ -170,7 +164,7 @@ export default function PlayerDetailPage() {
               <>
                 <Input label="Major" value={form.major ?? ''} onChange={set('major')} />
                 <Input label="GPA" value={form.gpa?.toString() ?? ''} onChange={set('gpa')} type="number" />
-                <Select label="Academic Year" value={form.academicYear ?? ''} onChange={set('academicYear')} options={YEAR_OPTIONS} />
+                <Select label="Academic Year" value={form.academicYear ?? ''} onChange={set('academicYear')} options={academicYears} />
               </>
             ) : (
               <>
@@ -213,7 +207,7 @@ export default function PlayerDetailPage() {
             {editing ? (
               <>
                 {isWriter && (
-                  <Select label="Position"  value={form.position ?? ''} onChange={set('position')} options={POSITION_OPTIONS} />
+                  <Select label="Position"  value={form.position ?? ''} onChange={set('position')} options={positions.map(p => ({ value: p, label: p }))} />
                 )}
                 <Select label="Status"       value={form.status ?? ''}      onChange={set('status')}      options={STATUS_OPTIONS} />
                 <Input  label="Jersey #"     value={form.jerseyNumber?.toString() ?? ''} onChange={set('jerseyNumber')} type="number" />

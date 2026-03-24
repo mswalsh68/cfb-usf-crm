@@ -6,8 +6,8 @@ import { rosterApi } from '@/lib/api';
 import { isGlobalAdmin } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Alert } from '@/components';
+import { useTeamConfig } from '@/lib/teamConfig';
 
-const POSITIONS = ['All','QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'];
 const STATUSES  = [
   { value: '',           label: 'All Statuses' },
   { value: 'active',     label: 'Active'       },
@@ -17,15 +17,6 @@ const STATUSES  = [
   { value: 'walkOn',     label: 'Walk-On'      },
   { value: 'graduated',  label: 'Graduated'    },
 ];
-const YEARS = [
-  { value: '',           label: 'All Years'   },
-  { value: 'freshman',   label: 'Freshman'    },
-  { value: 'sophomore',  label: 'Sophomore'   },
-  { value: 'junior',     label: 'Junior'      },
-  { value: 'senior',     label: 'Senior'      },
-  { value: 'graduate',   label: 'Graduate'    },
-];
-
 const statusBadge = (status: string) => {
   const map: Record<string, 'green' | 'warning' | 'danger' | 'gray' | 'gold'> = {
     active:      'green',
@@ -39,6 +30,7 @@ const statusBadge = (status: string) => {
 
 export default function RosterPage() {
   const router = useRouter();
+  const { positions, academicYears } = useTeamConfig();
   const [players,  setPlayers]  = useState<any[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
@@ -106,12 +98,12 @@ export default function RosterPage() {
         <Select
           value={year}
           onChange={(v) => { setYear(v); setPage(1); }}
-          options={YEARS}
+          options={[{ value: '', label: 'All Years' }, ...academicYears]}
         />
         <Select
           value={position}
           onChange={(v) => { setPosition(v); setPage(1); }}
-          options={[{ value: 'All', label: 'All Positions' }, ...POSITIONS.slice(1).map(p => ({ value: p, label: p }))]}
+          options={[{ value: 'All', label: 'All Positions' }, ...positions.map(p => ({ value: p, label: p }))]}
         />
       </div>
 
