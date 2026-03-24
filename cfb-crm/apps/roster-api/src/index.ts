@@ -30,11 +30,13 @@ function rosterAccess(req: express.Request, res: express.Response, next: express
   next();
 }
 function rosterWrite(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (req.user?.globalRole === 'global_admin') return next();
   const role = req.user ? getAppRole(req.user, 'roster') : null;
   if (!role || !['global_admin','app_admin','coach_staff'].includes(role)) return res.status(403).json({ success: false, error: 'Write access required' });
   next();
 }
 function rosterAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (req.user?.globalRole === 'global_admin') return next();
   const role = req.user ? getAppRole(req.user, 'roster') : null;
   if (!role || !isAdmin(role)) return res.status(403).json({ success: false, error: 'Admin access required' });
   next();
@@ -118,7 +120,7 @@ app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
 app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
   const b    = req.body;
   const role = req.user ? getAppRole(req.user, 'roster') : null;
-  const isWriter = role && ['global_admin', 'app_admin', 'coach_staff'].includes(role);
+  const isWriter = req.user?.globalRole === 'global_admin' || !!(role && ['global_admin', 'app_admin', 'coach_staff'].includes(role));
 
   try {
     const db = await getDb();
