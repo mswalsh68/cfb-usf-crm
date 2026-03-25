@@ -57,13 +57,8 @@ export default function Nav({ currentPage }: NavProps) {
         setSwitchError('Failed to switch team. Please try again.');
         return;
       }
-      setCurrentTeamId(teamId);
-      // Update teams display name/logo instantly
-      setTeams(prev => prev); // re-read from new token on next render
-      // Push new theme colours to ThemeProvider without a page reload
-      triggerThemeRefresh(newConfig);
-      // Soft reload current page to pick up new team data
-      router.refresh();
+      // Hard reload to /dashboard so all pages re-fetch with the new team context
+      window.location.href = '/dashboard';
     } catch {
       setSwitchError('Failed to switch team. Please try again.');
     } finally {
