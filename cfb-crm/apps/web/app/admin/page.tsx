@@ -154,11 +154,11 @@ export default function AdminPage() {
 
       {/* User table */}
       <div style={{ backgroundColor: theme.white, borderRadius: 16, border: `1px solid ${theme.cardBorder}`, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }} aria-label="User management">
           <thead>
             <tr style={{ backgroundColor: theme.gray50, borderBottom: `1px solid ${theme.gray200}` }}>
               {['Name', 'Email', 'Role', 'Status', 'Actions'].map((h) => (
-                <th key={h} style={{ textAlign: 'left', padding: '12px 24px', fontSize: 11, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                <th key={h} scope="col" style={{ textAlign: 'left', padding: '12px 24px', fontSize: 11, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   {h}
                 </th>
               ))}

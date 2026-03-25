@@ -1,17 +1,20 @@
 'use client';
 
+import React from 'react';
+
 type Variant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
 type Size    = 'sm' | 'md' | 'lg';
 
 interface ButtonProps {
-  label:      string;
-  onClick?:   (e?: any) => void;
-  type?:      'button' | 'submit' | 'reset';
-  variant?:   Variant;
-  size?:      Size;
-  disabled?:  boolean;
-  loading?:   boolean;
-  fullWidth?: boolean;
+  label:       string;
+  onClick?:    (e?: any) => void;
+  type?:       'button' | 'submit' | 'reset';
+  variant?:    Variant;
+  size?:       Size;
+  disabled?:   boolean;
+  loading?:    boolean;
+  fullWidth?:  boolean;
+  ariaLabel?:  string;  // for icon-only or context-specific labels
 }
 
 const variantStyles: Record<Variant, React.CSSProperties> = {
@@ -28,17 +31,19 @@ const sizeStyles: Record<Size, React.CSSProperties> = {
   lg: { padding: '12px 24px', fontSize: 15, borderRadius: 'var(--radius-md)' },
 };
 
-import React from 'react';
-
 export default function Button({
   label, onClick, type = 'button', variant = 'primary',
   size = 'md', disabled = false, loading = false, fullWidth = false,
+  ariaLabel,
 }: ButtonProps) {
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
+      aria-label={ariaLabel}
+      aria-busy={loading ? 'true' : undefined}
+      aria-disabled={disabled || loading ? 'true' : undefined}
       style={{
         ...variantStyles[variant],
         ...sizeStyles[size],
@@ -54,7 +59,7 @@ export default function Button({
         boxSizing:      'border-box',
       }}
     >
-      {loading ? 'Loading...' : label}
+      {loading ? <><span aria-hidden="true">Loading...</span><span className="sr-only">Please wait</span></> : label}
     </button>
   );
 }

@@ -116,12 +116,12 @@ export default function AlumniPage() {
 
       {/* Alumni table */}
       <div style={{ backgroundColor: theme.cardBg, borderRadius: 'var(--radius-lg)', border: `1px solid ${theme.cardBorder}`, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }} aria-label="Alumni list">
           <thead>
             <tr style={{ backgroundColor: theme.gray50, borderBottom: `1px solid ${theme.gray200}` }}>
               {['Class', 'Name', 'Position', 'Employer', 'Location', 'Status', 'Donor', ''].map(h => (
-                <th key={h} style={{ textAlign: 'left', padding: '12px 20px', fontSize: 11, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                  {h}
+                <th key={h} scope="col" style={{ textAlign: 'left', padding: '12px 20px', fontSize: 11, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  {h || <span className="sr-only">Actions</span>}
                 </th>
               ))}
             </tr>
@@ -135,6 +135,10 @@ export default function AlumniPage() {
               <tr
                 key={a.id}
                 onClick={() => router.push(`/alumni/${a.id}`)}
+                onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') router.push(`/alumni/${a.id}`); }}
+                tabIndex={0}
+                role="button"
+                aria-label={`View ${a.firstName} ${a.lastName}`}
                 style={{
                   borderBottom:    `1px solid ${theme.gray100}`,
                   backgroundColor: i % 2 === 0 ? theme.cardBg : theme.gray50,

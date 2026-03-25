@@ -83,3 +83,33 @@ body {
 ::-webkit-scrollbar-track { background: var(--color-gray-100); }
 ::-webkit-scrollbar-thumb { background: var(--color-gray-300); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--color-gray-400); }
+
+/* ─── Accessibility ───────────────────────────────────────── */
+
+/* Visible focus ring for keyboard navigation */
+:focus-visible {
+  outline:        2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* Screen-reader only utility */
+.sr-only {
+  position:   absolute;
+  width:      1px;
+  height:     1px;
+  padding:    0;
+  margin:     -1px;
+  overflow:   hidden;
+  clip:       rect(0,0,0,0);
+  white-space: nowrap;
+  border:     0;
+}
+
+/* Respect reduced-motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration:   0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration:  0.01ms !important;
+  }
+}

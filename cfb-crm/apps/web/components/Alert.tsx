@@ -16,19 +16,27 @@ const alertStyles: Record<string, React.CSSProperties> = {
 
 export default function Alert({ message, variant, onClose }: AlertProps) {
   return (
-    <div style={{
-      ...alertStyles[variant],
-      borderRadius:   'var(--radius-md)',
-      padding:        '12px 16px',
-      fontSize:       14,
-      display:        'flex',
-      alignItems:     'center',
-      justifyContent: 'space-between',
-      marginBottom:   16,
-    }}>
+    <div
+      role="alert"
+      aria-live="polite"
+      style={{
+        ...alertStyles[variant],
+        borderRadius:   'var(--radius-md)',
+        padding:        '12px 16px',
+        fontSize:       14,
+        display:        'flex',
+        alignItems:     'center',
+        justifyContent: 'space-between',
+        marginBottom:   16,
+      }}
+    >
       <span>{message}</span>
       {onClose && (
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 18, lineHeight: 1, marginLeft: 12, color: 'inherit' }}>
+        <button
+          onClick={onClose}
+          aria-label="Dismiss"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontWeight: 700, fontSize: 18, lineHeight: 1, marginLeft: 12, color: 'inherit' }}
+        >
           ×
         </button>
       )}

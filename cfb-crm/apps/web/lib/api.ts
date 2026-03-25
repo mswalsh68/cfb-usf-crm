@@ -15,7 +15,11 @@ async function tryRefresh(): Promise<string | null> {
   let currentTeamId: string | null = null;
   try {
     const raw = localStorage.getItem('cfb_access_token');
-    if (raw) currentTeamId = JSON.parse(atob(raw.split('.')[1])).currentTeamId ?? null;
+    if (raw) {
+      const b64 = raw.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      const padded = b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, '=');
+      currentTeamId = JSON.parse(atob(padded)).currentTeamId ?? null;
+    }
   } catch { /* ignore — will default to first team */ }
 
   try {
