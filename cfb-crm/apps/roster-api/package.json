@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@cfb-crm/auth": "*",
+    "@cfb-crm/db": "*",
     "@cfb-crm/types": "*",
     "axios": "^1.13.6",
     "cors": "^2.8.5",

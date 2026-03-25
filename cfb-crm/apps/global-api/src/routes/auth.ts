@@ -27,7 +27,7 @@ authRouter.post('/login', async (req, res) => {
     const ok = await bcrypt.compare(password, PasswordHash); // bcrypt stays in code
     if (!ok) return res.status(401).json({ success: false, error: 'Invalid credentials' });
     const user = JSON.parse(UserJson);
-    const accessToken  = signAccessToken({ sub: UserId, email: user.email, globalRole: user.globalRole, appPermissions: user.appPermissions ?? [] });
+    const accessToken  = signAccessToken({ sub: UserId, email: user.email, globalRole: user.globalRole, appPermissions: user.appPermissions ?? [], teamId: user.teamId ?? '', rosterDb: user.rosterDb ?? '', alumniDb: user.alumniDb ?? '', dbServer: user.dbServer ?? '' });
     const refreshToken = signRefreshToken(UserId);
     await db.request()
       .input('UserId',    sql.UniqueIdentifier, UserId)
@@ -57,7 +57,7 @@ authRouter.post('/refresh', async (req, res) => {
       .execute('dbo.sp_RefreshToken');
     if (r.output.ErrorCode) return res.status(401).json({ success: false, error: 'Token invalid or expired' });
     const user        = JSON.parse(r.output.UserJson);
-    const accessToken = signAccessToken({ sub: user.id, email: user.email, globalRole: user.globalRole, appPermissions: user.appPermissions ?? [] });
+    const accessToken = signAccessToken({ sub: user.id, email: user.email, globalRole: user.globalRole, appPermissions: user.appPermissions ?? [], teamId: user.teamId ?? '', rosterDb: user.rosterDb ?? '', alumniDb: user.alumniDb ?? '', dbServer: user.dbServer ?? '' });
     return res.json({ success: true, data: { accessToken, refreshToken: newRefresh } });
   } catch (err) { console.error('[Refresh]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });

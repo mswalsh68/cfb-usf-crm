@@ -6,7 +6,20 @@ import rateLimit from 'express-rate-limit';
 import axios from 'axios';
 import { verifyAccessToken, extractBearerToken, hasAppAccess, getAppRole, isAdmin } from '@cfb-crm/auth';
 import type { AuthTokenPayload } from '@cfb-crm/types';
-import { getDb, sql } from './db';
+import { getClientDb, sql } from '@cfb-crm/db';
+import { getHealthDb } from './db';
+
+// Returns a connection pool scoped to this user's roster database
+function rosterDb(user: AuthTokenPayload) {
+  return getClientDb({
+    server:    user.dbServer,
+    database:  user.rosterDb,
+    user:      process.env.DB_USER,
+    password:  process.env.DB_PASS,
+    encrypt:   process.env.DB_ENCRYPT === 'true',
+    trustCert: process.env.DB_TRUST_CERT === 'true',
+  });
+}
 
 const app      = express();
 const PORT     = process.env.PORT       || 3002;
@@ -46,7 +59,7 @@ function rosterAdmin(req: express.Request, res: express.Response, next: express.
 app.get('/players', auth, rosterAccess, async (req, res) => {
   const { search, status, position, academicYear, recruitingClass, page = '1', pageSize = '50' } = req.query as Record<string, string>;
   try {
-    const db = await getDb();
+    const db = await rosterDb(req.user!);
     const r = await db.request()
       .input('Search',          sql.NVarChar, search           || null)
       .input('Status',          sql.NVarChar, status           || null)
@@ -64,7 +77,7 @@ app.get('/players', auth, rosterAccess, async (req, res) => {
 // ─── GET /players/:id ─────────────────────────────────────────
 app.get('/players/:id', auth, rosterAccess, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = await rosterDb(req.user!);
     const r = await db.request()
       .input('PlayerId',   sql.UniqueIdentifier, req.params.id)
       .output('ErrorCode', sql.NVarChar(50))
@@ -78,7 +91,7 @@ app.get('/players/:id', auth, rosterAccess, async (req, res) => {
 app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
   const b = req.body;
   try {
-    const db = await getDb();
+    const db = await rosterDb(req.user!);
     const r = await db.request()
       .input('UserId',                sql.UniqueIdentifier, b.userId)
       .input('JerseyNumber',          sql.TinyInt,          b.jerseyNumber          ?? null)
@@ -123,7 +136,7 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
   const isWriter = req.user?.globalRole === 'global_admin' || !!(role && ['global_admin', 'app_admin', 'coach_staff'].includes(role));
 
   try {
-    const db = await getDb();
+    const db = await rosterDb(req.user!);
 
     // If not a writer, verify the caller owns this player record
     if (!isWriter) {
@@ -172,7 +185,7 @@ app.post('/players/transfer', auth, rosterAccess, rosterAdmin, async (req, res) 
   if (!playerIds?.length) return res.status(400).json({ success: false, error: 'playerIds array is required' });
   if (!transferReason)    return res.status(400).json({ success: false, error: 'transferReason is required' });
   try {
-    const db = await getDb();
+    const db = await rosterDb(req.user!);
     const r = await db.request()
       .input('PlayerIds',        sql.NVarChar(sql.MAX), JSON.stringify(playerIds))
       .input('TransferReason',   sql.NVarChar(50),      transferReason)
@@ -235,7 +248,7 @@ app.post('/players/bulk', auth, rosterAccess, rosterWrite, async (req, res) => {
   if (!Array.isArray(players) || players.length === 0) return res.status(400).json({ success: false, error: 'players array is required' });
   if (players.length > 500) return res.status(400).json({ success: false, error: 'Maximum 500 players per upload' });
   try {
-    const db = await getDb();
+    const db = await rosterDb(req.user!);
     const r = await db.request()
       .input('PlayersJson',   sql.NVarChar(sql.MAX), JSON.stringify(players))
       .input('CreatedBy',     sql.UniqueIdentifier,  req.user!.sub)
@@ -251,7 +264,7 @@ app.post('/players/bulk', auth, rosterAccess, rosterWrite, async (req, res) => {
 app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res) => {
   const { seasonYear, gamesPlayed, statsJson } = req.body;
   try {
-    const db = await getDb();
+    const db = await rosterDb(req.user!);
     const r = await db.request()
       .input('PlayerId',    sql.UniqueIdentifier,  req.params.id)
       .input('SeasonYear',  sql.SmallInt,          seasonYear)
@@ -266,7 +279,7 @@ app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res)
 
 // ─── Health ───────────────────────────────────────────────────
 app.get('/health', async (_req, res) => {
-  try { const db = await getDb(); await db.request().query('SELECT 1'); res.json({ success: true, service: 'roster-api', db: 'connected' }); }
+  try { const db = await getHealthDb(); await db.request().query('SELECT 1'); res.json({ success: true, service: 'roster-api', db: 'connected' }); }
   catch { res.status(503).json({ success: false, service: 'roster-api', db: 'disconnected' }); }
 });
 

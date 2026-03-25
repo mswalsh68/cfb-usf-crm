@@ -5,7 +5,20 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import { verifyAccessToken, extractBearerToken, hasAppAccess, getAppRole, isAdmin } from '@cfb-crm/auth';
 import type { AuthTokenPayload } from '@cfb-crm/types';
-import { getDb, sql } from './db';
+import { getClientDb, sql } from '@cfb-crm/db';
+import { getHealthDb } from './db';
+
+// Returns a connection pool scoped to this user's alumni database
+function alumniDb(user: AuthTokenPayload) {
+  return getClientDb({
+    server:    user.dbServer,
+    database:  user.alumniDb,
+    user:      process.env.DB_USER,
+    password:  process.env.DB_PASS,
+    encrypt:   process.env.DB_ENCRYPT === 'true',
+    trustCert: process.env.DB_TRUST_CERT === 'true',
+  });
+}
 
 const app  = express();
 const PORT = process.env.PORT || 3003;
@@ -45,7 +58,7 @@ const alumniAdmin = (req: express.Request, res: express.Response, next: express.
 app.get('/alumni', auth, alumniAccess, async (req, res) => {
   const { search, status, isDonor, gradYear, position, page = '1', pageSize = '50' } = req.query as Record<string, string>;
   try {
-    const db = await getDb();
+    const db = await alumniDb(req.user!);
     const r = await db.request()
       .input('Search',      sql.NVarChar, search   || null)
       .input('Status',      sql.NVarChar, status   || null)
@@ -63,7 +76,7 @@ app.get('/alumni', auth, alumniAccess, async (req, res) => {
 // GET /alumni/:id
 app.get('/alumni/:id', auth, alumniAccess, async (req, res) => {
   try {
-    const db = await getDb();
+    const db = await alumniDb(req.user!);
     const r = await db.request()
       .input('AlumniId',   sql.UniqueIdentifier, req.params.id)
       .output('ErrorCode', sql.NVarChar(50))
@@ -82,7 +95,7 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
   const isWriter = role && ['global_admin', 'app_admin', 'coach_staff'].includes(role);
 
   try {
-    const db = await getDb();
+    const db = await alumniDb(req.user!);
 
     // If not a writer, verify the caller owns this alumni record
     if (!isWriter) {
@@ -123,7 +136,7 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
 app.post('/alumni/:id/interactions', auth, alumniAccess, alumniWrite, async (req, res) => {
   const { channel, summary, outcome, followUpAt } = req.body;
   try {
-    const db = await getDb();
+    const db = await alumniDb(req.user!);
     const r = await db.request()
       .input('AlumniId',   sql.UniqueIdentifier, req.params.id)
       .input('LoggedBy',   sql.UniqueIdentifier, req.user!.sub)
@@ -142,7 +155,7 @@ app.post('/alumni/:id/interactions', auth, alumniAccess, alumniWrite, async (req
 app.post('/alumni',  auth, alumniAccess , async (req, res) => {
   const b = req.body;
   try {
-    const db = await getDb();
+    const db = await alumniDb(req.user!);
     const result = await db.request()
       .input('UserId',             sql.UniqueIdentifier, b.userId             ?? null)
       .input('SourcePlayerId',     sql.UniqueIdentifier, b.sourcePlayerId     ?? null)
@@ -170,7 +183,7 @@ app.post('/alumni',  auth, alumniAccess , async (req, res) => {
 // GET /campaigns
 app.get('/campaigns', auth, alumniAccess, async (_req, res) => {
   try {
-    const db = await getDb();
+    const db = await alumniDb(req.user!);
     const r = await db.request().execute('dbo.sp_GetCampaigns');
     return res.json({ success: true, data: r.recordset });
   } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
@@ -180,7 +193,7 @@ app.get('/campaigns', auth, alumniAccess, async (_req, res) => {
 app.post('/campaigns', auth, alumniAccess, alumniAdmin, async (req, res) => {
   const { name, description, targetAudience, audienceFilters, scheduledAt } = req.body;
   try {
-    const db = await getDb();
+    const db = await alumniDb(req.user!);
     const r = await db.request()
       .input('Name',            sql.NVarChar,         name)
       .input('Description',     sql.NVarChar,         description     || null)
@@ -199,7 +212,7 @@ app.post('/campaigns', auth, alumniAccess, alumniAdmin, async (req, res) => {
 // GET /stats
 app.get('/stats', auth, alumniAccess, async (_req, res) => {
   try {
-    const db = await getDb();
+    const db = await alumniDb(req.user!);
     const r = await db.request().execute('dbo.sp_GetAlumniStats');
     const row = r.recordset[0];
     if (row?.classCounts) row.classCounts = JSON.parse(row.classCounts);
@@ -215,7 +228,7 @@ app.post('/alumni/bulk', auth, alumniAccess, alumniWrite, async (req, res) => {
   if (alumni.length > 500)
     return res.status(400).json({ success: false, error: 'Maximum 500 alumni per upload' });
   try {
-    const db = await getDb();
+    const db = await alumniDb(req.user!);
     const r = await db.request()
     .input('AlumniJson',    sql.NVarChar(sql.MAX), JSON.stringify(alumni))
       .input('CreatedBy',     sql.UniqueIdentifier,  req.user!.sub)
@@ -233,7 +246,7 @@ app.post('/alumni/bulk', auth, alumniAccess, alumniWrite, async (req, res) => {
   // Health
   app.get('/health', async (_req, res) => {
     try {
-      const db = await getDb();
+      const db = await getHealthDb();
       await db.request().query('SELECT 1');
       res.json({ success: true, service: 'alumni-api', db: 'connected' });
     } catch {
