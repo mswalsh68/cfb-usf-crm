@@ -32,7 +32,11 @@ export function getUser() {
   const token = getAccessToken();
   if (!token) return null;
   try {
-    return JSON.parse(atob(token.split('.')[1]));
+    // JWTs use base64url (- and _ instead of + and /). atob() needs standard base64.
+    const base64url = token.split('.')[1];
+    const base64    = base64url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded    = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
+    return JSON.parse(atob(padded));
   } catch {
     return null;
   }
