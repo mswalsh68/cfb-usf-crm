@@ -18,15 +18,19 @@ app.use(cors({
   credentials: true,
 }));
 
-const globalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
-const authLimiter   = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: 'Too many auth attempts, please try again later' });
+const globalLimiter      = rateLimit({ windowMs: 15 * 60 * 1000, max: 200 });
+// Strict limiter for login/register only (brute-force protection)
+const authLimiter        = rateLimit({ windowMs: 15 * 60 * 1000, max: 10,  message: 'Too many auth attempts, please try again later' });
+// Relaxed limiter for switch-team — legitimate users switch frequently
+const switchTeamLimiter  = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, message: 'Too many team switch requests' });
 
 app.use(globalLimiter);
 app.use(express.json({ limit: '10kb' }));
 
 app.use('/health',      healthRouter);
 app.use('/config',      configRouter);
-app.use('/auth',        authLimiter, authRouter);
+app.use('/auth/switch-team', switchTeamLimiter);
+app.use('/auth',             authLimiter, authRouter);
 app.use('/users',       usersRouter);
 app.use('/permissions', permissionsRouter);
 app.use('/platform',    platformRouter);
