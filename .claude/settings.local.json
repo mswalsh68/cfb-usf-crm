@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find /c/Users/mikew/Desktop/GitHub/cfb-usf-crm/cfb-crm/apps/web/components -type f -name *.tsx -o -name index.ts)"
+      "Bash(find /c/Users/mikew/Desktop/GitHub/cfb-usf-crm/cfb-crm/apps/web/components -type f -name *.tsx -o -name index.ts)",
+      "Bash(npm install:*)"
     ]
   }
 }
