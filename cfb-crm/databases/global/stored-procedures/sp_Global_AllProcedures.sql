@@ -45,7 +45,7 @@ BEGIN
     RETURN;
   END
 
-  -- Build user + permissions JSON (API signs the JWT from this)
+  -- Build user + permissions + team JSON (API signs the JWT from this)
   SELECT @UserJson = (
     SELECT
       u.id,
@@ -55,6 +55,11 @@ BEGIN
       u.global_role      AS globalRole,
       u.is_active        AS isActive,
       u.created_at       AS createdAt,
+      t.id               AS teamId,
+      t.name             AS teamName,
+      t.roster_db        AS rosterDb,
+      t.alumni_db        AS alumniDb,
+      t.db_server        AS dbServer,
       (
         SELECT
           ap.app_name   AS app,
@@ -67,6 +72,7 @@ BEGIN
         FOR JSON PATH
       ) AS appPermissions
     FROM dbo.users u
+    LEFT JOIN dbo.teams t ON t.id = u.team_id
     WHERE u.id = @UserId
     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
   );
@@ -164,6 +170,11 @@ BEGIN
       u.last_name        AS lastName,
       u.global_role      AS globalRole,
       u.is_active        AS isActive,
+      t.id               AS teamId,
+      t.name             AS teamName,
+      t.roster_db        AS rosterDb,
+      t.alumni_db        AS alumniDb,
+      t.db_server        AS dbServer,
       (
         SELECT ap.app_name AS app, ap.role, ap.granted_at AS grantedAt, ap.granted_by AS grantedBy
         FROM dbo.app_permissions ap
@@ -171,6 +182,7 @@ BEGIN
         FOR JSON PATH
       ) AS appPermissions
     FROM dbo.users u
+    LEFT JOIN dbo.teams t ON t.id = u.team_id
     WHERE u.id = @UserId
     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
   );
