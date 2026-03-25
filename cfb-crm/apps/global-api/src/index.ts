@@ -7,6 +7,7 @@ import { authRouter } from './routes/auth';
 import { usersRouter, permissionsRouter } from './routes/users';
 import { healthRouter } from './routes/health';
 import { configRouter } from './routes/config';
+import { platformRouter } from './routes/platform';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -28,6 +29,7 @@ app.use('/config',      configRouter);
 app.use('/auth',        authLimiter, authRouter);
 app.use('/users',       usersRouter);
 app.use('/permissions', permissionsRouter);
+app.use('/platform',    platformRouter);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, error: 'Route not found' });
