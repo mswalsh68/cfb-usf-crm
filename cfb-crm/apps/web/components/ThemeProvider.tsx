@@ -7,20 +7,28 @@ export type { TeamConfig };
 
 const GLOBAL_API = process.env.NEXT_PUBLIC_GLOBAL_API_URL ?? 'http://localhost:3001';
 
-function applyTheme(config: TeamConfig) {
+// Exported so Nav can call it directly after a team switch
+export function applyTheme(config: Partial<TeamConfig>) {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  root.style.setProperty('--color-primary',       config.colorPrimary);
-  root.style.setProperty('--color-primary-dark',  config.colorPrimaryDark);
-  root.style.setProperty('--color-primary-light', config.colorPrimaryLight);
-  root.style.setProperty('--color-primary-hover', config.colorPrimary);
-  root.style.setProperty('--color-accent',        config.colorAccent);
-  root.style.setProperty('--color-accent-dark',   config.colorAccentDark);
-  root.style.setProperty('--color-accent-light',  config.colorAccentLight);
-  root.style.setProperty('--color-success',       config.colorPrimary);
-  root.style.setProperty('--color-success-light', config.colorPrimaryLight);
-  root.style.setProperty('--color-info',          config.colorPrimaryDark);
-  root.style.setProperty('--color-info-light',    config.colorPrimaryLight);
+  if (config.colorPrimary)      root.style.setProperty('--color-primary',       config.colorPrimary);
+  if (config.colorPrimaryDark)  root.style.setProperty('--color-primary-dark',  config.colorPrimaryDark);
+  if (config.colorPrimaryLight) root.style.setProperty('--color-primary-light', config.colorPrimaryLight);
+  if (config.colorPrimary)      root.style.setProperty('--color-primary-hover', config.colorPrimary);
+  if (config.colorAccent)       root.style.setProperty('--color-accent',        config.colorAccent);
+  if (config.colorAccentDark)   root.style.setProperty('--color-accent-dark',   config.colorAccentDark);
+  if (config.colorAccentLight)  root.style.setProperty('--color-accent-light',  config.colorAccentLight);
+  if (config.colorPrimary)      root.style.setProperty('--color-success',       config.colorPrimary);
+  if (config.colorPrimaryLight) root.style.setProperty('--color-success-light', config.colorPrimaryLight);
+  if (config.colorPrimaryDark)  root.style.setProperty('--color-info',          config.colorPrimaryDark);
+  if (config.colorPrimaryLight) root.style.setProperty('--color-info-light',    config.colorPrimaryLight);
+}
+
+// Dispatches a custom event that ThemeProvider listens for.
+// Nav calls this after a successful team switch.
+export function triggerThemeRefresh(newConfig: Partial<TeamConfig>) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('team-config-changed', { detail: newConfig }));
 }
 
 export default function ThemeProvider({ children }: { children: React.ReactNode }) {
@@ -31,7 +39,11 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
     applyTheme(DEFAULT_CONFIG);
 
     // Fetch real config from global API (no auth required)
-    fetch(`${GLOBAL_API}/config`)
+    fetch(`${GLOBAL_API}/config`, {
+      headers: localStorage.getItem('cfb_access_token')
+        ? { Authorization: `Bearer ${localStorage.getItem('cfb_access_token')}` }
+        : {},
+    })
       .then(r => r.json())
       .then(({ data }) => {
         if (data) {
@@ -43,6 +55,19 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
       .catch(() => {
         // Fall back to defaults silently — API may not be running in dev
       });
+
+    // Listen for team switches triggered by Nav
+    const handleTeamChange = (e: Event) => {
+      const newConfig = (e as CustomEvent<Partial<TeamConfig>>).detail;
+      setConfig(prev => {
+        const merged = { ...prev, ...newConfig };
+        applyTheme(merged);
+        return merged;
+      });
+    };
+
+    window.addEventListener('team-config-changed', handleTeamChange);
+    return () => window.removeEventListener('team-config-changed', handleTeamChange);
   }, []);
 
   return (
