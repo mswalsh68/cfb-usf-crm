@@ -125,9 +125,10 @@ platformRouter.post('/onboard-client', async (req, res) => {
       server:   serverName.replace('\\\\', '\\'),
       database: rosterDb,
       options:  { encrypt: false, trustServerCertificate: true },
-      authentication: process.env.DB_USER
-        ? { type: 'default', options: { userName: process.env.DB_USER, password: process.env.DB_PASSWORD } }
-        : { type: 'default' },
+      authentication: {
+        type: 'default' as const,
+        options: { userName: process.env.DB_USER ?? '', password: process.env.DB_PASSWORD ?? '' },
+      },
     }).connect();
 
     await rosterPool.request().query(`
@@ -178,9 +179,10 @@ platformRouter.post('/onboard-client', async (req, res) => {
       server:   serverName.replace('\\\\', '\\'),
       database: alumniDb,
       options:  { encrypt: false, trustServerCertificate: true },
-      authentication: process.env.DB_USER
-        ? { type: 'default', options: { userName: process.env.DB_USER, password: process.env.DB_PASSWORD } }
-        : { type: 'default' },
+      authentication: {
+        type: 'default' as const,
+        options: { userName: process.env.DB_USER ?? '', password: process.env.DB_PASSWORD ?? '' },
+      },
     }).connect();
 
     await alumniPool.request().query(`

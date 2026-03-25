@@ -132,7 +132,7 @@ authRouter.post('/switch-team', requireAuth, async (req, res) => {
 
     // Re-sign the access token with the new currentTeamId and updated DB routing
     const updatedUser = {
-      ...req.user,
+      ...req.user!,
       currentTeamId: teamId,
       rosterDb: teamData.rosterDb,
       alumniDb: teamData.alumniDb,

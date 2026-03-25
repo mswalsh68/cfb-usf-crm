@@ -12,7 +12,8 @@ export function getAccessToken(): string | null {
 export function setTokens(accessToken: string, refreshToken: string) {
   localStorage.setItem('cfb_access_token', accessToken);
   localStorage.setItem('cfb_refresh_token', refreshToken);
-  document.cookie = 'cfb_access_token=1; path=/; SameSite=Strict';
+  // 7-day persistent cookie — matches refresh token lifetime
+  document.cookie = 'cfb_access_token=1; path=/; SameSite=Strict; Max-Age=604800';
 }
 
 export function setAccessToken(accessToken: string) {
