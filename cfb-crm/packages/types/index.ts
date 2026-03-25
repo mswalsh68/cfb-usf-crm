@@ -35,6 +35,10 @@ export interface AuthTokenPayload {
   email: string;
   globalRole: GlobalRole;
   appPermissions: AppPermission[];
+  teamId:   string;
+  rosterDb: string;
+  alumniDb: string;
+  dbServer: string;
   iat: number;
   exp: number;
 }

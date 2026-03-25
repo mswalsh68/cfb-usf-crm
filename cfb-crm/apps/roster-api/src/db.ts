@@ -1,42 +1,16 @@
-import sql from 'mssql';
+// Multi-tenant DB connections are handled via getClientDb() in @cfb-crm/db.
+// This file provides a server-level pool used only for the /health endpoint.
+import { getClientDb, sql } from '@cfb-crm/db';
 
-const config: sql.config = {
-  server:   process.env.ROSTER_DB_SERVER!,
-  database: process.env.ROSTER_DB_NAME!,
-  authentication: {
-    type: 'azure-active-directory-default', // Uses managed identity in Azure
-    options: {},
-  },
-  options: {
-    encrypt:              process.env.ROSTER_DB_ENCRYPT === 'true',
-    trustServerCertificate: process.env.ROSTER_DB_TRUST_CERT === 'true',
-    enableArithAbort:     true,
-  },
-  pool: {
-    max: 10,
-    min: 0,
-    idleTimeoutMillis: 30000,
-  },
-};
-
-// For local dev, fall back to SQL auth if managed identity isn't available
-if (process.env.NODE_ENV === 'development') {
-  config.authentication = {
-    type: 'default',
-    options: {
-      userName: process.env.ROSTER_DB_USER!,
-      password: process.env.ROSTER_DB_PASS!,
-    },
-  };
-}
-
-let pool: sql.ConnectionPool | null = null;
-
-export async function getDb(): Promise<sql.ConnectionPool> {
-  if (pool && pool.connected) return pool;
-  pool = await sql.connect(config);
-  console.log('[Roster DB] Connected');
-  return pool;
+export async function getHealthDb() {
+  return getClientDb({
+    server:    process.env.DB_SERVER!,
+    database:  'master',
+    user:      process.env.DB_USER,
+    password:  process.env.DB_PASS,
+    encrypt:   process.env.DB_ENCRYPT === 'true',
+    trustCert: process.env.DB_TRUST_CERT === 'true',
+  });
 }
 
 export { sql };

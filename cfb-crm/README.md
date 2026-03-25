@@ -1,3 +1,9 @@
+# Onboarding
+in apps/global-api run
+npm run onboard "--" "--email=admin@admin.com" "--firstName=PHS" "--lastName=Admin"
+
+
+
 # CFB CRM — Monorepo
 
 College Football Player & Alumni CRM — React Native (Expo) mobile app backed by three Azure-hosted Node.js APIs and Azure SQL Server databases.

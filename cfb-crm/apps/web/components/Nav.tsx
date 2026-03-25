@@ -2,16 +2,15 @@
 
 import { useRouter } from 'next/navigation';
 import { clearTokens } from '@/lib/auth';
+import { useTeamConfig } from '@/lib/teamConfig';
 
 interface NavProps {
   currentPage?: string;
 }
 
-const teamAbbr = process.env.NEXT_PUBLIC_TEAM_ABBR ?? 'USF';
-const teamName = process.env.NEXT_PUBLIC_TEAM_NAME ?? 'Bulls Team Portal';
-
 export default function Nav({ currentPage }: NavProps) {
   const router = useRouter();
+  const { teamName, teamAbbr, logoUrl } = useTeamConfig();
 
   const handleLogout = () => {
     clearTokens();
@@ -37,7 +36,7 @@ export default function Nav({ currentPage }: NavProps) {
           onClick={() => router.push('/dashboard')}
           style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
         >
-          {/* Team logo badge */}
+          {/* Team logo or abbr badge */}
           <div style={{
             width:           36,
             height:          36,
@@ -47,10 +46,15 @@ export default function Nav({ currentPage }: NavProps) {
             alignItems:      'center',
             justifyContent:  'center',
             flexShrink:      0,
+            overflow:        'hidden',
           }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)' }}>
-              {teamAbbr}
-            </span>
+            {logoUrl ? (
+              <img src={logoUrl} alt={teamAbbr} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-primary)' }}>
+                {teamAbbr}
+              </span>
+            )}
           </div>
           <span style={{ fontSize: 16, fontWeight: 600, color: '#ffffff' }}>{teamName}</span>
         </button>

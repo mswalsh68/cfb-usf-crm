@@ -2,12 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { hasAppAccess, isGlobalAdmin } from '@/lib/auth';
 import { rosterApi } from '@/lib/api';
+import { isGlobalAdmin } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Alert } from '@/components';
+import { useTeamConfig } from '@/lib/teamConfig';
 
-const POSITIONS = ['All','QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'];
 const STATUSES  = [
   { value: '',           label: 'All Statuses' },
   { value: 'active',     label: 'Active'       },
@@ -15,16 +15,8 @@ const STATUSES  = [
   { value: 'suspended',  label: 'Suspended'    },
   { value: 'transferred',label: 'Transferred'  },
   { value: 'walkOn',     label: 'Walk-On'      },
+  { value: 'graduated',  label: 'Graduated'    },
 ];
-const YEARS = [
-  { value: '',           label: 'All Years'   },
-  { value: 'freshman',   label: 'Freshman'    },
-  { value: 'sophomore',  label: 'Sophomore'   },
-  { value: 'junior',     label: 'Junior'      },
-  { value: 'senior',     label: 'Senior'      },
-  { value: 'graduate',   label: 'Graduate'    },
-];
-
 const statusBadge = (status: string) => {
   const map: Record<string, 'green' | 'warning' | 'danger' | 'gray' | 'gold'> = {
     active:      'green',
@@ -38,21 +30,18 @@ const statusBadge = (status: string) => {
 
 export default function RosterPage() {
   const router = useRouter();
+  const { positions, academicYears } = useTeamConfig();
   const [players,  setPlayers]  = useState<any[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [search,   setSearch]   = useState('');
   const [position, setPosition] = useState('All');
-  const [status,   setStatus]   = useState('');
+  const [status,   setStatus]   = useState('active');
   const [year,     setYear]     = useState('');
   const [total,    setTotal]    = useState(0);
   const [page,     setPage]     = useState(1);
 
   useEffect(() => {
-    if (!hasAppAccess('roster') && !isGlobalAdmin()) {
-      router.push('/dashboard');
-      return;
-    }
     fetchPlayers();
   }, [search, position, status, year, page]);
 
@@ -83,11 +72,13 @@ export default function RosterPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>Roster</h1>
           <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>{total} players</p>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <Button label="Upload Players" variant="outline" onClick={() => router.push('/roster/upload')} />
-          <Button label="Transfer to Alumni" variant="outline" onClick={() => router.push('/roster/transfer')} />
-          <Button label="+ Add Player" onClick={() => router.push('/roster/add')} />
-        </div>
+        {isGlobalAdmin() && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <Button label="Upload Players"    variant="outline" onClick={() => router.push('/roster/upload')}   />
+            <Button label="Transfer to Alumni" variant="outline" onClick={() => router.push('/roster/transfer')} />
+            <Button label="+ Add Player"                        onClick={() => router.push('/roster/add')}      />
+          </div>
+        )}
       </div>
 
       {error && <Alert message={error} variant="error" onClose={() => setError('')} />}
@@ -107,12 +98,12 @@ export default function RosterPage() {
         <Select
           value={year}
           onChange={(v) => { setYear(v); setPage(1); }}
-          options={YEARS}
+          options={[{ value: '', label: 'All Years' }, ...academicYears]}
         />
         <Select
           value={position}
           onChange={(v) => { setPosition(v); setPage(1); }}
-          options={[{ value: 'All', label: 'All Positions' }, ...POSITIONS.slice(1).map(p => ({ value: p, label: p }))]}
+          options={[{ value: 'All', label: 'All Positions' }, ...positions.map(p => ({ value: p, label: p }))]}
         />
       </div>
 

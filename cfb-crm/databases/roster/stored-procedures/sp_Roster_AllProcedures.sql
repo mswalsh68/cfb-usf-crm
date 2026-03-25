@@ -53,6 +53,10 @@ BEGIN
     p.gpa,
     p.major,
     p.phone,
+    p.email,
+    p.instagram,
+    p.twitter,
+    p.snapchat,
     p.emergency_contact_name  AS emergencyContactName,
     p.emergency_contact_phone AS emergencyContactPhone,
     p.notes,
@@ -96,7 +100,8 @@ BEGIN
     p.height_inches AS heightInches, p.weight_lbs AS weightLbs,
     p.home_town AS homeTown, p.home_state AS homeState,
     p.high_school AS highSchool, p.recruiting_class AS recruitingClass,
-    p.gpa, p.major, p.phone,
+    p.gpa, p.major, p.phone, p.email,
+    p.instagram, p.twitter, p.snapchat,
     p.emergency_contact_name AS emergencyContactName,
     p.emergency_contact_phone AS emergencyContactPhone,
     p.notes, p.graduated_at AS graduatedAt,
@@ -136,6 +141,10 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreatePlayer
   @Gpa                   DECIMAL(3,2)     = NULL,
   @Major                 NVARCHAR(100)    = NULL,
   @Phone                 NVARCHAR(20)     = NULL,
+  @Email                 NVARCHAR(255)    = NULL,
+  @Instagram             NVARCHAR(100)    = NULL,
+  @Twitter               NVARCHAR(100)    = NULL,
+  @Snapchat              NVARCHAR(100)    = NULL,
   @EmergencyContactName  NVARCHAR(150)    = NULL,
   @EmergencyContactPhone NVARCHAR(20)     = NULL,
   @Notes                 NVARCHAR(MAX)    = NULL,
@@ -147,13 +156,6 @@ AS
 BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
-
-  -- Validate position
-  IF @Position NOT IN ('QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH')
-  BEGIN
-    SET @ErrorCode = 'INVALID_POSITION';
-    RETURN;
-  END
 
   -- Validate academic year
   IF @AcademicYear NOT IN ('freshman','sophomore','junior','senior','graduate')
@@ -191,12 +193,12 @@ BEGIN
   INSERT INTO dbo.players (
     id, user_id, jersey_number, first_name, last_name, position, academic_year,
     recruiting_class, height_inches, weight_lbs, home_town, home_state, high_school,
-    gpa, major, phone, emergency_contact_name, emergency_contact_phone, notes
+    gpa, major, phone, email, instagram, twitter, snapchat, emergency_contact_name, emergency_contact_phone, notes
   )
   VALUES (
     @NewPlayerId, @UserId, @JerseyNumber, @FirstName, @LastName, @Position, @AcademicYear,
     @RecruitingClass, @HeightInches, @WeightLbs, @HomeTown, @HomeState, @HighSchool,
-    @Gpa, @Major, @Phone, @EmergencyContactName, @EmergencyContactPhone, @Notes
+    @Gpa, @Major, @Phone, @Email, @Instagram, @Twitter, @Snapchat, @EmergencyContactName, @EmergencyContactPhone, @Notes
   );
 END;
 GO
@@ -209,6 +211,7 @@ GO
 CREATE OR ALTER PROCEDURE dbo.sp_UpdatePlayer
   @PlayerId              UNIQUEIDENTIFIER,
   @JerseyNumber          TINYINT          = NULL,
+  @Position              NVARCHAR(10)     = NULL,
   @AcademicYear          NVARCHAR(20)     = NULL,
   @Status                NVARCHAR(20)     = NULL,
   @HeightInches          TINYINT          = NULL,
@@ -216,6 +219,10 @@ CREATE OR ALTER PROCEDURE dbo.sp_UpdatePlayer
   @Gpa                   DECIMAL(3,2)     = NULL,
   @Major                 NVARCHAR(100)    = NULL,
   @Phone                 NVARCHAR(20)     = NULL,
+  @Email                 NVARCHAR(255)    = NULL,
+  @Instagram             NVARCHAR(100)    = NULL,
+  @Twitter               NVARCHAR(100)    = NULL,
+  @Snapchat              NVARCHAR(100)    = NULL,
   @EmergencyContactName  NVARCHAR(150)    = NULL,
   @EmergencyContactPhone NVARCHAR(20)     = NULL,
   @Notes                 NVARCHAR(MAX)    = NULL,
@@ -258,6 +265,7 @@ BEGIN
 
   UPDATE dbo.players SET
     jersey_number           = COALESCE(@JerseyNumber,          jersey_number),
+    position                = COALESCE(@Position,              position),
     academic_year           = COALESCE(@AcademicYear,          academic_year),
     status                  = COALESCE(@Status,                status),
     height_inches           = COALESCE(@HeightInches,          height_inches),
@@ -265,6 +273,10 @@ BEGIN
     gpa                     = COALESCE(@Gpa,                   gpa),
     major                   = COALESCE(@Major,                 major),
     phone                   = COALESCE(@Phone,                 phone),
+    email                   = COALESCE(@Email,                 email),
+    instagram               = COALESCE(@Instagram,             instagram),
+    twitter                 = COALESCE(@Twitter,               twitter),
+    snapchat                = COALESCE(@Snapchat,              snapchat),
     emergency_contact_name  = COALESCE(@EmergencyContactName,  emergency_contact_name),
     emergency_contact_phone = COALESCE(@EmergencyContactPhone, emergency_contact_phone),
     notes                   = COALESCE(@Notes,                 notes),
@@ -466,5 +478,148 @@ BEGIN
     (SELECT player_id AS playerId, reason FROM @failures FOR JSON PATH),
     '[]'
   );
+END;
+GO
+
+-- ============================================================
+-- sp_TransferToAlumni
+-- Marks players as graduated/transferred and returns their data
+-- so the API can create alumni records.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_TransferToAlumni
+  @PlayerIds         NVARCHAR(MAX),   -- JSON array: ["guid","guid",...]
+  @TransferReason    NVARCHAR(50),
+  @TransferYear      SMALLINT,
+  @TransferSemester  NVARCHAR(10),
+  @Notes             NVARCHAR(MAX)    = NULL,
+  @TriggeredBy       NVARCHAR(100),
+  -- Outputs
+  @TransactionId     UNIQUEIDENTIFIER OUTPUT,
+  @SuccessCount      INT              OUTPUT,
+  @FailureJson       NVARCHAR(MAX)    OUTPUT,
+  @PlayersJson       NVARCHAR(MAX)    OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET XACT_ABORT ON;
+
+  SET @TransactionId = NEWID();
+  SET @SuccessCount  = 0;
+  SET @FailureJson   = '[]';
+  SET @PlayersJson   = '[]';
+
+  DECLARE @failures      TABLE (player_id NVARCHAR(100), reason NVARCHAR(500));
+  DECLARE @transferred   TABLE (
+    player_id        UNIQUEIDENTIFIER,
+    user_id          UNIQUEIDENTIFIER,
+    first_name       NVARCHAR(100),
+    last_name        NVARCHAR(100),
+    position         NVARCHAR(10),
+    recruiting_class SMALLINT,
+    phone            NVARCHAR(20),
+    email            NVARCHAR(255)
+  );
+  DECLARE @playerIds2 TABLE (player_id UNIQUEIDENTIFIER);
+  DECLARE @currentId  UNIQUEIDENTIFIER;
+
+  -- Parse the JSON array of player GUIDs
+  INSERT INTO @playerIds2 (player_id)
+  SELECT TRY_CAST([value] AS UNIQUEIDENTIFIER)
+  FROM OPENJSON(@PlayerIds)
+  WHERE TRY_CAST([value] AS UNIQUEIDENTIFIER) IS NOT NULL;
+
+  DECLARE player_cursor CURSOR FOR
+    SELECT player_id FROM @playerIds2;
+
+  OPEN player_cursor;
+  FETCH NEXT FROM player_cursor INTO @currentId;
+
+  WHILE @@FETCH_STATUS = 0
+  BEGIN
+    BEGIN TRY
+      BEGIN TRANSACTION;
+
+        DECLARE @firstName    NVARCHAR(100);
+        DECLARE @lastName     NVARCHAR(100);
+        DECLARE @position     NVARCHAR(10);
+        DECLARE @recruitClass SMALLINT;
+        DECLARE @userId       UNIQUEIDENTIFIER;
+        DECLARE @curStatus    NVARCHAR(20);
+        DECLARE @phone        NVARCHAR(20);
+        DECLARE @email        NVARCHAR(255);
+
+        SELECT
+          @firstName    = first_name,
+          @lastName     = last_name,
+          @position     = position,
+          @recruitClass = recruiting_class,
+          @userId       = user_id,
+          @curStatus    = status,
+          @phone        = phone,
+          @email        = email
+        FROM dbo.players
+        WHERE id = @currentId;
+
+        IF @userId IS NULL
+        BEGIN
+          ROLLBACK TRANSACTION;
+          INSERT INTO @failures VALUES (CAST(@currentId AS NVARCHAR(100)), 'Player not found');
+          FETCH NEXT FROM player_cursor INTO @currentId;
+          CONTINUE;
+        END
+
+        IF @curStatus = 'graduated'
+        BEGIN
+          ROLLBACK TRANSACTION;
+          INSERT INTO @failures VALUES (CAST(@currentId AS NVARCHAR(100)), 'Player already graduated');
+          FETCH NEXT FROM player_cursor INTO @currentId;
+          CONTINUE;
+        END
+
+        -- Mark player as graduated/transferred
+        UPDATE dbo.players
+        SET status       = 'graduated',
+            graduated_at = SYSUTCDATETIME(),
+            notes        = ISNULL(notes + CHAR(10), '') + 'Transfer reason: ' + @TransferReason,
+            updated_at   = SYSUTCDATETIME()
+        WHERE id = @currentId;
+
+        -- Collect for PlayersJson
+        INSERT INTO @transferred
+          (player_id, user_id, first_name, last_name, position, recruiting_class, phone, email)
+        VALUES
+          (@currentId, @userId, @firstName, @lastName, @position, @recruitClass, @phone, @email);
+
+        SET @SuccessCount = @SuccessCount + 1;
+
+      COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+      IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+      INSERT INTO @failures VALUES (CAST(@currentId AS NVARCHAR(100)), ERROR_MESSAGE());
+    END CATCH;
+
+    FETCH NEXT FROM player_cursor INTO @currentId;
+  END
+
+  CLOSE player_cursor;
+  DEALLOCATE player_cursor;
+
+  -- Build output JSON
+  SELECT @FailureJson = ISNULL(
+    (SELECT player_id AS playerId, reason FROM @failures FOR JSON PATH), '[]');
+
+  SELECT @PlayersJson = ISNULL(
+    (SELECT
+       CAST(player_id AS NVARCHAR(50))  AS playerId,
+       CAST(user_id   AS NVARCHAR(50))  AS userId,
+       first_name       AS firstName,
+       last_name        AS lastName,
+       position,
+       recruiting_class AS recruitingClass,
+       phone,
+       email
+     FROM @transferred
+     FOR JSON PATH), '[]');
 END;
 GO

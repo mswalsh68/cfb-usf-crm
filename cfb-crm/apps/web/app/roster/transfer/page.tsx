@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { hasAppAccess, isGlobalAdmin } from '@/lib/auth';
+import { isGlobalAdmin } from '@/lib/auth';
 import { rosterApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Select, Alert, Badge } from '@/components';
@@ -46,8 +46,8 @@ export default function TransferPage() {
   const [search,          setSearch]          = useState('');
 
   useEffect(() => {
-    if (!hasAppAccess('roster') && !isGlobalAdmin()) {
-      router.push('/dashboard');
+    if (!isGlobalAdmin()) {
+      router.push('/unauthorized');
       return;
     }
     fetchPlayers();

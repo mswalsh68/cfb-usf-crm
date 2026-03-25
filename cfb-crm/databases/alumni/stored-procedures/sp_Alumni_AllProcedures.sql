@@ -19,25 +19,33 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreateAlumniFromPlayer
   @GraduationSemester NVARCHAR(10),
   @Position           NVARCHAR(10),
   @RecruitingClass    SMALLINT,
-  @ErrorCode          NVARCHAR(50) OUTPUT
+  @Phone              NVARCHAR(20)     = NULL,
+  @PersonalEmail      NVARCHAR(255)    = NULL,
+  @NewAlumniId        UNIQUEIDENTIFIER OUTPUT,
+  @ErrorCode          NVARCHAR(50)     OUTPUT
 AS
 BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
 
-  -- Idempotent: already exists is not an error
+  -- Idempotent: already exists — return the existing ID
   IF EXISTS (SELECT 1 FROM dbo.alumni WHERE source_player_id = @SourcePlayerId)
   BEGIN
+    SELECT @NewAlumniId = id FROM dbo.alumni WHERE source_player_id = @SourcePlayerId;
     SET @ErrorCode = 'ALUMNI_ALREADY_EXISTS';
     RETURN;
   END
 
+  SET @NewAlumniId = NEWID();
+
   INSERT INTO dbo.alumni
-    (user_id, source_player_id, first_name, last_name,
-     graduation_year, graduation_semester, position, recruiting_class, status)
+    (id, user_id, source_player_id, first_name, last_name,
+     graduation_year, graduation_semester, position, recruiting_class,
+     phone, personal_email, status)
   VALUES
-    (@UserId, @SourcePlayerId, @FirstName, @LastName,
-     @GraduationYear, @GraduationSemester, @Position, @RecruitingClass, 'active');
+    (@NewAlumniId, @UserId, @SourcePlayerId, @FirstName, @LastName,
+     @GraduationYear, @GraduationSemester, @Position, @RecruitingClass,
+     @Phone, @PersonalEmail, 'active');
 END;
 GO
 
@@ -85,6 +93,7 @@ BEGIN
     a.personal_email        AS personalEmail,
     a.phone,
     a.linkedin_url          AS linkedInUrl,
+    a.twitter_url           AS twitterUrl,
     a.current_employer      AS currentEmployer,
     a.current_job_title     AS currentJobTitle,
     a.current_city          AS currentCity,
@@ -133,7 +142,7 @@ BEGIN
     a.first_name AS firstName, a.last_name AS lastName,
     a.graduation_year AS graduationYear, a.graduation_semester AS graduationSemester,
     a.position, a.recruiting_class AS recruitingClass, a.status,
-    a.personal_email AS personalEmail, a.phone, a.linkedin_url AS linkedInUrl,
+    a.personal_email AS personalEmail, a.phone, a.linkedin_url AS linkedInUrl, a.twitter_url AS twitterUrl,
     a.current_employer AS currentEmployer, a.current_job_title AS currentJobTitle,
     a.current_city AS currentCity, a.current_state AS currentState,
     a.is_donor AS isDonor, a.last_donation_date AS lastDonationDate,
@@ -168,6 +177,7 @@ CREATE OR ALTER PROCEDURE dbo.sp_UpdateAlumni
   @PersonalEmail   NVARCHAR(255)  = NULL,
   @Phone           NVARCHAR(20)   = NULL,
   @LinkedInUrl     NVARCHAR(500)  = NULL,
+  @TwitterUrl      NVARCHAR(100)  = NULL,
   @CurrentEmployer NVARCHAR(200)  = NULL,
   @CurrentJobTitle NVARCHAR(150)  = NULL,
   @CurrentCity     NVARCHAR(100)  = NULL,
@@ -200,6 +210,7 @@ BEGIN
     personal_email      = COALESCE(@PersonalEmail,    personal_email),
     phone               = COALESCE(@Phone,            phone),
     linkedin_url        = COALESCE(@LinkedInUrl,      linkedin_url),
+    twitter_url         = COALESCE(@TwitterUrl,       twitter_url),
     current_employer    = COALESCE(@CurrentEmployer,  current_employer),
     current_job_title   = COALESCE(@CurrentJobTitle,  current_job_title),
     current_city        = COALESCE(@CurrentCity,      current_city),

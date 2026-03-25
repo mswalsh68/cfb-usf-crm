@@ -5,7 +5,8 @@
     "dev": "ts-node-dev --respawn src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "onboard": "ts-node -r dotenv/config scripts/onboard.ts"
   },
   "dependencies": {
     "@cfb-crm/auth": "*",

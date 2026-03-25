@@ -4,16 +4,10 @@ import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { rosterApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
+import { getUser, isGlobalAdmin } from '@/lib/auth';
 import { PageLayout, Button, Input, Select, Badge, Alert, Card } from '@/components';
+import { useTeamConfig } from '@/lib/teamConfig';
 
-const POSITION_OPTIONS = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'].map(p => ({ value: p, label: p }));
-const YEAR_OPTIONS = [
-  { value: 'freshman',  label: 'Freshman'  },
-  { value: 'sophomore', label: 'Sophomore' },
-  { value: 'junior',    label: 'Junior'    },
-  { value: 'senior',    label: 'Senior'    },
-  { value: 'graduate',  label: 'Graduate'  },
-];
 const STATUS_OPTIONS = [
   { value: 'active',      label: 'Active'      },
   { value: 'injured',     label: 'Injured'     },
@@ -28,6 +22,7 @@ const STATUS_BADGE: Record<string, 'green' | 'warning' | 'danger' | 'gray' | 'go
 export default function PlayerDetailPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
+  const { positions, academicYears } = useTeamConfig();
 
   const [player,  setPlayer]  = useState<any>(null);
   const [stats,   setStats]   = useState<any[]>([]);
@@ -57,11 +52,15 @@ export default function PlayerDetailPage() {
     try {
       await rosterApi.patch(`/players/${id}`, {
         jerseyNumber:           form.jerseyNumber   ? parseInt(form.jerseyNumber) : undefined,
+        position:               form.position       || undefined,
         academicYear:           form.academicYear   || undefined,
         status:                 form.status         || undefined,
         gpa:                    form.gpa            ? parseFloat(form.gpa) : undefined,
         major:                  form.major          || undefined,
         phone:                  form.phone          || undefined,
+        email:                  form.email          || undefined,
+        instagram:              form.instagram       || undefined,
+        twitter:                form.twitter         || undefined,
         weightLbs:              form.weightLbs      ? parseInt(form.weightLbs) : undefined,
         emergencyContactName:   form.emergencyContactName  || undefined,
         emergencyContactPhone:  form.emergencyContactPhone || undefined,
@@ -85,6 +84,10 @@ export default function PlayerDetailPage() {
     </PageLayout>
   );
 
+  const user        = getUser();
+  const isWriter    = isGlobalAdmin() || user?.appPermissions?.some((p: any) => p.app === 'roster' && ['global_admin','app_admin','coach_staff'].includes(p.role));
+  const canEdit     = isWriter || user?.sub === player?.userId;
+
   if (!player) return (
     <PageLayout currentPage="Roster">
       <Alert message="Player not found" variant="error" />
@@ -99,14 +102,14 @@ export default function PlayerDetailPage() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <Button label="← Back to Roster" variant="outline" onClick={() => router.push('/roster')} />
         <div style={{ display: 'flex', gap: 10 }}>
-          {editing ? (
+          {canEdit && (editing ? (
             <>
-              <Button label="Cancel" variant="ghost" onClick={() => { setEditing(false); setForm(player); }} />
-              <Button label="Save Changes" loading={saving} onClick={handleSave} />
+              <Button label="Cancel"       variant="ghost"   onClick={() => { setEditing(false); setForm(player); }} />
+              <Button label="Save Changes" loading={saving}  onClick={handleSave} />
             </>
           ) : (
             <Button label="Edit Player" variant="outline" onClick={() => setEditing(true)} />
-          )}
+          ))}
         </div>
       </div>
 
@@ -161,7 +164,7 @@ export default function PlayerDetailPage() {
               <>
                 <Input label="Major" value={form.major ?? ''} onChange={set('major')} />
                 <Input label="GPA" value={form.gpa?.toString() ?? ''} onChange={set('gpa')} type="number" />
-                <Select label="Academic Year" value={form.academicYear ?? ''} onChange={set('academicYear')} options={YEAR_OPTIONS} />
+                <Select label="Academic Year" value={form.academicYear ?? ''} onChange={set('academicYear')} options={academicYears} />
               </>
             ) : (
               <>
@@ -182,12 +185,14 @@ export default function PlayerDetailPage() {
             {editing ? (
               <>
                 <Input label="Phone" value={form.phone ?? ''} onChange={set('phone')} type="tel" />
+                <Input label="Email" type="email" value={form.email ?? ''} onChange={set('email')} />
                 <Input label="Emergency Contact" value={form.emergencyContactName ?? ''} onChange={set('emergencyContactName')} />
                 <Input label="Emergency Phone"   value={form.emergencyContactPhone ?? ''} onChange={set('emergencyContactPhone')} type="tel" />
               </>
             ) : (
               <>
                 <InfoRow label="Phone"             value={player.phone}                />
+                <InfoRow label="Email"             value={player.email}                />
                 <InfoRow label="Emergency Contact" value={player.emergencyContactName} />
                 <InfoRow label="Emergency Phone"   value={player.emergencyContactPhone} />
               </>
@@ -201,6 +206,9 @@ export default function PlayerDetailPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {editing ? (
               <>
+                {isWriter && (
+                  <Select label="Position"  value={form.position ?? ''} onChange={set('position')} options={positions.map(p => ({ value: p, label: p }))} />
+                )}
                 <Select label="Status"       value={form.status ?? ''}      onChange={set('status')}      options={STATUS_OPTIONS} />
                 <Input  label="Jersey #"     value={form.jerseyNumber?.toString() ?? ''} onChange={set('jerseyNumber')} type="number" />
                 <Input  label="Weight (lbs)" value={form.weightLbs?.toString() ?? ''} onChange={set('weightLbs')} type="number" />
@@ -231,6 +239,24 @@ export default function PlayerDetailPage() {
               {player.notes || 'No notes.'}
             </p>
           )}
+        </Card>
+
+        {/* Social Media */}
+        <Card>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: theme.gray900, marginBottom: 16, marginTop: 0 }}>Social Media</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {editing ? (
+              <>
+                <Input label="Instagram" value={form.instagram ?? ''} onChange={set('instagram')} placeholder="@username" />
+                <Input label="Twitter / X" value={form.twitter ?? ''} onChange={set('twitter')} placeholder="@username" />
+              </>
+            ) : (
+              <>
+                <InfoRow label="Instagram"  value={player.instagram} />
+                <InfoRow label="Twitter / X" value={player.twitter} />
+              </>
+            )}
+          </div>
         </Card>
 
       </div>

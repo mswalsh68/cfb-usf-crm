@@ -4,9 +4,11 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { globalApi } from '@/lib/api';
 import { setTokens } from '@/lib/auth';
+import { useTeamConfig } from '@/lib/teamConfig';
 
 export default function LoginPage() {
   const router = useRouter();
+  const config = useTeamConfig();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -28,15 +30,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: '#006747' }}>
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: config.colorPrimary }}>
       <div className="w-full max-w-md">
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-xl mb-4" style={{ backgroundColor: '#CFC493' }}>
-            <span className="text-2xl font-bold" style={{ color: '#006747' }}>USF</span>
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-xl mb-4" style={{ backgroundColor: config.colorAccent }}>
+            <span className="text-2xl font-bold" style={{ color: config.colorPrimary }}>{config.teamAbbr}</span>
           </div>
-          <h1 className="text-white text-3xl font-bold">Bulls Team Portal</h1>
+          <h1 className="text-white text-3xl font-bold">{config.teamName}</h1>
           <p className="mt-1" style={{ color: 'rgba(255,255,255,0.65)' }}>Sign in to continue</p>
         </div>
 
@@ -61,7 +63,7 @@ export default function LoginPage() {
                 placeholder="coach@usf.edu"
                 required
                 className="w-full rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2"
-                style={{ border: '1.5px solid #E5E7EB'}}
+                style={{ border: '1.5px solid #E5E7EB' }}
               />
             </div>
 
@@ -84,7 +86,7 @@ export default function LoginPage() {
               type="submit"
               disabled={loading}
               className="w-full text-white py-3 rounded-lg font-semibold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: loading ? '#005432' : '#006747' }}
+              style={{ backgroundColor: loading ? config.colorPrimaryDark : config.colorPrimary }}
             >
               {loading ? 'Signing in...' : 'Sign In'}
             </button>

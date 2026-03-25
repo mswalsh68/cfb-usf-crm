@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { z } from 'zod';
 import { requireAuth, requireGlobalAdmin } from '../middleware/auth';
 import { getDb, sql } from '../db';
@@ -8,6 +9,8 @@ export const usersRouter      = Router();
 export const permissionsRouter = Router();
 usersRouter.use(requireAuth);
 permissionsRouter.use(requireAuth);
+
+const sha256 = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
 
 // GET /users — sp_GetUsers handles filtering, pagination, counts
 usersRouter.get('/', requireGlobalAdmin, async (req, res) => {
@@ -18,33 +21,36 @@ usersRouter.get('/', requireGlobalAdmin, async (req, res) => {
       .input('Search',     sql.NVarChar, search    || null)
       .input('GlobalRole', sql.NVarChar, role      || null)
       .input('Page',       sql.Int,      parseInt(page))
-      .input('PageSize',   sql.Int,      parseInt(pageSize))
+      .input('PageSize',   sql.Int,      Math.min(parseInt(pageSize) || 50, 200))
       .output('TotalCount', sql.Int)
       .execute('dbo.sp_GetUsers');
     return res.json({ success: true, data: r.recordset, total: r.output.TotalCount, page: parseInt(page), pageSize: parseInt(pageSize) });
   } catch (err) { console.error('[GET /users]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
-// POST /users — hash password in code, sp_CreateUser handles everything else
+// POST /users — password is optional; if omitted an invite token is generated.
+// Returns { user: { id }, inviteToken } — the frontend builds the invite URL.
 const createSchema = z.object({
-  email: z.string().email(), password: z.string().min(10),
-  firstName: z.string().min(1), lastName: z.string().min(1),
-  globalRole: z.enum(['global_admin','app_admin','coach_staff','player','readonly']),
+  email:        z.string().email(),
+  firstName:    z.string().min(1),
+  lastName:     z.string().min(1),
+  globalRole:   z.enum(['global_admin','app_admin','coach_staff','player','readonly']),
   grantAppName: z.enum(['roster','alumni','global-admin']).optional(),
   grantAppRole: z.enum(['global_admin','app_admin','coach_staff','player','readonly']).optional(),
 });
 usersRouter.post('/', requireGlobalAdmin, async (req, res) => {
   const p = createSchema.safeParse(req.body);
   if (!p.success) return res.status(400).json({ success: false, error: p.error.flatten() });
-  const { email, password, firstName, lastName, globalRole, grantAppName, grantAppRole } = p.data;
+  const { email, firstName, lastName, globalRole, grantAppName, grantAppRole } = p.data;
   try {
-    const db           = await getDb();
-    const passwordHash = await bcrypt.hash(password, 12); // hashing stays in code
+    const db = await getDb();
+    // Use a random placeholder hash — real password set when invite is redeemed
+    const placeholderHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
     const r = await db.request()
-      .input('Email',        sql.NVarChar,         email)
-      .input('PasswordHash', sql.NVarChar,         passwordHash)
-      .input('FirstName',    sql.NVarChar,         firstName)
-      .input('LastName',     sql.NVarChar,         lastName)
+      .input('Email',        sql.NVarChar,         email.trim().toLowerCase())
+      .input('PasswordHash', sql.NVarChar,         placeholderHash)
+      .input('FirstName',    sql.NVarChar,         firstName.trim())
+      .input('LastName',     sql.NVarChar,         lastName.trim())
       .input('GlobalRole',   sql.NVarChar,         globalRole)
       .input('CreatedBy',    sql.UniqueIdentifier, req.user!.sub)
       .input('GrantAppName', sql.NVarChar,         grantAppName || null)
@@ -52,9 +58,43 @@ usersRouter.post('/', requireGlobalAdmin, async (req, res) => {
       .output('NewUserId',   sql.UniqueIdentifier)
       .output('ErrorCode',   sql.NVarChar(50))
       .execute('dbo.sp_CreateUser');
-    if (r.output.ErrorCode === 'EMAIL_ALREADY_EXISTS') return res.status(409).json({ success: false, error: 'Email already in use' });
+    if (r.output.ErrorCode === 'EMAIL_ALREADY_EXISTS') {
+      // User already exists — fetch their ID and issue a fresh invite so the
+      // caller can still get a valid invite link (idempotent create).
+      const existing = await db.request()
+        .input('Search',     sql.NVarChar, email.trim().toLowerCase())
+        .input('GlobalRole', sql.NVarChar, null)
+        .input('Page',       sql.Int,      1)
+        .input('PageSize',   sql.Int,      1)
+        .output('TotalCount', sql.Int)
+        .execute('dbo.sp_GetUsers');
+      const existingUser = existing.recordset?.[0];
+      if (!existingUser) return res.status(409).json({ success: false, error: 'Email already in use' });
+      const rawToken  = crypto.randomBytes(32).toString('hex');
+      const tokenHash = sha256(rawToken);
+      const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+      await db.request()
+        .input('UserId',    sql.UniqueIdentifier, existingUser.id)
+        .input('TokenHash', sql.NVarChar,         tokenHash)
+        .input('ExpiresAt', sql.DateTime2,        expiresAt)
+        .execute('dbo.sp_CreateInviteToken');
+      return res.status(200).json({ success: true, data: { id: existingUser.id, inviteToken: rawToken }, alreadyExisted: true });
+    }
     if (r.output.ErrorCode) return res.status(400).json({ success: false, error: r.output.ErrorCode });
-    return res.status(201).json({ success: true, data: { id: r.output.NewUserId } });
+
+    const newUserId = r.output.NewUserId;
+
+    // Generate invite token (72-hour expiry)
+    const rawToken  = crypto.randomBytes(32).toString('hex');
+    const tokenHash = sha256(rawToken);
+    const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+    await db.request()
+      .input('UserId',    sql.UniqueIdentifier, newUserId)
+      .input('TokenHash', sql.NVarChar,         tokenHash)
+      .input('ExpiresAt', sql.DateTime2,        expiresAt)
+      .execute('dbo.sp_CreateInviteToken');
+
+    return res.status(201).json({ success: true, data: { id: newUserId, inviteToken: rawToken } });
   } catch (err) { console.error('[POST /users]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 

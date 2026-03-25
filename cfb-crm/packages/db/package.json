@@ -1,0 +1,12 @@
+{
+  "name": "@cfb-crm/db",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "types": "index.ts",
+  "dependencies": {
+    "mssql": "^10.0.2"
+  },
+  "devDependencies": {
+    "@types/mssql": "^9.1.4"
+  }
+}

@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isGlobalAdmin } from '@/lib/auth';
 import { globalApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Modal, Alert } from '@/components';
@@ -33,12 +32,12 @@ export default function AdminPage() {
   const [success,      setSuccess]      = useState('');
 
   const [newUser, setNewUser] = useState({
-    email: '', password: '', firstName: '', lastName: '',
+    email: '', firstName: '', lastName: '',
     globalRole: 'readonly', grantAppName: '', grantAppRole: 'readonly',
   });
+  const [inviteUrl, setInviteUrl] = useState('');
 
   useEffect(() => {
-    if (!isGlobalAdmin()) { router.push('/dashboard'); return; }
     fetchUsers();
   }, []);
 
@@ -111,18 +110,17 @@ export default function AdminPage() {
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await globalApi.post('/users', {
+      const res = await globalApi.post('/users', {
         email:        newUser.email,
-        password:     newUser.password,
         firstName:    newUser.firstName,
         lastName:     newUser.lastName,
         globalRole:   newUser.globalRole,
         grantAppName: newUser.grantAppName || undefined,
         grantAppRole: newUser.grantAppName ? newUser.grantAppRole : undefined,
       });
-      flash(`User ${newUser.firstName} ${newUser.lastName} created`);
-      setShowCreate(false);
-      setNewUser({ email: '', password: '', firstName: '', lastName: '', globalRole: 'readonly', grantAppName: '', grantAppRole: 'readonly' });
+      const { inviteToken } = res.data.data;
+      setInviteUrl(`${window.location.origin}/invite/${inviteToken}`);
+      setNewUser({ email: '', firstName: '', lastName: '', globalRole: 'readonly', grantAppName: '', grantAppRole: 'readonly' });
       fetchUsers();
     } catch (err: any) {
       flash(err?.response?.data?.error ?? 'Failed to create user', 'error');
@@ -139,7 +137,10 @@ export default function AdminPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>User Management</h1>
           <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>{users.length} total users</p>
         </div>
-        <Button label="+ New User" onClick={() => setShowCreate(true)} />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <Button label="Team Settings" variant="outline" onClick={() => router.push('/admin/settings')} />
+          <Button label="+ New User" onClick={() => setShowCreate(true)} />
+        </div>
       </div>
 
       {/* Alerts */}
@@ -239,15 +240,14 @@ export default function AdminPage() {
       </div>
 
       {/* Create User Modal */}
-      {showCreate && (
+      {showCreate && !inviteUrl && (
         <Modal title="Create New User" onClose={() => setShowCreate(false)}>
           <form onSubmit={createUser} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Input label="First Name" required value={newUser.firstName} onChange={(v) => setNewUser({ ...newUser, firstName: v })} />
               <Input label="Last Name"  required value={newUser.lastName}  onChange={(v) => setNewUser({ ...newUser, lastName: v })}  />
             </div>
-            <Input label="Email"    required type="email"    value={newUser.email}    onChange={(v) => setNewUser({ ...newUser, email: v })}    />
-            <Input label="Password" required type="password" value={newUser.password} onChange={(v) => setNewUser({ ...newUser, password: v })} helper="Minimum 10 characters" />
+            <Input label="Email" required type="email" value={newUser.email} onChange={(v) => setNewUser({ ...newUser, email: v })} helper="An invite link will be generated — no password needed yet" />
             <Select label="Global Role" value={newUser.globalRole} onChange={(v) => setNewUser({ ...newUser, globalRole: v })} options={ROLE_OPTIONS} />
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <Select label="Grant App Access" value={newUser.grantAppName} onChange={(v) => setNewUser({ ...newUser, grantAppName: v })} options={APP_OPTIONS} />
@@ -257,9 +257,28 @@ export default function AdminPage() {
             </div>
             <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
               <Button label="Cancel"      variant="ghost"   fullWidth onClick={() => setShowCreate(false)} />
-              <Button label="Create User" variant="primary" fullWidth type="submit" />
+              <Button label="Create & Get Invite Link" variant="primary" fullWidth type="submit" />
             </div>
           </form>
+        </Modal>
+      )}
+
+      {/* Invite Link Modal */}
+      {inviteUrl && (
+        <Modal title="Share Invite Link" onClose={() => { setInviteUrl(''); setShowCreate(false); }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, textAlign: 'center' }}>
+            <p style={{ fontSize: 14, color: theme.gray600, margin: 0 }}>
+              User created. Share this link so they can set their password.
+              <br /><strong>Expires in 72 hours.</strong>
+            </p>
+            <div style={{ backgroundColor: theme.gray50, border: `1px solid ${theme.gray200}`, borderRadius: 8, padding: '10px 14px', fontSize: 13, color: theme.gray700, wordBreak: 'break-all', textAlign: 'left' }}>
+              {inviteUrl}
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <Button label="Copy Link" fullWidth onClick={() => { navigator.clipboard.writeText(inviteUrl); flash('Invite link copied!'); }} />
+              <Button label="Done" variant="outline" fullWidth onClick={() => { setInviteUrl(''); setShowCreate(false); }} />
+            </div>
+          </div>
         </Modal>
       )}
     </PageLayout>

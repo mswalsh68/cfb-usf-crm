@@ -38,11 +38,12 @@ export default function GraduateScreen() {
 
   const graduateMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await rosterApi.post('/players/graduate', {
-        playerIds:          Array.from(selectedIds),
-        graduationYear:     parseInt(gradYear),
-        graduationSemester: semester,
-        notes: notes || undefined,
+      const { data } = await rosterApi.post('/players/transfer', {
+        playerIds:        Array.from(selectedIds),
+        transferReason:   'graduated',
+        transferYear:     parseInt(gradYear),
+        transferSemester: semester,
+        notes:            notes || undefined,
       });
       return data.data as GraduationResult;
     },
@@ -51,9 +52,10 @@ export default function GraduateScreen() {
       queryClient.invalidateQueries({ queryKey: ['players-graduatable'] });
       setSelectedIds(new Set());
 
-      const msg = result.failures.length > 0
-        ? `${result.graduatedCount} graduated successfully.\n${result.failures.length} failed — check the audit log.`
-        : `${result.graduatedCount} player${result.graduatedCount !== 1 ? 's' : ''} graduated successfully and moved to Alumni.`;
+      const count = result.transferredCount ?? result.graduatedCount ?? 0;
+      const msg = result.failures?.length > 0
+        ? `${count} graduated successfully.\n${result.failures.length} failed — check the audit log.`
+        : `${count} player${count !== 1 ? 's' : ''} graduated successfully and moved to Alumni.`;
 
       Alert.alert('Graduation Complete', msg);
     },
