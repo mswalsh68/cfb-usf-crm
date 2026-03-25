@@ -181,7 +181,7 @@ app.post('/alumni',  auth, alumniAccess , async (req, res) => {
 });
 
 // GET /campaigns
-app.get('/campaigns', auth, alumniAccess, async (_req, res) => {
+app.get('/campaigns', auth, alumniAccess, async (req, res) => {
   try {
     const db = await alumniDb(req.user!);
     const r = await db.request().execute('dbo.sp_GetCampaigns');
@@ -210,7 +210,7 @@ app.post('/campaigns', auth, alumniAccess, alumniAdmin, async (req, res) => {
 });
 
 // GET /stats
-app.get('/stats', auth, alumniAccess, async (_req, res) => {
+app.get('/stats', auth, alumniAccess, async (req, res) => {
   try {
     const db = await alumniDb(req.user!);
     const r = await db.request().execute('dbo.sp_GetAlumniStats');
