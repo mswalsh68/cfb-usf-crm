@@ -7,19 +7,19 @@
 
 -- ============================================================
 -- sp_Login
--- Validates credentials, returns user + app permissions as JSON.
--- The API calls this, receives the JSON, signs a JWT, done.
--- No credential logic ever touches application code.
+-- Validates credentials; returns user + teams array + app
+-- permissions as JSON. The API bcrypt-compares the password,
+-- signs the JWT from the returned JSON. No cred logic in code.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_Login
   @Email       NVARCHAR(255),
   @IpAddress   NVARCHAR(50)   = NULL,
   @DeviceInfo  NVARCHAR(255)  = NULL,
   -- Outputs
-  @UserId      UNIQUEIDENTIFIER OUTPUT,
-  @PasswordHash NVARCHAR(255) OUTPUT,
-  @UserJson    NVARCHAR(MAX)  OUTPUT,  -- full user + permissions payload
-  @ErrorCode   NVARCHAR(50)   OUTPUT   -- NULL = success
+  @UserId       UNIQUEIDENTIFIER OUTPUT,
+  @PasswordHash NVARCHAR(255)    OUTPUT,
+  @UserJson     NVARCHAR(MAX)    OUTPUT,  -- full user + teams + permissions payload
+  @ErrorCode    NVARCHAR(50)     OUTPUT   -- NULL = success
 AS
 BEGIN
   SET NOCOUNT ON;
@@ -45,21 +45,101 @@ BEGIN
     RETURN;
   END
 
-  -- Build user + permissions + team JSON (API signs the JWT from this)
+  DECLARE @GlobalRole NVARCHAR(50);
+  SELECT @GlobalRole = global_role FROM dbo.users WHERE id = @UserId;
+
+  -- Build teams JSON:
+  --   platform_owner  -> all active teams
+  --   everyone else   -> their user_teams rows
+  DECLARE @TeamsJson NVARCHAR(MAX);
+
+  IF @GlobalRole = 'platform_owner'
+  BEGIN
+    SELECT @TeamsJson = (
+      SELECT
+        t.id               AS teamId,
+        t.abbr,
+        t.name,
+        'platform_owner'   AS role,
+        tc.logo_url        AS logoUrl,
+        ISNULL(tc.color_primary, '#006747') AS colorPrimary,
+        ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+      FROM dbo.teams t
+      LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
+      WHERE t.is_active = 1
+      ORDER BY t.name
+      FOR JSON PATH
+    );
+  END
+  ELSE
+  BEGIN
+    SELECT @TeamsJson = (
+      SELECT
+        t.id    AS teamId,
+        t.abbr,
+        t.name,
+        ut.role,
+        tc.logo_url AS logoUrl,
+        ISNULL(tc.color_primary, '#006747') AS colorPrimary,
+        ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+      FROM dbo.user_teams ut
+      JOIN  dbo.teams t        ON t.id      = ut.team_id
+      LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
+      WHERE ut.user_id  = @UserId
+        AND ut.is_active = 1
+      ORDER BY t.name
+      FOR JSON PATH
+    );
+  END
+
+  IF @TeamsJson IS NULL SET @TeamsJson = '[]';
+
+  -- Resolve current team (first alphabetically)
+  DECLARE @CurrentTeamId UNIQUEIDENTIFIER;
+  DECLARE @RosterDb      NVARCHAR(100) = '';
+  DECLARE @AlumniDb      NVARCHAR(100) = '';
+  DECLARE @DbServer      NVARCHAR(200) = '';
+
+  IF @GlobalRole = 'platform_owner'
+  BEGIN
+    SELECT TOP 1
+      @CurrentTeamId = t.id,
+      @RosterDb      = t.roster_db,
+      @AlumniDb      = t.alumni_db,
+      @DbServer      = t.db_server
+    FROM dbo.teams t
+    WHERE t.is_active = 1
+    ORDER BY t.name;
+  END
+  ELSE
+  BEGIN
+    SELECT TOP 1
+      @CurrentTeamId = t.id,
+      @RosterDb      = t.roster_db,
+      @AlumniDb      = t.alumni_db,
+      @DbServer      = t.db_server
+    FROM dbo.user_teams ut
+    JOIN dbo.teams t ON t.id = ut.team_id
+    WHERE ut.user_id  = @UserId
+      AND ut.is_active = 1
+    ORDER BY t.name;
+  END
+
+  -- Build full payload JSON
   SELECT @UserJson = (
     SELECT
       u.id,
       u.email,
-      u.first_name       AS firstName,
-      u.last_name        AS lastName,
-      u.global_role      AS globalRole,
-      u.is_active        AS isActive,
-      u.created_at       AS createdAt,
-      t.id               AS teamId,
-      t.name             AS teamName,
-      t.roster_db        AS rosterDb,
-      t.alumni_db        AS alumniDb,
-      t.db_server        AS dbServer,
+      u.first_name                          AS firstName,
+      u.last_name                           AS lastName,
+      u.global_role                         AS globalRole,
+      u.is_active                           AS isActive,
+      u.created_at                          AS createdAt,
+      CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
+      @RosterDb                             AS rosterDb,
+      @AlumniDb                             AS alumniDb,
+      @DbServer                             AS dbServer,
+      JSON_QUERY(@TeamsJson)                AS teams,
       (
         SELECT
           ap.app_name   AS app,
@@ -72,7 +152,6 @@ BEGIN
         FOR JSON PATH
       ) AS appPermissions
     FROM dbo.users u
-    LEFT JOIN dbo.teams t ON t.id = u.team_id
     WHERE u.id = @UserId
     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
   );
@@ -108,7 +187,8 @@ GO
 
 -- ============================================================
 -- sp_RefreshToken
--- Validates an existing refresh token, revokes it, issues a new one.
+-- Validates an existing refresh token, revokes it, issues a
+-- new one. Returns fresh user payload including teams array.
 -- Entire rotation is atomic — no partial state possible.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_RefreshToken
@@ -128,7 +208,6 @@ BEGIN
 
   BEGIN TRANSACTION;
 
-    -- Validate existing token
     SELECT @UserId = user_id
     FROM dbo.refresh_tokens
     WHERE token_hash  = @OldTokenHash
@@ -142,7 +221,6 @@ BEGIN
       RETURN;
     END
 
-    -- Check user still active
     IF NOT EXISTS (SELECT 1 FROM dbo.users WHERE id = @UserId AND is_active = 1)
     BEGIN
       ROLLBACK TRANSACTION;
@@ -150,31 +228,105 @@ BEGIN
       RETURN;
     END
 
-    -- Revoke old token
     UPDATE dbo.refresh_tokens
     SET revoked_at = SYSUTCDATETIME()
     WHERE token_hash = @OldTokenHash;
 
-    -- Issue new token
     INSERT INTO dbo.refresh_tokens (user_id, token_hash, expires_at)
     VALUES (@UserId, @NewTokenHash, @NewExpiresAt);
 
   COMMIT TRANSACTION;
 
-  -- Return fresh user payload for new access token
+  -- Build fresh user payload (same structure as sp_Login)
+  DECLARE @GlobalRole NVARCHAR(50);
+  SELECT @GlobalRole = global_role FROM dbo.users WHERE id = @UserId;
+
+  DECLARE @TeamsJson NVARCHAR(MAX);
+
+  IF @GlobalRole = 'platform_owner'
+  BEGIN
+    SELECT @TeamsJson = (
+      SELECT
+        t.id               AS teamId,
+        t.abbr,
+        t.name,
+        'platform_owner'   AS role,
+        tc.logo_url        AS logoUrl,
+        ISNULL(tc.color_primary, '#006747') AS colorPrimary,
+        ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+      FROM dbo.teams t
+      LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
+      WHERE t.is_active = 1
+      ORDER BY t.name
+      FOR JSON PATH
+    );
+  END
+  ELSE
+  BEGIN
+    SELECT @TeamsJson = (
+      SELECT
+        t.id    AS teamId,
+        t.abbr,
+        t.name,
+        ut.role,
+        tc.logo_url AS logoUrl,
+        ISNULL(tc.color_primary, '#006747') AS colorPrimary,
+        ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+      FROM dbo.user_teams ut
+      JOIN  dbo.teams t        ON t.id      = ut.team_id
+      LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
+      WHERE ut.user_id  = @UserId
+        AND ut.is_active = 1
+      ORDER BY t.name
+      FOR JSON PATH
+    );
+  END
+
+  IF @TeamsJson IS NULL SET @TeamsJson = '[]';
+
+  DECLARE @CurrentTeamId UNIQUEIDENTIFIER;
+  DECLARE @RosterDb      NVARCHAR(100) = '';
+  DECLARE @AlumniDb      NVARCHAR(100) = '';
+  DECLARE @DbServer      NVARCHAR(200) = '';
+
+  IF @GlobalRole = 'platform_owner'
+  BEGIN
+    SELECT TOP 1
+      @CurrentTeamId = t.id,
+      @RosterDb      = t.roster_db,
+      @AlumniDb      = t.alumni_db,
+      @DbServer      = t.db_server
+    FROM dbo.teams t
+    WHERE t.is_active = 1
+    ORDER BY t.name;
+  END
+  ELSE
+  BEGIN
+    SELECT TOP 1
+      @CurrentTeamId = t.id,
+      @RosterDb      = t.roster_db,
+      @AlumniDb      = t.alumni_db,
+      @DbServer      = t.db_server
+    FROM dbo.user_teams ut
+    JOIN dbo.teams t ON t.id = ut.team_id
+    WHERE ut.user_id  = @UserId
+      AND ut.is_active = 1
+    ORDER BY t.name;
+  END
+
   SELECT @UserJson = (
     SELECT
       u.id,
       u.email,
-      u.first_name       AS firstName,
-      u.last_name        AS lastName,
-      u.global_role      AS globalRole,
-      u.is_active        AS isActive,
-      t.id               AS teamId,
-      t.name             AS teamName,
-      t.roster_db        AS rosterDb,
-      t.alumni_db        AS alumniDb,
-      t.db_server        AS dbServer,
+      u.first_name                          AS firstName,
+      u.last_name                           AS lastName,
+      u.global_role                         AS globalRole,
+      u.is_active                           AS isActive,
+      CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
+      @RosterDb                             AS rosterDb,
+      @AlumniDb                             AS alumniDb,
+      @DbServer                             AS dbServer,
+      JSON_QUERY(@TeamsJson)                AS teams,
       (
         SELECT ap.app_name AS app, ap.role, ap.granted_at AS grantedAt, ap.granted_by AS grantedBy
         FROM dbo.app_permissions ap
@@ -182,7 +334,6 @@ BEGIN
         FOR JSON PATH
       ) AS appPermissions
     FROM dbo.users u
-    LEFT JOIN dbo.teams t ON t.id = u.team_id
     WHERE u.id = @UserId
     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
   );
@@ -207,11 +358,143 @@ END;
 GO
 
 -- ============================================================
+-- sp_SwitchTeam
+-- Validates a user can access @NewTeamId, returns team details
+-- so the API can re-issue the JWT with updated currentTeamId.
+-- platform_owner bypasses the user_teams membership check.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_SwitchTeam
+  @UserId    UNIQUEIDENTIFIER,
+  @NewTeamId UNIQUEIDENTIFIER,
+  -- Outputs
+  @TeamJson  NVARCHAR(MAX) OUTPUT,
+  @ErrorCode NVARCHAR(50)  OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET @ErrorCode = NULL;
+  SET @TeamJson  = NULL;
+
+  -- Does the target team exist and is it active?
+  IF NOT EXISTS (SELECT 1 FROM dbo.teams WHERE id = @NewTeamId AND is_active = 1)
+  BEGIN
+    SET @ErrorCode = 'TEAM_NOT_FOUND';
+    RETURN;
+  END
+
+  -- Validate access (platform_owner bypasses user_teams check)
+  DECLARE @GlobalRole NVARCHAR(50);
+  SELECT @GlobalRole = global_role FROM dbo.users WHERE id = @UserId;
+
+  IF @GlobalRole <> 'platform_owner'
+  BEGIN
+    IF NOT EXISTS (
+      SELECT 1 FROM dbo.user_teams
+      WHERE user_id  = @UserId
+        AND team_id  = @NewTeamId
+        AND is_active = 1
+    )
+    BEGIN
+      SET @ErrorCode = 'ACCESS_DENIED';
+      RETURN;
+    END
+  END
+
+  -- Return team details for JWT re-issue + ThemeProvider refresh
+  SELECT @TeamJson = (
+    SELECT
+      t.id        AS teamId,
+      t.name,
+      t.abbr,
+      t.roster_db AS rosterDb,
+      t.alumni_db AS alumniDb,
+      t.db_server AS dbServer,
+      tc.logo_url            AS logoUrl,
+      tc.color_primary       AS colorPrimary,
+      tc.color_primary_dark  AS colorPrimaryDark,
+      tc.color_primary_light AS colorPrimaryLight,
+      tc.color_accent        AS colorAccent,
+      tc.color_accent_dark   AS colorAccentDark,
+      tc.color_accent_light  AS colorAccentLight,
+      tc.positions_json      AS positionsJson,
+      tc.academic_years_json AS academicYearsJson,
+      tc.alumni_label        AS alumniLabel,
+      tc.roster_label        AS rosterLabel,
+      tc.class_label         AS classLabel
+    FROM dbo.teams t
+    LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
+    WHERE t.id = @NewTeamId
+    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+  );
+
+  -- Audit the switch
+  INSERT INTO dbo.audit_log (actor_id, action, target_type, target_id, payload)
+  VALUES (
+    @UserId, 'team_switch', 'team', CAST(@NewTeamId AS NVARCHAR(100)),
+    JSON_OBJECT('isPlatformOwner': CASE WHEN @GlobalRole = 'platform_owner' THEN 'true' ELSE 'false' END)
+  );
+END;
+GO
+
+-- ============================================================
+-- sp_GetUserTeams
+-- Returns all teams a user has access to.
+-- platform_owner gets all active teams.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_GetUserTeams
+  @UserId UNIQUEIDENTIFIER
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  DECLARE @GlobalRole NVARCHAR(50);
+  SELECT @GlobalRole = global_role FROM dbo.users WHERE id = @UserId;
+
+  IF @GlobalRole = 'platform_owner'
+  BEGIN
+    SELECT
+      t.id               AS teamId,
+      t.abbr,
+      t.name,
+      t.sport,
+      t.level,
+      t.is_active        AS isActive,
+      'platform_owner'   AS role,
+      tc.logo_url        AS logoUrl,
+      ISNULL(tc.color_primary, '#006747') AS colorPrimary,
+      ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+    FROM dbo.teams t
+    LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
+    WHERE t.is_active = 1
+    ORDER BY t.name;
+  END
+  ELSE
+  BEGIN
+    SELECT
+      t.id    AS teamId,
+      t.abbr,
+      t.name,
+      t.sport,
+      t.level,
+      t.is_active     AS isActive,
+      ut.role,
+      tc.logo_url     AS logoUrl,
+      ISNULL(tc.color_primary, '#006747') AS colorPrimary,
+      ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+    FROM dbo.user_teams ut
+    JOIN  dbo.teams t        ON t.id      = ut.team_id
+    LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
+    WHERE ut.user_id  = @UserId
+      AND ut.is_active = 1
+    ORDER BY t.name;
+  END
+END;
+GO
+
+-- ============================================================
 -- sp_CreateUser
--- Creates a user account and optionally grants initial app permissions.
--- Password hashing: the API passes the bcrypt hash — hashing stays in
--- application code (bcrypt is not natively available in SQL Server).
--- All other logic — validation, audit, duplicate check — lives here.
+-- Creates a user and optionally grants initial app permissions.
+-- Also inserts into user_teams when @TeamId is provided.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_CreateUser
   @Email         NVARCHAR(255),
@@ -220,6 +503,7 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreateUser
   @LastName      NVARCHAR(100),
   @GlobalRole    NVARCHAR(50),
   @CreatedBy     UNIQUEIDENTIFIER,
+  @TeamId        UNIQUEIDENTIFIER = NULL,
   -- Optional: immediately grant access to an app
   @GrantAppName  NVARCHAR(50)  = NULL,
   @GrantAppRole  NVARCHAR(50)  = NULL,
@@ -232,17 +516,21 @@ BEGIN
   SET XACT_ABORT ON;
   SET @ErrorCode = NULL;
 
-  -- Validate role
-  IF @GlobalRole NOT IN ('global_admin','app_admin','coach_staff','player','readonly')
+  IF @GlobalRole NOT IN ('global_admin','app_admin','coach_staff','player','readonly','platform_owner')
   BEGIN
     SET @ErrorCode = 'INVALID_ROLE';
     RETURN;
   END
 
-  -- Duplicate email check
   IF EXISTS (SELECT 1 FROM dbo.users WHERE email = @Email)
   BEGIN
     SET @ErrorCode = 'EMAIL_ALREADY_EXISTS';
+    RETURN;
+  END
+
+  IF @TeamId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.teams WHERE id = @TeamId AND is_active = 1)
+  BEGIN
+    SET @ErrorCode = 'TEAM_NOT_FOUND';
     RETURN;
   END
 
@@ -250,24 +538,38 @@ BEGIN
 
     SET @NewUserId = NEWID();
 
-    INSERT INTO dbo.users (id, email, password_hash, first_name, last_name, global_role)
-    VALUES (@NewUserId, @Email, @PasswordHash, @FirstName, @LastName, @GlobalRole);
+    INSERT INTO dbo.users (id, email, password_hash, first_name, last_name, global_role, team_id)
+    VALUES (@NewUserId, @Email, @PasswordHash, @FirstName, @LastName, @GlobalRole, @TeamId);
 
-    -- Optionally grant app permission immediately
+    IF @TeamId IS NOT NULL
+    BEGIN
+      INSERT INTO dbo.user_teams (user_id, team_id, role)
+      VALUES (
+        @NewUserId,
+        @TeamId,
+        CASE @GlobalRole
+          WHEN 'global_admin' THEN 'global_admin'
+          WHEN 'app_admin'    THEN 'app_admin'
+          WHEN 'coach_staff'  THEN 'coach_staff'
+          ELSE 'readonly'
+        END
+      );
+    END
+
     IF @GrantAppName IS NOT NULL AND @GrantAppRole IS NOT NULL
     BEGIN
       INSERT INTO dbo.app_permissions (user_id, app_name, role, granted_by)
       VALUES (@NewUserId, @GrantAppName, @GrantAppRole, @CreatedBy);
     END
 
-    -- Audit
     INSERT INTO dbo.audit_log (actor_id, action, target_type, target_id, payload)
     VALUES (
       @CreatedBy, 'user_created', 'user', CAST(@NewUserId AS NVARCHAR(100)),
       JSON_OBJECT(
-        'email':      @Email,
-        'globalRole': @GlobalRole,
-        'grantedApp': ISNULL(@GrantAppName, ''),
+        'email':       @Email,
+        'globalRole':  @GlobalRole,
+        'teamId':      ISNULL(CAST(@TeamId AS NVARCHAR(100)), ''),
+        'grantedApp':  ISNULL(@GrantAppName, ''),
         'grantedRole': ISNULL(@GrantAppRole, '')
       )
     );
@@ -297,13 +599,12 @@ BEGIN
     RETURN;
   END
 
-  IF @GlobalRole IS NOT NULL AND @GlobalRole NOT IN ('global_admin','app_admin','coach_staff','player','readonly')
+  IF @GlobalRole IS NOT NULL AND @GlobalRole NOT IN ('global_admin','app_admin','coach_staff','player','readonly','platform_owner')
   BEGIN
     SET @ErrorCode = 'INVALID_ROLE';
     RETURN;
   END
 
-  -- Capture before state for audit
   DECLARE @Before NVARCHAR(MAX);
   SELECT @Before = JSON_OBJECT('globalRole': global_role, 'isActive': CAST(is_active AS NVARCHAR))
   FROM dbo.users WHERE id = @TargetUserId;
@@ -324,8 +625,6 @@ GO
 
 -- ============================================================
 -- sp_GrantPermission
--- Grants a user access to an app. Revokes any existing grant first
--- so there is never more than one active permission row per user+app.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GrantPermission
   @UserId    UNIQUEIDENTIFIER,
@@ -353,18 +652,15 @@ BEGIN
 
   BEGIN TRANSACTION;
 
-    -- Revoke existing active permission for this app
     UPDATE dbo.app_permissions
     SET revoked_at = SYSUTCDATETIME()
     WHERE user_id  = @UserId
       AND app_name = @AppName
       AND revoked_at IS NULL;
 
-    -- Grant new permission
     INSERT INTO dbo.app_permissions (user_id, app_name, role, granted_by)
     VALUES (@UserId, @AppName, @Role, @GrantedBy);
 
-    -- Audit
     INSERT INTO dbo.audit_log (actor_id, action, target_type, target_id, payload)
     VALUES (
       @GrantedBy, 'permission_granted', 'user', CAST(@UserId AS NVARCHAR(100)),
@@ -377,7 +673,6 @@ GO
 
 -- ============================================================
 -- sp_RevokePermission
--- Revokes a user's access to an app.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_RevokePermission
   @UserId    UNIQUEIDENTIFIER,
@@ -413,8 +708,7 @@ END;
 GO
 
 -- ============================================================
--- sp_TransferPlayerToAlumni  (called by sp_GraduatePlayer)
--- Swaps app_permissions: roster → alumni, writes audit.
+-- sp_TransferPlayerToAlumni
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_TransferPlayerToAlumni
   @UserId    UNIQUEIDENTIFIER,
@@ -425,14 +719,12 @@ BEGIN
 
   DECLARE @GrantedByGuid UNIQUEIDENTIFIER = TRY_CAST(@GrantedBy AS UNIQUEIDENTIFIER);
 
-  -- Revoke roster access
   UPDATE dbo.app_permissions
   SET revoked_at = SYSUTCDATETIME()
   WHERE user_id  = @UserId
     AND app_name = 'roster'
     AND revoked_at IS NULL;
 
-  -- Grant alumni access (readonly — alumni can view their own profile)
   IF NOT EXISTS (
     SELECT 1 FROM dbo.app_permissions
     WHERE user_id = @UserId AND app_name = 'alumni' AND revoked_at IS NULL
@@ -452,14 +744,12 @@ GO
 
 -- ============================================================
 -- sp_GetUsers
--- Paginated user list with optional filters. Used by Global Admin screen.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GetUsers
   @Search     NVARCHAR(255) = NULL,
   @GlobalRole NVARCHAR(50)  = NULL,
   @Page       INT           = 1,
   @PageSize   INT           = 50,
-  -- Outputs
   @TotalCount INT           OUTPUT
 AS
 BEGIN
@@ -496,7 +786,6 @@ GO
 
 -- ============================================================
 -- sp_GetUserPermissions
--- Returns all permission rows for a user (current + historical).
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GetUserPermissions
   @UserId UNIQUEIDENTIFIER
@@ -521,8 +810,6 @@ GO
 
 -- ============================================================
 -- sp_CreateInviteToken
--- Invalidates any existing unused invite for a user, then inserts
--- a new one. Caller passes the sha256 hash of the raw token.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_CreateInviteToken
   @UserId    UNIQUEIDENTIFIER,
@@ -532,7 +819,6 @@ AS
 BEGIN
   SET NOCOUNT ON;
 
-  -- Expire any previous unused invite tokens for this user
   UPDATE dbo.invite_tokens
   SET    used_at = SYSUTCDATETIME()
   WHERE  user_id = @UserId AND used_at IS NULL;
@@ -544,8 +830,6 @@ GO
 
 -- ============================================================
 -- sp_ValidateInviteToken
--- Returns the user's first name and email if the token is valid
--- (unused, not expired). Returns empty set if invalid.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_ValidateInviteToken
   @TokenHash VARCHAR(128)
@@ -564,8 +848,6 @@ GO
 
 -- ============================================================
 -- sp_RedeemInviteToken
--- Validates the token, sets the user's password hash, activates
--- the account, and marks the token used — all in one transaction.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_RedeemInviteToken
   @TokenHash    VARCHAR(128),
@@ -612,7 +894,6 @@ GO
 
 -- ============================================================
 -- sp_CleanExpiredTokens
--- Housekeeping — run on a schedule (e.g. Azure SQL Agent, daily).
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_CleanExpiredTokens
 AS
