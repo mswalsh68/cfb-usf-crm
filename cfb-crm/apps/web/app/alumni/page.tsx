@@ -39,6 +39,9 @@ export default function AlumniPage() {
   const [isDonor,   setIsDonor]   = useState(false);
   const [total,     setTotal]     = useState(0);
   const [page,      setPage]      = useState(1);
+  const [isAdmin,   setIsAdmin]   = useState(false);
+
+  useEffect(() => { setIsAdmin(isGlobalAdmin()); }, []);
 
   useEffect(() => {
     fetchAlumni();
@@ -71,7 +74,7 @@ export default function AlumniPage() {
           <h1 style={{ fontSize: 24, fontWeight: 700, color: theme.gray900, margin: 0 }}>{alumniLabel}</h1>
           <p style={{ fontSize: 14, color: theme.gray500, marginTop: 4 }}>{total} records</p>
         </div>
-        {isGlobalAdmin() && (
+        {isAdmin && (
           <div style={{ display: 'flex', gap: 10 }}>
             <Button label={`Upload ${alumniLabel}`} variant="outline" onClick={() => router.push('/alumni/upload')} />
             <Button label={`+ Add ${alumniLabel}`}                    onClick={() => router.push('/alumni/add')}    />
