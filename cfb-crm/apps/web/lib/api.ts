@@ -10,8 +10,16 @@ let refreshQueue: Array<(token: string) => void> = [];
 async function tryRefresh(): Promise<string | null> {
   const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('cfb_refresh_token') : null;
   if (!refreshToken) return null;
+
+  // Preserve the user's active team across token refresh
+  let currentTeamId: string | null = null;
   try {
-    const res = await axios.post(`${GLOBAL_API}/auth/refresh`, { refreshToken });
+    const raw = localStorage.getItem('cfb_access_token');
+    if (raw) currentTeamId = JSON.parse(atob(raw.split('.')[1])).currentTeamId ?? null;
+  } catch { /* ignore — will default to first team */ }
+
+  try {
+    const res = await axios.post(`${GLOBAL_API}/auth/refresh`, { refreshToken, currentTeamId });
     const { accessToken, refreshToken: newRefresh } = res.data.data;
     localStorage.setItem('cfb_access_token', accessToken);
     localStorage.setItem('cfb_refresh_token', newRefresh);
