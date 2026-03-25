@@ -3,7 +3,8 @@
 export type AppName = 'roster' | 'alumni' | 'global-admin';
 
 export type GlobalRole =
-  | 'global_admin'    // Full access to everything, all apps
+  | 'platform_owner'  // SaaS operator — access to all teams and platform admin
+  | 'global_admin'    // Full access to their team, all apps
   | 'app_admin'       // Admin within their assigned app(s)
   | 'coach_staff'     // Read/write in assigned app(s)
   | 'player'          // Access to roster app only (self-record)
@@ -14,6 +15,18 @@ export interface AppPermission {
   role: GlobalRole;
   grantedAt: string;
   grantedBy: string;
+}
+
+// ─── Multi-tenant team summary (embedded in JWT) ──────────────────────────────
+
+export interface TeamSummary {
+  teamId:       string;
+  abbr:         string;
+  name:         string;
+  role:         string;
+  logoUrl?:     string;
+  colorPrimary: string;
+  colorAccent:  string;
 }
 
 // ─── User ────────────────────────────────────────────────────────────────────
@@ -31,11 +44,13 @@ export interface User {
 }
 
 export interface AuthTokenPayload {
-  sub: string;            // user id
-  email: string;
-  globalRole: GlobalRole;
+  sub:            string;            // user id
+  email:          string;
+  globalRole:     GlobalRole;
+  currentTeamId:  string;           // active team for this session
+  teams:          TeamSummary[];    // all teams this user can access
   appPermissions: AppPermission[];
-  teamId:   string;
+  // Current team DB routing (derived from currentTeamId at login/switch)
   rosterDb: string;
   alumniDb: string;
   dbServer: string;
@@ -62,7 +77,7 @@ export type PositionGroup = 'QB' | 'RB' | 'WR' | 'TE' | 'OL' | 'DL' | 'LB' | 'DB
 
 export interface Player {
   id: string;
-  userId: string;           // links to global users table
+  userId: string;
   jerseyNumber: number;
   firstName: string;
   lastName: string;
@@ -74,7 +89,7 @@ export interface Player {
   homeTown: string;
   homeState: string;
   highSchool: string;
-  recruitingClass: number;  // year
+  recruitingClass: number;
   gpa?: number;
   major?: string;
   phone?: string;
@@ -90,7 +105,7 @@ export interface GraduationRequest {
   graduationYear: number;
   graduationSemester: 'spring' | 'fall' | 'summer';
   notes?: string;
-  confirmedBy: string;      // userId of coach/admin triggering
+  confirmedBy: string;
 }
 
 export interface GraduationResult {
@@ -107,8 +122,8 @@ export type OutreachStatus = 'pending' | 'sent' | 'responded' | 'bounced' | 'uns
 
 export interface Alumni {
   id: string;
-  userId: string;           // links to global users table
-  playerId: string;         // original roster player id
+  userId: string;
+  playerId: string;
   firstName: string;
   lastName: string;
   graduationYear: number;
@@ -116,7 +131,6 @@ export interface Alumni {
   position: PositionGroup;
   recruitingClass: number;
   status: AlumniStatus;
-  // Post-grad info
   currentEmployer?: string;
   currentJobTitle?: string;
   currentCity?: string;
@@ -124,11 +138,10 @@ export interface Alumni {
   personalEmail?: string;
   phone?: string;
   linkedInUrl?: string;
-  // Giving/engagement
   isDonor: boolean;
   lastDonationDate?: string;
   totalDonations?: number;
-  engagementScore?: number; // 0-100
+  engagementScore?: number;
   notes?: string;
   createdAt: string;
   updatedAt: string;

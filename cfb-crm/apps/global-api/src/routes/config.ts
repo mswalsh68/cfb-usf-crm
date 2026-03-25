@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { requireAuth, requireGlobalAdmin } from '../middleware/auth';
+import { extractBearerToken, verifyAccessToken } from '@cfb-crm/auth';
 import { getDb, sql } from '../db';
 
 export const configRouter = Router();
 
-const DEFAULT_POSITIONS     = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'];
+const DEFAULT_POSITIONS      = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'];
 const DEFAULT_ACADEMIC_YEARS = [
   { value: 'freshman',  label: 'Freshman'  },
   { value: 'sophomore', label: 'Sophomore' },
@@ -13,36 +14,64 @@ const DEFAULT_ACADEMIC_YEARS = [
   { value: 'graduate',  label: 'Graduate'  },
 ];
 
+function parseConfigRow(row: any) {
+  return {
+    ...row,
+    positions:     row.positionsJson     ? JSON.parse(row.positionsJson)     : DEFAULT_POSITIONS,
+    academicYears: row.academicYearsJson ? JSON.parse(row.academicYearsJson) : DEFAULT_ACADEMIC_YEARS,
+    positionsJson:     undefined,
+    academicYearsJson: undefined,
+  };
+}
+
 // GET /config — public, no auth required
-// Web app fetches this on load to apply theme and get dynamic config
-configRouter.get('/', async (_req, res) => {
+// Resolves the team to serve:
+//   1. ?teamId query param (platform_owner only — validated in route)
+//   2. currentTeamId from JWT (if a valid token is present in Authorization header)
+//   3. First/default team config (fallback for unauthenticated / ThemeProvider initial load)
+configRouter.get('/', async (req, res) => {
   try {
     const db = await getDb();
-    const r  = await db.request().execute('dbo.sp_GetTeamConfig');
+
+    // Try to resolve teamId from JWT (optional auth)
+    let teamId: string | null = null;
+    const token = extractBearerToken(req.headers.authorization);
+    if (token) {
+      try {
+        const decoded = verifyAccessToken(token);
+        // platform_owner can request any team via ?teamId query param
+        if (decoded.globalRole === 'platform_owner' && req.query.teamId) {
+          teamId = req.query.teamId as string;
+        } else {
+          teamId = decoded.currentTeamId || null;
+        }
+      } catch {
+        // Invalid token — fall through to default config
+      }
+    }
+
+    const r = await db.request()
+      .input('TeamId', sql.UniqueIdentifier, teamId ?? null)
+      .execute('dbo.sp_GetTeamConfig');
+
     const row = r.recordset[0];
     if (!row) return res.status(500).json({ success: false, error: 'Team config not found' });
 
-    const config = {
-      ...row,
-      positions:     row.positionsJson     ? JSON.parse(row.positionsJson)     : DEFAULT_POSITIONS,
-      academicYears: row.academicYearsJson ? JSON.parse(row.academicYearsJson) : DEFAULT_ACADEMIC_YEARS,
-      positionsJson:     undefined,
-      academicYearsJson: undefined,
-    };
-
-    return res.json({ success: true, data: config });
+    return res.json({ success: true, data: parseConfigRow(row) });
   } catch (err) {
     console.error('[GET /config]', err);
     return res.status(500).json({ success: false, error: 'Server error' });
   }
 });
 
-// PATCH /config — global admin only
+// PATCH /config — global admin only, uses currentTeamId from JWT
 configRouter.patch('/', requireAuth, requireGlobalAdmin, async (req, res) => {
-  const b = req.body;
+  const b      = req.body;
+  const teamId = req.user!.currentTeamId || null;
   try {
     const db = await getDb();
     const r  = await db.request()
+      .input('TeamId',            sql.UniqueIdentifier,  teamId ?? null)
       .input('TeamName',          sql.NVarChar,          b.teamName          ?? null)
       .input('TeamAbbr',          sql.NVarChar,          b.teamAbbr          ?? null)
       .input('Sport',             sql.NVarChar,          b.sport             ?? null)
@@ -61,6 +90,7 @@ configRouter.patch('/', requireAuth, requireGlobalAdmin, async (req, res) => {
       .input('ClassLabel',        sql.NVarChar,          b.classLabel        ?? null)
       .output('ErrorCode',        sql.NVarChar(50))
       .execute('dbo.sp_UpdateTeamConfig');
+
     if (r.output.ErrorCode) return res.status(400).json({ success: false, error: r.output.ErrorCode });
     return res.json({ success: true, message: 'Team config updated' });
   } catch (err) {
