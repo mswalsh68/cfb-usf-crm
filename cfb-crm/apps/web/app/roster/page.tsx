@@ -8,15 +8,7 @@ import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Alert } from '@/components';
 import { useTeamConfig } from '@/lib/teamConfig';
 
-const STATUSES  = [
-  { value: '',           label: 'All Statuses' },
-  { value: 'active',     label: 'Active'       },
-  { value: 'injured',    label: 'Injured'      },
-  { value: 'suspended',  label: 'Suspended'    },
-  { value: 'transferred',label: 'Transferred'  },
-  { value: 'walkOn',     label: 'Walk-On'      },
-  { value: 'graduated',  label: 'Graduated'    },
-];
+
 const statusBadge = (status: string) => {
   const map: Record<string, 'green' | 'warning' | 'danger' | 'gray' | 'gold'> = {
     active:      'green',
@@ -36,14 +28,14 @@ export default function RosterPage() {
   const [error,    setError]    = useState('');
   const [search,   setSearch]   = useState('');
   const [position, setPosition] = useState('All');
-  const [status,   setStatus]   = useState('active');
+  const status = 'active';
   const [year,     setYear]     = useState('');
   const [total,    setTotal]    = useState(0);
   const [page,     setPage]     = useState(1);
 
   useEffect(() => {
     fetchPlayers();
-  }, [search, position, status, year, page]);
+  }, [search, position, year, page]);
 
   const fetchPlayers = async () => {
     setLoading(true);
@@ -84,16 +76,11 @@ export default function RosterPage() {
       {error && <Alert message={error} variant="error" onClose={() => setError('')} />}
 
       {/* Filters */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
         <Input
           value={search}
           onChange={(v) => { setSearch(v); setPage(1); }}
           placeholder="Search name or jersey #..."
-        />
-        <Select
-          value={status}
-          onChange={(v) => { setStatus(v); setPage(1); }}
-          options={STATUSES}
         />
         <Select
           value={year}
