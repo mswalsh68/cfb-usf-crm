@@ -328,7 +328,7 @@ export default function PlatformAdminPage() {
 
           <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
             <Button label="Cancel" variant="outline" onClick={() => { setShowAddModal(false); setFormError(''); }} />
-            <Button label={submitting ? 'Provisioning...' : 'Provision Client'} disabled={submitting} onClick={() => {}} />
+            <Button label={submitting ? 'Provisioning...' : 'Provision Client'} disabled={submitting} type="submit" />
           </div>
         </form>
       </Modal>

@@ -18,7 +18,7 @@ const YEARS: AcademicYear[]      = ['freshman','sophomore','junior','senior','gr
 
 export default function AddPlayerScreen() {
   const router       = useRouter();
-  const { canWrite } = useAuth();
+  const { canWrite, user } = useAuth();
   const queryClient  = useQueryClient();
 
   const [form, setForm] = useState({
@@ -65,10 +65,7 @@ export default function AddPlayerScreen() {
         : undefined;
 
       await rosterApi.post('/players', {
-        // userId would normally come from a user-creation flow first.
-        // For now we generate a placeholder — in production, create the user
-        // in Global DB first and pass that userId here.
-        userId:               '00000000-0000-0000-0000-000000000000', // replace with actual flow
+        userId:               user!.id,
         firstName:            form.firstName.trim(),
         lastName:             form.lastName.trim(),
         jerseyNumber:         form.jerseyNumber ? parseInt(form.jerseyNumber) : undefined,
