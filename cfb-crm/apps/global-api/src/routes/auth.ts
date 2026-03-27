@@ -88,11 +88,12 @@ authRouter.post('/refresh', async (req, res) => {
     const expiresAt  = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     const r = await db.request()
-      .input('OldTokenHash', sql.NVarChar,  hash(refreshToken))
-      .input('NewTokenHash', sql.NVarChar,  hash(newRefresh))
-      .input('NewExpiresAt', sql.DateTime2, expiresAt)
-      .output('UserJson',    sql.NVarChar(sql.MAX))
-      .output('ErrorCode',   sql.NVarChar(50))
+      .input('OldTokenHash',  sql.NVarChar,       hash(refreshToken))
+      .input('NewTokenHash',  sql.NVarChar,       hash(newRefresh))
+      .input('NewExpiresAt',  sql.DateTime2,      expiresAt)
+      .input('CurrentTeamId', sql.UniqueIdentifier, currentTeamId ?? null)
+      .output('UserJson',     sql.NVarChar(sql.MAX))
+      .output('ErrorCode',    sql.NVarChar(50))
       .execute('dbo.sp_RefreshToken');
 
     if (r.output.ErrorCode) return res.status(401).json({ success: false, error: 'Token invalid or expired' });

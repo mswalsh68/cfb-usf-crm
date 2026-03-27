@@ -195,6 +195,7 @@ CREATE OR ALTER PROCEDURE dbo.sp_RefreshToken
   @OldTokenHash  NVARCHAR(255),
   @NewTokenHash  NVARCHAR(255),
   @NewExpiresAt  DATETIME2,
+  @CurrentTeamId UNIQUEIDENTIFIER = NULL,   -- client's active team; used to pin DB routing
   -- Outputs
   @UserJson      NVARCHAR(MAX) OUTPUT,
   @ErrorCode     NVARCHAR(50)  OUTPUT
@@ -284,34 +285,64 @@ BEGIN
 
   IF @TeamsJson IS NULL SET @TeamsJson = '[]';
 
-  DECLARE @CurrentTeamId UNIQUEIDENTIFIER;
-  DECLARE @RosterDb      NVARCHAR(100) = '';
-  DECLARE @AlumniDb      NVARCHAR(100) = '';
-  DECLARE @DbServer      NVARCHAR(200) = '';
+  DECLARE @ResolvedTeamId UNIQUEIDENTIFIER;
+  DECLARE @RosterDb       NVARCHAR(100) = '';
+  DECLARE @AlumniDb       NVARCHAR(100) = '';
+  DECLARE @DbServer       NVARCHAR(200) = '';
 
-  IF @GlobalRole = 'platform_owner'
+  -- Try to pin to the client's requested team first (validates access too)
+  IF @CurrentTeamId IS NOT NULL
   BEGIN
-    SELECT TOP 1
-      @CurrentTeamId = t.id,
-      @RosterDb      = t.roster_db,
-      @AlumniDb      = t.alumni_db,
-      @DbServer      = t.db_server
-    FROM dbo.teams t
-    WHERE t.is_active = 1
-    ORDER BY t.name;
+    IF @GlobalRole = 'platform_owner'
+    BEGIN
+      SELECT
+        @ResolvedTeamId = t.id,
+        @RosterDb       = t.roster_db,
+        @AlumniDb       = t.alumni_db,
+        @DbServer       = t.db_server
+      FROM dbo.teams t
+      WHERE t.id = @CurrentTeamId AND t.is_active = 1;
+    END
+    ELSE
+    BEGIN
+      SELECT
+        @ResolvedTeamId = t.id,
+        @RosterDb       = t.roster_db,
+        @AlumniDb       = t.alumni_db,
+        @DbServer       = t.db_server
+      FROM dbo.user_teams ut
+      JOIN dbo.teams t ON t.id = ut.team_id
+      WHERE ut.user_id = @UserId AND ut.team_id = @CurrentTeamId AND ut.is_active = 1;
+    END
   END
-  ELSE
+
+  -- Fall back to first-alphabetical team if requested team not found / not provided
+  IF @ResolvedTeamId IS NULL
   BEGIN
-    SELECT TOP 1
-      @CurrentTeamId = t.id,
-      @RosterDb      = t.roster_db,
-      @AlumniDb      = t.alumni_db,
-      @DbServer      = t.db_server
-    FROM dbo.user_teams ut
-    JOIN dbo.teams t ON t.id = ut.team_id
-    WHERE ut.user_id  = @UserId
-      AND ut.is_active = 1
-    ORDER BY t.name;
+    IF @GlobalRole = 'platform_owner'
+    BEGIN
+      SELECT TOP 1
+        @ResolvedTeamId = t.id,
+        @RosterDb       = t.roster_db,
+        @AlumniDb       = t.alumni_db,
+        @DbServer       = t.db_server
+      FROM dbo.teams t
+      WHERE t.is_active = 1
+      ORDER BY t.name;
+    END
+    ELSE
+    BEGIN
+      SELECT TOP 1
+        @ResolvedTeamId = t.id,
+        @RosterDb       = t.roster_db,
+        @AlumniDb       = t.alumni_db,
+        @DbServer       = t.db_server
+      FROM dbo.user_teams ut
+      JOIN dbo.teams t ON t.id = ut.team_id
+      WHERE ut.user_id  = @UserId
+        AND ut.is_active = 1
+      ORDER BY t.name;
+    END
   END
 
   SELECT @UserJson = (
@@ -322,11 +353,11 @@ BEGIN
       u.last_name                           AS lastName,
       u.global_role                         AS globalRole,
       u.is_active                           AS isActive,
-      CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
-      @RosterDb                             AS rosterDb,
-      @AlumniDb                             AS alumniDb,
-      @DbServer                             AS dbServer,
-      JSON_QUERY(@TeamsJson)                AS teams,
+      CAST(@ResolvedTeamId AS NVARCHAR(100)) AS currentTeamId,
+      @RosterDb                              AS rosterDb,
+      @AlumniDb                              AS alumniDb,
+      @DbServer                              AS dbServer,
+      JSON_QUERY(@TeamsJson)                 AS teams,
       (
         SELECT ap.app_name AS app, ap.role, ap.granted_at AS grantedAt, ap.granted_by AS grantedBy
         FROM dbo.app_permissions ap
