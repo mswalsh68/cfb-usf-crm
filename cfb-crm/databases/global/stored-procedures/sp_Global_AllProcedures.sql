@@ -192,6 +192,7 @@ CREATE OR ALTER PROCEDURE dbo.sp_RefreshToken
   @OldTokenHash  NVARCHAR(255),
   @NewTokenHash  NVARCHAR(255),
   @NewExpiresAt  DATETIME2,
+  @CurrentTeamId UNIQUEIDENTIFIER = NULL,   -- client's active team; used to pin DB routing
   -- Outputs
   @UserJson      NVARCHAR(MAX) OUTPUT,
   @ErrorCode     NVARCHAR(50)  OUTPUT
@@ -281,12 +282,13 @@ BEGIN
 
   IF @TeamsJson IS NULL SET @TeamsJson = '[]';
 
-  DECLARE @CurrentTeamId UNIQUEIDENTIFIER;
-  DECLARE @RosterDb      NVARCHAR(100) = '';
-  DECLARE @AlumniDb      NVARCHAR(100) = '';
-  DECLARE @DbServer      NVARCHAR(200) = '';
+  DECLARE @ResolvedTeamId UNIQUEIDENTIFIER;
+  DECLARE @RosterDb       NVARCHAR(100) = '';
+  DECLARE @AlumniDb       NVARCHAR(100) = '';
+  DECLARE @DbServer       NVARCHAR(200) = '';
 
-  IF @GlobalRole = 'platform_owner'
+  -- Try to pin to the client's requested team first (validates access too)
+  IF @CurrentTeamId IS NOT NULL
   BEGIN
     SELECT TOP 1
       @CurrentTeamId = t.id,
@@ -296,7 +298,9 @@ BEGIN
     WHERE t.is_active = 1
     ORDER BY t.name;
   END
-  ELSE
+
+  -- Fall back to first-alphabetical team if requested team not found / not provided
+  IF @ResolvedTeamId IS NULL
   BEGIN
     SELECT TOP 1
       @CurrentTeamId = t.id,
