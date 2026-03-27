@@ -1,8 +1,35 @@
 {
   "permissions": {
     "allow": [
-      "Bash(find /c/Users/mikew/Desktop/GitHub/cfb-usf-crm/cfb-crm/apps/web/components -type f -name *.tsx -o -name index.ts)",
-      "Bash(npm install:*)"
+      "Bash(npm cache:*)",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"SELECT OBJECT_ID\\(''HSFC_Roster.dbo.sp_BulkCreatePlayers''\\) AS bulk_players, OBJECT_ID\\(''HSFC_Alumni.dbo.sp_BulkCreateAlumni''\\) AS bulk_alumni;\")",
+      "Bash(powershell.exe -Command \":*)",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE CfbRoster; SELECT COUNT\\(*\\) AS total FROM dbo.players; SELECT TOP 5 first_name, last_name, is_active FROM dbo.players;\")",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE CfbRoster; SELECT COUNT\\(*\\) AS total FROM dbo.players; SELECT TOP 5 first_name, last_name, status FROM dbo.players;\")",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE CfbRoster; EXEC dbo.sp_GetPlayers @Status=''''graduated'''', @Page=1, @PageSize=50;\")",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE CfbRoster; DECLARE @T INT; EXEC dbo.sp_GetPlayers @Status=''''graduated'''', @Page=1, @PageSize=50, @TotalCount=@T OUTPUT; SELECT @T;\")",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE CfbRoster; DECLARE @def NVARCHAR\\(MAX\\); SELECT @def = CAST\\(definition AS NVARCHAR\\(MAX\\)\\) FROM sys.sql_modules WHERE object_id = OBJECT_ID\\(''''dbo.sp_GetPlayers''''\\); PRINT SUBSTRING\\(@def, 1, 2000\\);\")",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE CfbAlumni; SELECT COUNT\\(*\\) AS total FROM dbo.alumni;\")",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE CfbAlumni; DECLARE @T INT; EXEC dbo.sp_GetAlumni @Page=1, @PageSize=50, @TotalCount=@T OUTPUT; SELECT @T AS total;\")",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE HSFC_Alumni; DECLARE @T INT; EXEC dbo.sp_GetAlumni @Page=1, @PageSize=50, @TotalCount=@T OUTPUT; SELECT @T AS total;\")",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE CfbGlobal;:*)",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE CfbAlumni; DECLARE @T INT; EXEC dbo.sp_GetAlumni @Page=1, @PageSize=50, @TotalCount=@T OUTPUT; SELECT @T AS total_count, COUNT\\(*\\) as actual_rows FROM dbo.alumni;\")",
+      "Bash(xargs -I{} curl -s \"http://localhost:3003/alumni?page=1&pageSize=50\" -H \"Authorization: Bearer {}\")",
+      "Bash(sqlcmd -S \"localhost\\\\SQLEXPRESS\" -E -Q \"USE CfbAlumni; DECLARE @def NVARCHAR\\(MAX\\); SELECT @def = CAST\\(definition AS NVARCHAR\\(MAX\\)\\) FROM sys.sql_modules WHERE object_id = OBJECT_ID\\(''dbo.sp_GetAlumni''\\); PRINT SUBSTRING\\(@def, 1, 4000\\);\")",
+      "Bash(node -e \":*)",
+      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbGlobal'' -Username ''mswalsh68'' -Password ''USFbulls68!'' -Query ''SELECT name, roster_db, alumni_db, db_server, is_active FROM dbo.teams'' -TrustServerCertificate\")",
+      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbGlobal'' -Username ''mswalsh68'' -Password ''USFbulls68!'' -Query ''SELECT name, roster_db, alumni_db, db_server, is_active FROM dbo.teams''\")",
+      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbGlobal'' -Query ''SELECT name, roster_db, alumni_db, db_server, is_active FROM dbo.teams''\")",
+      "Bash(find C:UsersmikewDesktopGitHubcfb-usf-crmcfb-crmappsweb -name Nav* -o -name nav*)",
+      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbAlumni'' -Query ''EXEC dbo.sp_GetAlumni @Page=1, @PageSize=50, @TotalCount=0 OUTPUT''\")",
+      "Bash(powershell -Command \"Get-Process -Name node -ErrorAction SilentlyContinue | ForEach-Object { $_Id, $_CommandLine } \")",
+      "Bash(powershell -Command \"netstat -ano | findstr '':3003''\")",
+      "Bash(powershell -Command \"netstat -ano | findstr '':3001 :3002 :3003 LISTENING''\")",
+      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbGlobal'' -InputFile ''C:\\\\Users\\\\mikew\\\\Desktop\\\\GitHub\\\\cfb-usf-crm\\\\cfb-crm\\\\databases\\\\global\\\\stored-procedures\\\\sp_Global_AllProcedures.sql''\")",
+      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbGlobal'' -Query ''DECLARE @j NVARCHAR\\(MAX\\), @e NVARCHAR\\(50\\); EXEC dbo.sp_RefreshToken @OldTokenHash=N\"\"test\"\", @NewTokenHash=N\"\"test2\"\", @NewExpiresAt=GETDATE\\(\\), @CurrentTeamId=NULL, @UserJson=@j OUTPUT, @ErrorCode=@e OUTPUT; SELECT @e AS ErrorCode''\")",
+      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbRoster'' -Query ''SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_NAME, ORDINAL_POSITION''\")",
+      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbAlumni'' -Query ''SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_NAME, ORDINAL_POSITION''\")",
+      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbGlobal'' -Query \"\"SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=''teams'' ORDER BY ORDINAL_POSITION\"\"\")"
     ]
   }
 }
