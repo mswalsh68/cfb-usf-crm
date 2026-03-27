@@ -3,8 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 
 // ─── Base URLs (set in .env) ─────────────────────────────────
 const GLOBAL_API  = process.env.EXPO_PUBLIC_GLOBAL_API_URL  ?? 'http://localhost:3001';
-const ROSTER_API  = process.env.EXPO_PUBLIC_ROSTER_API_URL  ?? 'http://localhost:3002';
-const ALUMNI_API  = process.env.EXPO_PUBLIC_ALUMNI_API_URL  ?? 'http://localhost:3003';
+const APP_API     = process.env.EXPO_PUBLIC_APP_API_URL     ?? 'http://localhost:3002';
 
 const SECURE_KEYS = {
   accessToken:  'cfb_access_token',
@@ -100,5 +99,4 @@ function createApiClient(baseURL: string): AxiosInstance {
 }
 
 export const globalApi = createApiClient(GLOBAL_API);
-export const rosterApi = createApiClient(ROSTER_API);
-export const alumniApi = createApiClient(ALUMNI_API);
+export const appApi   = createApiClient(APP_API);

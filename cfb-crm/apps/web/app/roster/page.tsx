@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { rosterApi } from '@/lib/api';
+import { appApi } from '@/lib/api';
 import { isGlobalAdmin } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Alert } from '@/components';
@@ -45,7 +45,7 @@ export default function RosterPage() {
       if (position !== 'All') params.position   = position;
       if (status)            params.status      = status;
       if (year)              params.academicYear = year;
-      const { data } = await rosterApi.get('/players', { params });
+      const { data } = await appApi.get('/players', { params });
       setPlayers(data.data ?? []);
       setTotal(data.total ?? 0);
     } catch {

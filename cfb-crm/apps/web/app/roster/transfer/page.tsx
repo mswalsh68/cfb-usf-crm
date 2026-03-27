@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isGlobalAdmin } from '@/lib/auth';
-import { rosterApi } from '@/lib/api';
+import { appApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Select, Alert, Badge } from '@/components';
 
@@ -55,7 +55,7 @@ export default function TransferPage() {
 
   const fetchPlayers = async () => {
     try {
-      const { data } = await rosterApi.get('/players', {
+      const { data } = await appApi.get('/players', {
         params: { pageSize: 200, status: 'active' },
       });
       setPlayers(data.data ?? []);
@@ -89,7 +89,7 @@ export default function TransferPage() {
     }
     setSubmitting(true);
     try {
-      const { data } = await rosterApi.post('/players/transfer', {
+      const { data } = await appApi.post('/players/transfer', {
         playerIds:        Array.from(selectedIds),
         transferReason,
         transferYear:     parseInt(transferYear),

@@ -129,7 +129,7 @@ BEGIN
         CONTINUE;
       END
 
-      INSERT INTO dbo.alumni (
+      INSERT INTO alumni.alumni (
         user_id, source_player_id, first_name, last_name,
         graduation_year, graduation_semester, position, recruiting_class,
         personal_email, phone, linkedin_url,

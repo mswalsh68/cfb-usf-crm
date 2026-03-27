@@ -104,8 +104,7 @@ BEGIN
   BEGIN
     SELECT TOP 1
       @CurrentTeamId = t.id,
-      @RosterDb      = t.roster_db,
-      @AlumniDb      = t.alumni_db,
+      @AppDb         = t.app_db,
       @DbServer      = t.db_server
     FROM dbo.teams t
     WHERE t.is_active = 1
@@ -115,8 +114,7 @@ BEGIN
   BEGIN
     SELECT TOP 1
       @CurrentTeamId = t.id,
-      @RosterDb      = t.roster_db,
-      @AlumniDb      = t.alumni_db,
+      @AppDb         = t.app_db,
       @DbServer      = t.db_server
     FROM dbo.user_teams ut
     JOIN dbo.teams t ON t.id = ut.team_id
@@ -136,8 +134,7 @@ BEGIN
       u.is_active                           AS isActive,
       u.created_at                          AS createdAt,
       CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
-      @RosterDb                             AS rosterDb,
-      @AlumniDb                             AS alumniDb,
+      @AppDb                                AS appDb,
       @DbServer                             AS dbServer,
       JSON_QUERY(@TeamsJson)                AS teams,
       (
@@ -293,56 +290,27 @@ BEGIN
   -- Try to pin to the client's requested team first (validates access too)
   IF @CurrentTeamId IS NOT NULL
   BEGIN
-    IF @GlobalRole = 'platform_owner'
-    BEGIN
-      SELECT
-        @ResolvedTeamId = t.id,
-        @RosterDb       = t.roster_db,
-        @AlumniDb       = t.alumni_db,
-        @DbServer       = t.db_server
-      FROM dbo.teams t
-      WHERE t.id = @CurrentTeamId AND t.is_active = 1;
-    END
-    ELSE
-    BEGIN
-      SELECT
-        @ResolvedTeamId = t.id,
-        @RosterDb       = t.roster_db,
-        @AlumniDb       = t.alumni_db,
-        @DbServer       = t.db_server
-      FROM dbo.user_teams ut
-      JOIN dbo.teams t ON t.id = ut.team_id
-      WHERE ut.user_id = @UserId AND ut.team_id = @CurrentTeamId AND ut.is_active = 1;
-    END
+    SELECT TOP 1
+      @CurrentTeamId = t.id,
+      @AppDb         = t.app_db,
+      @DbServer      = t.db_server
+    FROM dbo.teams t
+    WHERE t.is_active = 1
+    ORDER BY t.name;
   END
 
   -- Fall back to first-alphabetical team if requested team not found / not provided
   IF @ResolvedTeamId IS NULL
   BEGIN
-    IF @GlobalRole = 'platform_owner'
-    BEGIN
-      SELECT TOP 1
-        @ResolvedTeamId = t.id,
-        @RosterDb       = t.roster_db,
-        @AlumniDb       = t.alumni_db,
-        @DbServer       = t.db_server
-      FROM dbo.teams t
-      WHERE t.is_active = 1
-      ORDER BY t.name;
-    END
-    ELSE
-    BEGIN
-      SELECT TOP 1
-        @ResolvedTeamId = t.id,
-        @RosterDb       = t.roster_db,
-        @AlumniDb       = t.alumni_db,
-        @DbServer       = t.db_server
-      FROM dbo.user_teams ut
-      JOIN dbo.teams t ON t.id = ut.team_id
-      WHERE ut.user_id  = @UserId
-        AND ut.is_active = 1
-      ORDER BY t.name;
-    END
+    SELECT TOP 1
+      @CurrentTeamId = t.id,
+      @AppDb         = t.app_db,
+      @DbServer      = t.db_server
+    FROM dbo.user_teams ut
+    JOIN dbo.teams t ON t.id = ut.team_id
+    WHERE ut.user_id  = @UserId
+      AND ut.is_active = 1
+    ORDER BY t.name;
   END
 
   SELECT @UserJson = (
@@ -353,11 +321,10 @@ BEGIN
       u.last_name                           AS lastName,
       u.global_role                         AS globalRole,
       u.is_active                           AS isActive,
-      CAST(@ResolvedTeamId AS NVARCHAR(100)) AS currentTeamId,
-      @RosterDb                              AS rosterDb,
-      @AlumniDb                              AS alumniDb,
-      @DbServer                              AS dbServer,
-      JSON_QUERY(@TeamsJson)                 AS teams,
+      CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
+      @AppDb                                AS appDb,
+      @DbServer                             AS dbServer,
+      JSON_QUERY(@TeamsJson)                AS teams,
       (
         SELECT ap.app_name AS app, ap.role, ap.granted_at AS grantedAt, ap.granted_by AS grantedBy
         FROM dbo.app_permissions ap
@@ -437,8 +404,7 @@ BEGIN
       t.id        AS teamId,
       t.name,
       t.abbr,
-      t.roster_db AS rosterDb,
-      t.alumni_db AS alumniDb,
+      t.app_db AS appDb,
       t.db_server AS dbServer,
       tc.logo_url            AS logoUrl,
       tc.color_primary       AS colorPrimary,

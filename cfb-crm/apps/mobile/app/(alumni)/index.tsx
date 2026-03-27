@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { alumniApi } from '../../hooks/useApiClient';
+import { appApi } from '../../hooks/useApiClient';
 import { useAuth } from '../../hooks/useAuth';
 import {
   AlumniCard, Button, EmptyState,
@@ -30,7 +30,7 @@ export default function AlumniScreen() {
       if (search)            params.search   = search;
       if (status !== 'All')  params.status   = status;
       if (onlyDonors)        params.isDonor  = 'true';
-      const { data } = await alumniApi.get('/alumni', { params });
+      const { data } = await appApi.get('/alumni', { params });
       return data;
     },
   });

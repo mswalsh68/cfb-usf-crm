@@ -1,8 +1,7 @@
 import axios from 'axios';
 
 const GLOBAL_API  = process.env.NEXT_PUBLIC_GLOBAL_API_URL  ?? 'http://localhost:3001';
-const ROSTER_API  = process.env.NEXT_PUBLIC_ROSTER_API_URL  ?? 'http://localhost:3002';
-const ALUMNI_API  = process.env.NEXT_PUBLIC_ALUMNI_API_URL  ?? 'http://localhost:3003';
+const APP_API     = process.env.NEXT_PUBLIC_APP_API_URL     ?? 'http://localhost:3002';
 
 let isRefreshing = false;
 let refreshQueue: Array<(token: string) => void> = [];
@@ -78,5 +77,4 @@ function createClient(baseURL: string) {
 }
 
 export const globalApi = createClient(GLOBAL_API);
-export const rosterApi = createClient(ROSTER_API);
-export const alumniApi = createClient(ALUMNI_API);
+export const appApi   = createClient(APP_API);
