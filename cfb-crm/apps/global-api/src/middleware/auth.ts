@@ -63,7 +63,7 @@ export function requireActiveTeam(req: Request, res: Response, next: NextFunctio
       }
       next();
     })
-    .catch(() => next()); // fail open on DB error — don't block users on infra issues
+    .catch(() => res.status(503).json({ success: false, error: 'Service temporarily unavailable' }));
 }
 
 // ─── App Access Guard ─────────────────────────────────────────────────────────

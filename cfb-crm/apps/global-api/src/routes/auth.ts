@@ -217,6 +217,22 @@ authRouter.post('/accept-invite', async (req, res) => {
 });
 
 // ─── POST /auth/logout ────────────────────────────────────────────────────────
+/** Return current user profile from the verified JWT — no DB call needed */
+authRouter.get('/me', requireAuth, (req, res) => {
+  const u = req.user!;
+  res.json({
+    success: true,
+    data: {
+      id:             u.sub,
+      email:          u.email,
+      globalRole:     u.globalRole,
+      currentTeamId:  u.currentTeamId,
+      teams:          u.teams,
+      appPermissions: u.appPermissions,
+    },
+  });
+});
+
 authRouter.post('/logout', async (req, res) => {
   const { refreshToken } = req.body;
   if (refreshToken) {

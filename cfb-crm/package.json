@@ -2,21 +2,20 @@
   "name": "cfb-crm",
   "private": true,
   "workspaces": [
-  "apps/global-api",
-  "apps/roster-api", 
-  "apps/alumni-api",
-  "apps/mobile",
-  "packages/*"
-],
-"scripts": {
-  "mobile": "npm run start --workspace=apps/mobile",
-  "global-api": "npm run dev --workspace=apps/global-api",
-  "roster-api": "npm run dev --workspace=apps/roster-api",
-  "alumni-api": "npm run dev --workspace=apps/alumni-api",
-  "dev": "concurrently \"npm run global-api\" \"npm run roster-api\" \"npm run alumni-api\"",
-  "typecheck": "npm run typecheck --workspaces --if-present",
-  "lint": "npm run lint --workspaces --if-present"
-},
+    "apps/global-api",
+    "apps/app-api",
+    "apps/web",
+    "apps/mobile",
+    "packages/*"
+  ],
+  "scripts": {
+    "mobile":     "npm run start --workspace=apps/mobile",
+    "global-api": "npm run dev --workspace=apps/global-api",
+    "app-api":    "npm run dev --workspace=apps/app-api",
+    "dev":        "concurrently \"npm run global-api\" \"npm run app-api\"",
+    "typecheck":  "npm run typecheck --workspaces --if-present",
+    "lint":       "npm run lint --workspaces --if-present"
+  },
   "devDependencies": {
     "concurrently": "^8.2.0",
     "typescript": "^5.3.3"
