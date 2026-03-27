@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { alumniApi } from '@/lib/api';
+import { appApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { getUser, isGlobalAdmin } from '@/lib/auth';
 import { useTeamConfig } from '@/lib/teamConfig';
@@ -70,7 +70,7 @@ export default function AlumniDetailPage() {
   const fetchAlumni = async () => {
     setLoading(true);
     try {
-      const { data } = await alumniApi.get(`/alumni/${id}`);
+      const { data } = await appApi.get(`/alumni/${id}`);
       const a = data.data;
       setAlumni(a);
       setInteractions(a.interactions ?? []);
@@ -100,7 +100,7 @@ export default function AlumniDetailPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await alumniApi.patch(`/alumni/${id}`, {
+      await appApi.patch(`/alumni/${id}`, {
         status:          edit.status          || undefined,
         personalEmail:   edit.personalEmail   || undefined,
         phone:           edit.phone           || undefined,
@@ -130,7 +130,7 @@ export default function AlumniDetailPage() {
     if (!interaction.summary.trim()) { setError('Summary is required.'); return; }
     setLoggingInteraction(true);
     try {
-      await alumniApi.post(`/alumni/${id}/interactions`, {
+      await appApi.post(`/alumni/${id}/interactions`, {
         channel:    interaction.channel,
         summary:    interaction.summary,
         outcome:    interaction.outcome   || undefined,

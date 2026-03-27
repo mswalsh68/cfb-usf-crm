@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import { isGlobalAdmin } from '@/lib/auth';
-import { alumniApi } from '@/lib/api';
+import { appApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Alert, Badge } from '@/components';
 
@@ -130,7 +130,7 @@ export default function AlumniUploadPage() {
     if (preview.length === 0) return;
     setUploading(true);
     try {
-      const { data } = await alumniApi.post('/alumni/bulk', {
+      const { data } = await appApi.post('/alumni/bulk', {
         alumni: preview.map(({ _rowNum, ...a }) => a),
       });
       setResult(data.data);

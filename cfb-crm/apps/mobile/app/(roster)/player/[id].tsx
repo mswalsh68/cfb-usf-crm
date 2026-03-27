@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { rosterApi } from '../../../hooks/useApiClient';
+import { appApi } from '../../../hooks/useApiClient';
 import { useAuth } from '../../../hooks/useAuth';
 import {
   Card, Badge, Button, Input, Divider, StatPill,
@@ -27,7 +27,7 @@ export default function PlayerDetailScreen() {
   const { data, isLoading } = useQuery({
     queryKey: ['player', id],
     queryFn: async () => {
-      const { data } = await rosterApi.get(`/players/${id}`);
+      const { data } = await appApi.get(`/players/${id}`);
       return data.data[0] as Player;
     },
     enabled: !!id,
@@ -35,7 +35,7 @@ export default function PlayerDetailScreen() {
 
   const updateMutation = useMutation({
     mutationFn: async (fields: Partial<Player>) => {
-      await rosterApi.patch(`/players/${id}`, fields);
+      await appApi.patch(`/players/${id}`, fields);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['player', id] });

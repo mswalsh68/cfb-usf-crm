@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { alumniApi } from '../../hooks/useApiClient';
+import { appApi } from '../../hooks/useApiClient';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Card, Badge, Button, Input, EmptyState, Divider,
@@ -29,7 +29,7 @@ export default function OutreachScreen() {
   const { data, isLoading } = useQuery({
     queryKey: ['campaigns'],
     queryFn: async () => {
-      const { data } = await alumniApi.get('/campaigns');
+      const { data } = await appApi.get('/campaigns');
       return data.data as (OutreachCampaign & { total_messages: number; sent_count: number; responded_count: number })[];
     },
   });
@@ -37,14 +37,14 @@ export default function OutreachScreen() {
   const statsQuery = useQuery({
     queryKey: ['alumni-stats'],
     queryFn: async () => {
-      const { data } = await alumniApi.get('/stats');
+      const { data } = await appApi.get('/stats');
       return data.data;
     },
   });
 
   const createMutation = useMutation({
     mutationFn: async () => {
-      await alumniApi.post('/campaigns', {
+      await appApi.post('/campaigns', {
         name:           form.name,
         description:    form.description || undefined,
         targetAudience: form.targetAudience,

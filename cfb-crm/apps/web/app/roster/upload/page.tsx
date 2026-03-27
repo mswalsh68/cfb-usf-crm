@@ -4,7 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import { isGlobalAdmin } from '@/lib/auth';
-import { rosterApi } from '@/lib/api';
+import { appApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Alert, Badge } from '@/components';
 
@@ -140,7 +140,7 @@ export default function RosterUploadPage() {
     if (preview.length === 0) return;
     setUploading(true);
     try {
-      const { data } = await rosterApi.post('/players/bulk', {
+      const { data } = await appApi.post('/players/bulk', {
         players: preview.map(({ _rowNum, ...p }) => p),
       });
       setResult(data.data);

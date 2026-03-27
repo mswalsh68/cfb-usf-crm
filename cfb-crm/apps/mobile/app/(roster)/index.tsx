@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { rosterApi } from '../../hooks/useApiClient';
+import { appApi } from '../../hooks/useApiClient';
 import { useAuth } from '../../hooks/useAuth';
 import {
   PlayerCard, Button, Badge, EmptyState, SectionHeader,
@@ -32,7 +32,7 @@ export default function RosterScreen() {
       if (search)            params.search   = search;
       if (position !== 'All') params.position = position;
       if (status   !== 'All') params.status   = status;
-      const { data } = await rosterApi.get('/players', { params });
+      const { data } = await appApi.get('/players', { params });
       return data;
     },
   });

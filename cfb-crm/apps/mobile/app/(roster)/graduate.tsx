@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { rosterApi } from '../../hooks/useApiClient';
+import { appApi } from '../../hooks/useApiClient';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Button, Card, Badge, SectionHeader, Input, EmptyState,
@@ -29,7 +29,7 @@ export default function GraduateScreen() {
   const { data, isLoading } = useQuery({
     queryKey: ['players-graduatable'],
     queryFn:  async () => {
-      const { data } = await rosterApi.get('/players', {
+      const { data } = await appApi.get('/players', {
         params: { status: 'active', pageSize: '200' },
       });
       return data.data as Player[];
@@ -38,7 +38,7 @@ export default function GraduateScreen() {
 
   const graduateMutation = useMutation({
     mutationFn: async () => {
-      const { data } = await rosterApi.post('/players/transfer', {
+      const { data } = await appApi.post('/players/transfer', {
         playerIds:        Array.from(selectedIds),
         transferReason:   'graduated',
         transferYear:     parseInt(gradYear),

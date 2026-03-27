@@ -1,5 +1,5 @@
-// Multi-tenant DB connections are handled via getClientDb() in @cfb-crm/db.
-// This file provides a server-level pool used only for the /health endpoint.
+// Health-check connection to master (not tenant-specific).
+// Tenant DB connections are handled per-request via getClientDb().
 import { getClientDb, sql } from '@cfb-crm/db';
 
 export async function getHealthDb() {

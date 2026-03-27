@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isGlobalAdmin } from '@/lib/auth';
-import { globalApi, alumniApi } from '@/lib/api';
+import { globalApi, appApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { useTeamConfig } from '@/lib/teamConfig';
 import { PageLayout, Button, Input, Select, Alert } from '@/components';
@@ -119,7 +119,7 @@ export default function AddAlumniPage() {
       const { id: userId, inviteToken } = userRes.data.data;
 
       // 2. Create alumni record
-      await alumniApi.post('/alumni', {
+      await appApi.post('/alumni', {
         userId,
         firstName:          form.firstName.trim(),
         lastName:           form.lastName.trim(),

@@ -33,7 +33,19 @@
       "Bash(gh pr:*)",
       "Bash(where gh:*)",
       "Bash(winget list:*)",
-      "Bash(powershell -Command \"Get-Command gh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")"
+      "Bash(powershell -Command \"Get-Command gh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")",
+      "Bash(sed -i 's/database:  user\\\\.rosterDb,/database:  user.appDb,/' cfb-crm/apps/roster-api/src/index.ts)",
+      "Bash(sed -i 's/database:  user\\\\.alumniDb,/database:  user.appDb,/' cfb-crm/apps/alumni-api/src/index.ts)",
+      "Bash(sed -i \"s/SELECT userId FROM dbo\\\\.alumni WHERE id = @AlumniId/SELECT user_id AS userId FROM alumni.alumni WHERE id = @AlumniId/\" cfb-crm/apps/alumni-api/src/index.ts)",
+      "Bash(powershell.exe -NoProfile:*)",
+      "Bash(npx tsc:*)",
+      "Bash(node_modules/.bin/tsc --noEmit)",
+      "Bash(npx --yes tsc --noEmit)",
+      "Bash(ls C:UsersmikewDesktopGitHubcfb-usf-crm.claudeworktreesblissful-moorecfb-crmnode_modules.bintsc*)",
+      "Bash(./node_modules/.bin/tsc --noEmit)",
+      "Bash(cmd /c \"node_modules\\\\.bin\\\\tsc.cmd --noEmit\")",
+      "Bash(grep -r \"ROSTER_API\\\\|ALUMNI_API\\\\|3002\\\\|3003\\\\|roster-api\\\\|alumni-api\" C:/Users/mikew/Desktop/GitHub/cfb-usf-crm/.claude/worktrees/blissful-moore/cfb-crm/apps/mobile --include=*.ts --include=*.tsx -l)",
+      "Bash(grep -r \"ROSTER_API\\\\|ALUMNI_API\\\\|3002\\\\|3003\" C:/Users/mikew/Desktop/GitHub/cfb-usf-crm/.claude/worktrees/blissful-moore/cfb-crm/apps/mobile --include=*.ts --include=*.tsx)"
     ]
   }
 }

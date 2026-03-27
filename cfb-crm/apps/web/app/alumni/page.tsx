@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { alumniApi } from '@/lib/api';
+import { appApi } from '@/lib/api';
 import { isGlobalAdmin } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { useTeamConfig } from '@/lib/teamConfig';
@@ -55,7 +55,7 @@ export default function AlumniPage() {
       if (status)   params.status   = status;
       if (position) params.position = position;
       if (isDonor)  params.isDonor  = 'true';
-      const { data } = await alumniApi.get('/alumni', { params });
+      const { data } = await appApi.get('/alumni', { params });
       setAlumni(data.data ?? []);
       setTotal(data.total ?? 0);
     } catch {

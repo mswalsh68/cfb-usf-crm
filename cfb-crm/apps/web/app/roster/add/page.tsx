@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isGlobalAdmin } from '@/lib/auth';
-import { rosterApi, globalApi } from '@/lib/api';
+import { appApi, globalApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { useTeamConfig } from '@/lib/teamConfig';
 import { PageLayout, Button, Input, Select, Alert } from '@/components';
@@ -119,7 +119,7 @@ export default function AddPlayerPage() {
       const heightInches = form.heightFeet && form.heightInches
         ? parseInt(form.heightFeet) * 12 + parseInt(form.heightInches)
         : undefined;
-      await rosterApi.post('/players', {
+      await appApi.post('/players', {
         userId,
         firstName:            form.firstName.trim(),
         lastName:             form.lastName.trim(),

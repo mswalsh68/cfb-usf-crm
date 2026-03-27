@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { rosterApi } from '../../hooks/useApiClient';
+import { appApi } from '../../hooks/useApiClient';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Card, Button, Input, EmptyState,
@@ -64,7 +64,7 @@ export default function AddPlayerScreen() {
         ? parseInt(form.heightFeet) * 12 + parseInt(form.heightInches)
         : undefined;
 
-      await rosterApi.post('/players', {
+      await appApi.post('/players', {
         userId:               user!.id,
         firstName:            form.firstName.trim(),
         lastName:             form.lastName.trim(),

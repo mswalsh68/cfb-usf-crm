@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { rosterApi } from '@/lib/api';
+import { appApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { getUser, isGlobalAdmin } from '@/lib/auth';
 import { PageLayout, Button, Input, Select, Badge, Alert, Card } from '@/components';
@@ -36,7 +36,7 @@ export default function PlayerDetailPage() {
 
   const fetchPlayer = async () => {
     try {
-      const { data } = await rosterApi.get(`/players/${id}`);
+      const { data } = await appApi.get(`/players/${id}`);
       setPlayer(data.data);
       setStats(data.data.stats ?? []);
       setForm(data.data);
@@ -50,7 +50,7 @@ export default function PlayerDetailPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await rosterApi.patch(`/players/${id}`, {
+      await appApi.patch(`/players/${id}`, {
         jerseyNumber:           form.jerseyNumber   ? parseInt(form.jerseyNumber) : undefined,
         position:               form.position       || undefined,
         academicYear:           form.academicYear   || undefined,

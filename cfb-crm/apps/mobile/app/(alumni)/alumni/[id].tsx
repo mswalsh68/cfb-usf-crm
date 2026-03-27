@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { alumniApi } from '../../../hooks/useApiClient';
+import { appApi } from '../../../hooks/useApiClient';
 import { useAuth } from '../../../hooks/useAuth';
 import {
   Card, Badge, Button, Input, Divider, StatPill,
@@ -30,7 +30,7 @@ export default function AlumniDetailScreen() {
   const { data, isLoading } = useQuery({
     queryKey: ['alumni', id],
     queryFn: async () => {
-      const { data } = await alumniApi.get(`/alumni/${id}`);
+      const { data } = await appApi.get(`/alumni/${id}`);
       return data.data;
     },
     enabled: !!id,
@@ -38,7 +38,7 @@ export default function AlumniDetailScreen() {
 
   const updateMutation = useMutation({
     mutationFn: async (fields: Partial<Alumni>) => {
-      await alumniApi.patch(`/alumni/${id}`, fields);
+      await appApi.patch(`/alumni/${id}`, fields);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alumni', id] });
@@ -51,7 +51,7 @@ export default function AlumniDetailScreen() {
 
   const logMutation = useMutation({
     mutationFn: async () => {
-      await alumniApi.post(`/alumni/${id}/interactions`, {
+      await appApi.post(`/alumni/${id}/interactions`, {
         channel: logChannel,
         summary: logSummary,
       });
