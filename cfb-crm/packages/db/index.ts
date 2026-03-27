@@ -16,6 +16,7 @@ export async function getClientDb(target: DbTarget): Promise<sql.ConnectionPool>
   const key = `${target.server}::${target.database}`;
   const existing = pools.get(key);
   if (existing?.connected) return existing;
+  if (existing) pools.delete(key); // stale pool — remove before reconnecting
 
   const config: sql.config = {
     server:   target.server,

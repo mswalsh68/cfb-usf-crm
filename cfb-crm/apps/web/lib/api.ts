@@ -3,9 +3,6 @@ import axios from 'axios';
 const GLOBAL_API  = process.env.NEXT_PUBLIC_GLOBAL_API_URL  ?? 'http://localhost:3001';
 const APP_API     = process.env.NEXT_PUBLIC_APP_API_URL     ?? 'http://localhost:3002';
 
-let isRefreshing = false;
-let refreshQueue: Array<(token: string) => void> = [];
-
 async function tryRefresh(): Promise<string | null> {
   const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('cfb_refresh_token') : null;
   if (!refreshToken) return null;
@@ -35,6 +32,10 @@ async function tryRefresh(): Promise<string | null> {
 function createClient(baseURL: string) {
   const client = axios.create({ baseURL, headers: { 'Content-Type': 'application/json' } });
 
+  // Per-client refresh state — prevents cross-client thundering herd
+  let isRefreshing = false;
+  let refreshQueue: Array<(token: string) => void> = [];
+
   client.interceptors.request.use((config) => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('cfb_access_token') : null;
     if (token) config.headers.Authorization = `Bearer ${token}`;
@@ -48,7 +49,7 @@ function createClient(baseURL: string) {
       if (error.response?.status === 401 && !original._retry) {
         original._retry = true;
         if (isRefreshing) {
-          return new Promise((resolve, reject) => {
+          return new Promise((resolve) => {
             refreshQueue.push((token) => {
               original.headers.Authorization = `Bearer ${token}`;
               resolve(client(original));

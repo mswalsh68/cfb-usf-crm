@@ -27,6 +27,14 @@ const switchTeamLimiter  = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, messa
 app.use(globalLimiter);
 app.use(express.json({ limit: '10kb' }));
 
+// Request logging
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () =>
+    console.log(`[Global API] ${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms`));
+  next();
+});
+
 app.use('/health',      healthRouter);
 app.use('/config',      configRouter);
 app.use('/auth/switch-team', switchTeamLimiter);

@@ -38,6 +38,26 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
     // Apply env-var defaults immediately for fast paint
     applyTheme(DEFAULT_CONFIG);
 
+    const CACHE_KEY = 'cfb_team_config';
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    const applyData = (data: Partial<TeamConfig>) => {
+      const merged: TeamConfig = { ...DEFAULT_CONFIG, ...data };
+      setConfig(merged);
+      applyTheme(merged);
+    };
+
+    // Serve from sessionStorage if fresh
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const { data: cached, ts } = JSON.parse(raw) as { data: Partial<TeamConfig>; ts: number };
+        if (Date.now() - ts < CACHE_TTL) {
+          applyData(cached);
+        }
+      }
+    } catch { /* ignore parse errors */ }
+
     // Fetch real config from global API (no auth required)
     fetch(`${GLOBAL_API}/config`, {
       headers: localStorage.getItem('cfb_access_token')
@@ -47,18 +67,18 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
       .then(r => r.json())
       .then(({ data }) => {
         if (data) {
-          const merged: TeamConfig = { ...DEFAULT_CONFIG, ...data };
-          setConfig(merged);
-          applyTheme(merged);
+          applyData(data);
+          try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() })); } catch { /* quota exceeded */ }
         }
       })
       .catch(() => {
         // Fall back to defaults silently — API may not be running in dev
       });
 
-    // Listen for team switches triggered by Nav
+    // Listen for team switches triggered by Nav — also bust the cache
     const handleTeamChange = (e: Event) => {
       const newConfig = (e as CustomEvent<Partial<TeamConfig>>).detail;
+      try { sessionStorage.removeItem(CACHE_KEY); } catch { /* ignore */ }
       setConfig(prev => {
         const merged = { ...prev, ...newConfig };
         applyTheme(merged);

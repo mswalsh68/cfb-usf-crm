@@ -3,10 +3,57 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
 import { verifyAccessToken, extractBearerToken, hasAppAccess, getAppRole, isAdmin } from '@cfb-crm/auth';
 import type { AuthTokenPayload } from '@cfb-crm/types';
 import { getClientDb, sql } from '@cfb-crm/db';
 import { getHealthDb } from './db';
+
+// ─── Validation schemas ───────────────────────────────────────
+const createPlayerSchema = z.object({
+  userId:          z.string().uuid(),
+  firstName:       z.string().min(1),
+  lastName:        z.string().min(1),
+  position:        z.string().min(1),
+  academicYear:    z.string().min(1),
+  recruitingClass: z.number().int(),
+}).passthrough();
+
+const transferSchema = z.object({
+  playerIds:        z.array(z.string().uuid()).min(1),
+  transferReason:   z.enum(['graduated', 'transferred', 'withdrew', 'other']),
+  transferYear:     z.number().int().min(2000).max(2100),
+  transferSemester: z.enum(['spring', 'fall', 'summer']),
+});
+
+const playerStatsSchema = z.object({
+  seasonYear: z.number().int(),
+});
+
+const createAlumniSchema = z.object({
+  firstName:      z.string().min(1),
+  lastName:       z.string().min(1),
+  graduationYear: z.number().int(),
+}).passthrough();
+
+const logInteractionSchema = z.object({
+  channel: z.string().min(1),
+  summary: z.string().min(1),
+});
+
+const createCampaignSchema = z.object({
+  name:           z.string().min(1),
+  targetAudience: z.enum(['all', 'byClass', 'byPosition', 'byStatus', 'custom']),
+}).passthrough();
+
+function validate<T>(schema: z.ZodType<T>, body: unknown, res: express.Response): T | null {
+  const result = schema.safeParse(body);
+  if (!result.success) {
+    res.status(400).json({ success: false, error: result.error.errors[0]?.message ?? 'Invalid request body' });
+    return null;
+  }
+  return result.data;
+}
 
 const app  = express();
 const PORT = process.env.PORT || 3002;
@@ -15,6 +62,14 @@ app.use(helmet());
 app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(','), credentials: true }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 app.use(express.json({ limit: '10kb' }));
+
+// Request logging
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () =>
+    console.log(`[App API] ${req.method} ${req.path} ${res.statusCode} ${Date.now() - start}ms`));
+  next();
+});
 
 declare global { namespace Express { interface Request { user?: AuthTokenPayload } } }
 
@@ -110,7 +165,8 @@ app.get('/players/:id', auth, rosterAccess, async (req, res) => {
 
 // POST /players
 app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
-  const b = req.body;
+  const b = validate(createPlayerSchema, req.body, res);
+  if (!b) return;
   try {
     const db = await appDb(req.user!);
     const r = await db.request()
@@ -193,9 +249,10 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
 // Marks players graduated in roster schema, then creates alumni records
 // in alumni schema — all in the same DB, no inter-service HTTP call.
 app.post('/players/transfer', auth, rosterAccess, rosterAdmin, async (req, res) => {
-  const { playerIds, transferReason, transferYear, transferSemester, notes } = req.body;
-  if (!playerIds?.length) return res.status(400).json({ success: false, error: 'playerIds array is required' });
-  if (!transferReason)    return res.status(400).json({ success: false, error: 'transferReason is required' });
+  const body = validate(transferSchema, req.body, res);
+  if (!body) return;
+  const { playerIds, transferReason, transferYear, transferSemester } = body;
+  const notes = (req.body as any).notes ?? null;
   try {
     const db = await appDb(req.user!);
 
@@ -278,7 +335,10 @@ app.post('/players/bulk', auth, rosterAccess, rosterWrite, async (req, res) => {
 
 // POST /players/:id/stats
 app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res) => {
-  const { seasonYear, gamesPlayed, statsJson } = req.body;
+  const body = validate(playerStatsSchema, req.body, res);
+  if (!body) return;
+  const { seasonYear } = body;
+  const { gamesPlayed, statsJson } = req.body as any;
   try {
     const db = await appDb(req.user!);
     const r = await db.request()
@@ -331,7 +391,8 @@ app.get('/alumni/:id', auth, alumniAccess, async (req, res) => {
 
 // POST /alumni
 app.post('/alumni', auth, alumniAccess, async (req, res) => {
-  const b = req.body;
+  const b = validate(createAlumniSchema, req.body, res);
+  if (!b) return;
   try {
     const db = await appDb(req.user!);
     const r = await db.request()
@@ -394,7 +455,10 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
 
 // POST /alumni/:id/interactions
 app.post('/alumni/:id/interactions', auth, alumniAccess, alumniWrite, async (req, res) => {
-  const { channel, summary, outcome, followUpAt } = req.body;
+  const body = validate(logInteractionSchema, req.body, res);
+  if (!body) return;
+  const { channel, summary } = body;
+  const { outcome, followUpAt } = req.body as any;
   try {
     const db = await appDb(req.user!);
     const r = await db.request()
@@ -444,7 +508,10 @@ app.get('/campaigns', auth, alumniAccess, async (req, res) => {
 
 // POST /campaigns
 app.post('/campaigns', auth, alumniAccess, alumniAdmin, async (req, res) => {
-  const { name, description, targetAudience, audienceFilters, scheduledAt } = req.body;
+  const body = validate(createCampaignSchema, req.body, res);
+  if (!body) return;
+  const { name, targetAudience } = body;
+  const { description, audienceFilters, scheduledAt } = req.body as any;
   try {
     const db = await appDb(req.user!);
     const r = await db.request()
