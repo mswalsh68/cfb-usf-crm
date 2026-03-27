@@ -28,8 +28,7 @@ function buildAccessToken(userId: string, user: any, overrideTeamId?: string): s
     currentTeamId,
     teams,
     appPermissions: user.appPermissions ?? [],
-    rosterDb:  user.rosterDb  ?? '',
-    alumniDb:  user.alumniDb  ?? '',
+    appDb:    user.appDb    ?? '',
     dbServer:  user.dbServer  ?? '',
   };
 
@@ -134,8 +133,7 @@ authRouter.post('/switch-team', requireAuth, async (req, res) => {
     const updatedUser = {
       ...req.user!,
       currentTeamId: teamId,
-      rosterDb: teamData.rosterDb,
-      alumniDb: teamData.alumniDb,
+      appDb:    teamData.appDb,
       dbServer: teamData.dbServer,
     };
     const newAccessToken = signAccessToken({
@@ -145,8 +143,7 @@ authRouter.post('/switch-team', requireAuth, async (req, res) => {
       currentTeamId:  teamId,
       teams:          updatedUser.teams ?? [],
       appPermissions: updatedUser.appPermissions ?? [],
-      rosterDb:       teamData.rosterDb,
-      alumniDb:       teamData.alumniDb,
+      appDb:          teamData.appDb,
       dbServer:       teamData.dbServer,
     });
 

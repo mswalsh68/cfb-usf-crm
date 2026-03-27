@@ -29,16 +29,16 @@ BEGIN
   SET @ErrorCode = NULL;
 
   -- Idempotent: already exists — return the existing ID
-  IF EXISTS (SELECT 1 FROM dbo.alumni WHERE source_player_id = @SourcePlayerId)
+  IF EXISTS (SELECT 1 FROM alumni.alumni WHERE source_player_id = @SourcePlayerId)
   BEGIN
-    SELECT @NewAlumniId = id FROM dbo.alumni WHERE source_player_id = @SourcePlayerId;
+    SELECT @NewAlumniId = id FROM alumni.alumni WHERE source_player_id = @SourcePlayerId;
     SET @ErrorCode = 'ALUMNI_ALREADY_EXISTS';
     RETURN;
   END
 
   SET @NewAlumniId = NEWID();
 
-  INSERT INTO dbo.alumni
+  INSERT INTO alumni.alumni
     (id, user_id, source_player_id, first_name, last_name,
      graduation_year, graduation_semester, position, recruiting_class,
      phone, personal_email, status)
@@ -70,7 +70,7 @@ BEGIN
   DECLARE @SearchWild NVARCHAR(257) = '%' + ISNULL(@Search, '') + '%';
 
   SELECT @TotalCount = COUNT(*)
-  FROM dbo.alumni a
+  FROM alumni.alumni a
   WHERE (@Status   IS NULL OR a.status           = @Status)
     AND (@IsDonor  IS NULL OR a.is_donor          = @IsDonor)
     AND (@GradYear IS NULL OR a.graduation_year   = @GradYear)
@@ -105,7 +105,7 @@ BEGIN
     a.notes,
     a.created_at            AS createdAt,
     a.updated_at            AS updatedAt
-  FROM dbo.alumni a
+  FROM alumni.alumni a
   WHERE (@Status   IS NULL OR a.status         = @Status)
     AND (@IsDonor  IS NULL OR a.is_donor        = @IsDonor)
     AND (@GradYear IS NULL OR a.graduation_year = @GradYear)
@@ -130,7 +130,7 @@ BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
 
-  IF NOT EXISTS (SELECT 1 FROM dbo.alumni WHERE id = @AlumniId)
+  IF NOT EXISTS (SELECT 1 FROM alumni.alumni WHERE id = @AlumniId)
   BEGIN
     SET @ErrorCode = 'ALUMNI_NOT_FOUND';
     RETURN;
@@ -148,7 +148,7 @@ BEGIN
     a.is_donor AS isDonor, a.last_donation_date AS lastDonationDate,
     a.total_donations AS totalDonations, a.engagement_score AS engagementScore,
     a.notes, a.created_at AS createdAt, a.updated_at AS updatedAt
-  FROM dbo.alumni a
+  FROM alumni.alumni a
   WHERE a.id = @AlumniId;
 
   -- Interaction history
@@ -160,7 +160,7 @@ BEGIN
     il.follow_up_at AS followUpAt,
     il.logged_at    AS loggedAt,
     il.logged_by    AS loggedBy
-  FROM dbo.interaction_log il
+  FROM alumni.interaction_log il
   WHERE il.alumni_id = @AlumniId
   ORDER BY il.logged_at DESC;
 END;
@@ -193,7 +193,7 @@ BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
 
-  IF NOT EXISTS (SELECT 1 FROM dbo.alumni WHERE id = @AlumniId)
+  IF NOT EXISTS (SELECT 1 FROM alumni.alumni WHERE id = @AlumniId)
   BEGIN
     SET @ErrorCode = 'ALUMNI_NOT_FOUND';
     RETURN;
@@ -205,7 +205,7 @@ BEGIN
     RETURN;
   END
 
-  UPDATE dbo.alumni SET
+  UPDATE alumni.alumni SET
     status              = COALESCE(@Status,           status),
     personal_email      = COALESCE(@PersonalEmail,    personal_email),
     phone               = COALESCE(@Phone,            phone),
@@ -224,7 +224,7 @@ BEGIN
 
   -- Recalculate engagement score in SQL:
   -- Base 30 pts + contact info (up to 25) + employment (up to 20) + donor (25)
-  UPDATE dbo.alumni SET
+  UPDATE alumni.alumni SET
     engagement_score = CAST(
       30
       + CASE WHEN personal_email   IS NOT NULL THEN 10 ELSE 0 END
@@ -256,7 +256,7 @@ BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
 
-  IF NOT EXISTS (SELECT 1 FROM dbo.alumni WHERE id = @AlumniId)
+  IF NOT EXISTS (SELECT 1 FROM alumni.alumni WHERE id = @AlumniId)
   BEGIN
     SET @ErrorCode = 'ALUMNI_NOT_FOUND';
     RETURN;
@@ -268,13 +268,13 @@ BEGIN
     RETURN;
   END
 
-  INSERT INTO dbo.interaction_log
+  INSERT INTO alumni.interaction_log
     (alumni_id, logged_by, channel, summary, outcome, follow_up_at)
   VALUES
     (@AlumniId, @LoggedBy, @Channel, @Summary, @Outcome, @FollowUpAt);
 
   -- Bump engagement score by 2 per interaction, capped at 100
-  UPDATE dbo.alumni
+  UPDATE alumni.alumni
   SET engagement_score = CAST(CASE
       WHEN engagement_score + 2 > 100 THEN 100
       ELSE engagement_score + 2
@@ -330,7 +330,7 @@ BEGIN
 
   SET @NewCampaignId = NEWID();
 
-  INSERT INTO dbo.outreach_campaigns
+  INSERT INTO alumni.outreach_campaigns
     (id, name, description, target_audience, audience_filters, scheduled_at, created_by)
   VALUES
     (@NewCampaignId, @Name, @Description, @TargetAudience, @AudienceFilters, @ScheduledAt, @CreatedBy);
@@ -369,8 +369,8 @@ BEGIN
         AS DECIMAL(5,2))
       ELSE 0
     END                                                                AS responseRatePct
-  FROM dbo.outreach_campaigns c
-  LEFT JOIN dbo.outreach_messages m ON m.campaign_id = c.id
+  FROM alumni.outreach_campaigns c
+  LEFT JOIN alumni.outreach_messages m ON m.campaign_id = c.id
   GROUP BY c.id, c.name, c.description, c.target_audience, c.status,
            c.scheduled_at, c.completed_at, c.created_by, c.created_at
   ORDER BY c.created_at DESC;
@@ -399,12 +399,12 @@ BEGIN
     -- Class breakdown as JSON
     (
       SELECT graduation_year AS gradYear, COUNT(*) AS cnt
-      FROM dbo.alumni
+      FROM alumni.alumni
       GROUP BY graduation_year
       ORDER BY graduation_year DESC
       FOR JSON PATH
     ) AS classCounts
-  FROM dbo.alumni;
+  FROM alumni.alumni;
 END;
 GO
 
@@ -425,7 +425,7 @@ BEGIN
   DECLARE @FiltersJson    NVARCHAR(MAX);
 
   SELECT @Audience = target_audience, @FiltersJson = audience_filters
-  FROM dbo.outreach_campaigns
+  FROM alumni.outreach_campaigns
   WHERE id = @CampaignId;
 
   IF @Audience IS NULL
@@ -441,7 +441,7 @@ BEGIN
 
   SELECT a.id AS alumniId, a.first_name AS firstName, a.last_name AS lastName,
          a.personal_email AS personalEmail, a.phone
-  FROM dbo.alumni a
+  FROM alumni.alumni a
   WHERE a.status <> 'doNotContact'
     AND (
       @Audience = 'all'

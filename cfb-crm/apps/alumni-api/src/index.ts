@@ -12,7 +12,7 @@ import { getHealthDb } from './db';
 function alumniDb(user: AuthTokenPayload) {
   return getClientDb({
     server:    user.dbServer,
-    database:  user.alumniDb,
+    database:  user.appDb,
     user:      process.env.DB_USER,
     password:  process.env.DB_PASS,
     encrypt:   process.env.DB_ENCRYPT === 'true',
@@ -101,7 +101,7 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
     if (!isWriter) {
       const check = await db.request()
         .input('AlumniId', sql.UniqueIdentifier, req.params.id)
-        .query('SELECT userId FROM dbo.alumni WHERE id = @AlumniId');
+        .query('SELECT user_id AS userId FROM alumni.alumni WHERE id = @AlumniId');
       const row = check.recordset[0];
       if (!row) return res.status(404).json({ success: false, error: 'Alumni not found' });
       if (row.userId !== req.user!.sub) return res.status(403).json({ success: false, error: 'You can only edit your own profile' });

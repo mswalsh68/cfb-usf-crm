@@ -27,7 +27,7 @@ BEGIN
   DECLARE @ExactNum   NVARCHAR(10)  = ISNULL(@Search, '');
 
   SELECT @TotalCount = COUNT(*)
-  FROM dbo.players p
+  FROM roster.players p
   WHERE (@Status       IS NULL OR p.status        = @Status)
     AND (@Position     IS NULL OR p.position      = @Position)
     AND (@AcademicYear IS NULL OR p.academic_year = @AcademicYear)
@@ -63,7 +63,7 @@ BEGIN
     p.graduated_at          AS graduatedAt,
     p.created_at            AS createdAt,
     p.updated_at            AS updatedAt
-  FROM dbo.players p
+  FROM roster.players p
   WHERE (@Status       IS NULL OR p.status        = @Status)
     AND (@Position     IS NULL OR p.position      = @Position)
     AND (@AcademicYear IS NULL OR p.academic_year = @AcademicYear)
@@ -87,7 +87,7 @@ BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
 
-  IF NOT EXISTS (SELECT 1 FROM dbo.players WHERE id = @PlayerId)
+  IF NOT EXISTS (SELECT 1 FROM roster.players WHERE id = @PlayerId)
   BEGIN
     SET @ErrorCode = 'PLAYER_NOT_FOUND';
     RETURN;
@@ -106,7 +106,7 @@ BEGIN
     p.emergency_contact_phone AS emergencyContactPhone,
     p.notes, p.graduated_at AS graduatedAt,
     p.created_at AS createdAt, p.updated_at AS updatedAt
-  FROM dbo.players p
+  FROM roster.players p
   WHERE p.id = @PlayerId;
 
   -- Return stats separately
@@ -115,7 +115,7 @@ BEGIN
     ps.games_played AS gamesPlayed,
     ps.stats_json   AS statsJson,
     ps.updated_at   AS updatedAt
-  FROM dbo.player_stats ps
+  FROM roster.player_stats ps
   WHERE ps.player_id = @PlayerId
   ORDER BY ps.season_year DESC;
 END;
@@ -172,7 +172,7 @@ BEGIN
   END
 
   -- Duplicate user check
-  IF EXISTS (SELECT 1 FROM dbo.players WHERE user_id = @UserId)
+  IF EXISTS (SELECT 1 FROM roster.players WHERE user_id = @UserId)
   BEGIN
     SET @ErrorCode = 'PLAYER_ALREADY_EXISTS_FOR_USER';
     RETURN;
@@ -180,7 +180,7 @@ BEGIN
 
   -- Duplicate jersey check (only within active players)
   IF @JerseyNumber IS NOT NULL AND EXISTS (
-    SELECT 1 FROM dbo.players
+    SELECT 1 FROM roster.players
     WHERE jersey_number = @JerseyNumber AND status = 'active'
   )
   BEGIN
@@ -190,7 +190,7 @@ BEGIN
 
   SET @NewPlayerId = NEWID();
 
-  INSERT INTO dbo.players (
+  INSERT INTO roster.players (
     id, user_id, jersey_number, first_name, last_name, position, academic_year,
     recruiting_class, height_inches, weight_lbs, home_town, home_state, high_school,
     gpa, major, phone, email, instagram, twitter, snapchat, emergency_contact_name, emergency_contact_phone, notes
@@ -233,7 +233,7 @@ BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
 
-  IF NOT EXISTS (SELECT 1 FROM dbo.players WHERE id = @PlayerId)
+  IF NOT EXISTS (SELECT 1 FROM roster.players WHERE id = @PlayerId)
   BEGIN
     SET @ErrorCode = 'PLAYER_NOT_FOUND';
     RETURN;
@@ -255,7 +255,7 @@ BEGIN
 
   -- Jersey conflict check if changing jersey
   IF @JerseyNumber IS NOT NULL AND EXISTS (
-    SELECT 1 FROM dbo.players
+    SELECT 1 FROM roster.players
     WHERE jersey_number = @JerseyNumber AND status = 'active' AND id <> @PlayerId
   )
   BEGIN
@@ -263,7 +263,7 @@ BEGIN
     RETURN;
   END
 
-  UPDATE dbo.players SET
+  UPDATE roster.players SET
     jersey_number           = COALESCE(@JerseyNumber,          jersey_number),
     position                = COALESCE(@Position,              position),
     academic_year           = COALESCE(@AcademicYear,          academic_year),
@@ -300,15 +300,15 @@ BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
 
-  IF NOT EXISTS (SELECT 1 FROM dbo.players WHERE id = @PlayerId)
+  IF NOT EXISTS (SELECT 1 FROM roster.players WHERE id = @PlayerId)
   BEGIN
     SET @ErrorCode = 'PLAYER_NOT_FOUND';
     RETURN;
   END
 
-  IF EXISTS (SELECT 1 FROM dbo.player_stats WHERE player_id = @PlayerId AND season_year = @SeasonYear)
+  IF EXISTS (SELECT 1 FROM roster.player_stats WHERE player_id = @PlayerId AND season_year = @SeasonYear)
   BEGIN
-    UPDATE dbo.player_stats SET
+    UPDATE roster.player_stats SET
       games_played = COALESCE(@GamesPlayed, games_played),
       stats_json   = COALESCE(@StatsJson,   stats_json),
       updated_at   = SYSUTCDATETIME()
@@ -316,7 +316,7 @@ BEGIN
   END
   ELSE
   BEGIN
-    INSERT INTO dbo.player_stats (player_id, season_year, games_played, stats_json)
+    INSERT INTO roster.player_stats (player_id, season_year, games_played, stats_json)
     VALUES (@PlayerId, @SeasonYear, @GamesPlayed, @StatsJson);
   END
 END;
@@ -398,7 +398,7 @@ BEGIN
           @recruitClass = recruiting_class,
           @userId       = user_id,
           @curStatus    = status
-        FROM dbo.players
+        FROM roster.players
         WHERE id = @currentId;
 
         IF @userId IS NULL
@@ -418,14 +418,14 @@ BEGIN
         END
 
         -- ── 2. Mark graduated in Roster DB ──────────────────
-        UPDATE dbo.players
+        UPDATE roster.players
         SET status       = 'graduated',
             graduated_at = SYSUTCDATETIME(),
             updated_at   = SYSUTCDATETIME()
         WHERE id = @currentId;
 
         -- ── 3. Graduation log in Roster DB ──────────────────
-        INSERT INTO dbo.graduation_log
+        INSERT INTO roster.graduation_log
           (transaction_id, player_id, graduation_year, graduation_semester,
            triggered_by, status, notes)
         VALUES
@@ -459,7 +459,7 @@ BEGIN
       INSERT INTO @failures VALUES (CAST(@currentId AS NVARCHAR(100)), @errMsg);
 
       -- Log failure outside the rolled-back transaction
-      INSERT INTO dbo.graduation_log
+      INSERT INTO roster.graduation_log
         (transaction_id, player_id, graduation_year, graduation_semester,
          triggered_by, status, notes)
       VALUES
@@ -557,7 +557,7 @@ BEGIN
           @curStatus    = status,
           @phone        = phone,
           @email        = email
-        FROM dbo.players
+        FROM roster.players
         WHERE id = @currentId;
 
         IF @userId IS NULL
@@ -577,7 +577,7 @@ BEGIN
         END
 
         -- Mark player as graduated/transferred
-        UPDATE dbo.players
+        UPDATE roster.players
         SET status       = 'graduated',
             graduated_at = SYSUTCDATETIME(),
             notes        = ISNULL(notes + CHAR(10), '') + 'Transfer reason: ' + @TransferReason,

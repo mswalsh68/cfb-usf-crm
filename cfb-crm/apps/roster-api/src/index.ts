@@ -13,7 +13,7 @@ import { getHealthDb } from './db';
 function rosterDb(user: AuthTokenPayload) {
   return getClientDb({
     server:    user.dbServer,
-    database:  user.rosterDb,
+    database:  user.appDb,
     user:      process.env.DB_USER,
     password:  process.env.DB_PASS,
     encrypt:   process.env.DB_ENCRYPT === 'true',

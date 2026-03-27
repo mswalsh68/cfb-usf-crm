@@ -29,7 +29,11 @@
       "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbGlobal'' -Query ''DECLARE @j NVARCHAR\\(MAX\\), @e NVARCHAR\\(50\\); EXEC dbo.sp_RefreshToken @OldTokenHash=N\"\"test\"\", @NewTokenHash=N\"\"test2\"\", @NewExpiresAt=GETDATE\\(\\), @CurrentTeamId=NULL, @UserJson=@j OUTPUT, @ErrorCode=@e OUTPUT; SELECT @e AS ErrorCode''\")",
       "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbRoster'' -Query ''SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_NAME, ORDINAL_POSITION''\")",
       "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbAlumni'' -Query ''SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS ORDER BY TABLE_NAME, ORDINAL_POSITION''\")",
-      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbGlobal'' -Query \"\"SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=''teams'' ORDER BY ORDINAL_POSITION\"\"\")"
+      "Bash(powershell -Command \"Invoke-Sqlcmd -ServerInstance ''localhost\\\\SQLEXPRESS'' -Database ''CfbGlobal'' -Query \"\"SELECT COLUMN_NAME, DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME=''teams'' ORDER BY ORDINAL_POSITION\"\"\")",
+      "Bash(gh pr:*)",
+      "Bash(where gh:*)",
+      "Bash(winget list:*)",
+      "Bash(powershell -Command \"Get-Command gh -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source\")"
     ]
   }
 }

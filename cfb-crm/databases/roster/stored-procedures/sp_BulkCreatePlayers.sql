@@ -138,7 +138,7 @@ BEGIN
 
       -- Check jersey conflict
       IF @jersey IS NOT NULL AND EXISTS (
-        SELECT 1 FROM dbo.players WHERE jersey_number = @jersey AND status = 'active'
+        SELECT 1 FROM roster.players WHERE jersey_number = @jersey AND status = 'active'
       )
       BEGIN
         INSERT INTO @errors VALUES (@rowNum, 'Jersey #' + CAST(@jersey AS NVARCHAR) + ' already in use');
@@ -148,7 +148,7 @@ BEGIN
       END
 
       -- Insert player (no user_id for bulk uploads — admin links accounts later)
-      INSERT INTO dbo.players (
+      INSERT INTO roster.players (
         user_id, first_name, last_name, jersey_number, position, academic_year,
         recruiting_class, height_inches, weight_lbs, home_town, home_state,
         high_school, gpa, major, phone, emergency_contact_name, emergency_contact_phone, notes

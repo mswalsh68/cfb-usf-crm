@@ -51,8 +51,7 @@ export interface AuthTokenPayload {
   teams:          TeamSummary[];    // all teams this user can access
   appPermissions: AppPermission[];
   // Current team DB routing (derived from currentTeamId at login/switch)
-  rosterDb: string;
-  alumniDb: string;
+  appDb:    string;
   dbServer: string;
   iat: number;
   exp: number;

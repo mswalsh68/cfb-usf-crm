@@ -104,8 +104,7 @@ BEGIN
   BEGIN
     SELECT TOP 1
       @CurrentTeamId = t.id,
-      @RosterDb      = t.roster_db,
-      @AlumniDb      = t.alumni_db,
+      @AppDb         = t.app_db,
       @DbServer      = t.db_server
     FROM dbo.teams t
     WHERE t.is_active = 1
@@ -115,8 +114,7 @@ BEGIN
   BEGIN
     SELECT TOP 1
       @CurrentTeamId = t.id,
-      @RosterDb      = t.roster_db,
-      @AlumniDb      = t.alumni_db,
+      @AppDb         = t.app_db,
       @DbServer      = t.db_server
     FROM dbo.user_teams ut
     JOIN dbo.teams t ON t.id = ut.team_id
@@ -136,8 +134,7 @@ BEGIN
       u.is_active                           AS isActive,
       u.created_at                          AS createdAt,
       CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
-      @RosterDb                             AS rosterDb,
-      @AlumniDb                             AS alumniDb,
+      @AppDb                                AS appDb,
       @DbServer                             AS dbServer,
       JSON_QUERY(@TeamsJson)                AS teams,
       (
@@ -293,8 +290,7 @@ BEGIN
   BEGIN
     SELECT TOP 1
       @CurrentTeamId = t.id,
-      @RosterDb      = t.roster_db,
-      @AlumniDb      = t.alumni_db,
+      @AppDb         = t.app_db,
       @DbServer      = t.db_server
     FROM dbo.teams t
     WHERE t.is_active = 1
@@ -304,8 +300,7 @@ BEGIN
   BEGIN
     SELECT TOP 1
       @CurrentTeamId = t.id,
-      @RosterDb      = t.roster_db,
-      @AlumniDb      = t.alumni_db,
+      @AppDb         = t.app_db,
       @DbServer      = t.db_server
     FROM dbo.user_teams ut
     JOIN dbo.teams t ON t.id = ut.team_id
@@ -323,8 +318,7 @@ BEGIN
       u.global_role                         AS globalRole,
       u.is_active                           AS isActive,
       CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
-      @RosterDb                             AS rosterDb,
-      @AlumniDb                             AS alumniDb,
+      @AppDb                                AS appDb,
       @DbServer                             AS dbServer,
       JSON_QUERY(@TeamsJson)                AS teams,
       (
@@ -406,8 +400,7 @@ BEGIN
       t.id        AS teamId,
       t.name,
       t.abbr,
-      t.roster_db AS rosterDb,
-      t.alumni_db AS alumniDb,
+      t.app_db AS appDb,
       t.db_server AS dbServer,
       tc.logo_url            AS logoUrl,
       tc.color_primary       AS colorPrimary,
