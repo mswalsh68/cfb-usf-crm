@@ -81,7 +81,7 @@ INSERT INTO alumni.alumni (
   graduation_year, graduation_semester, position, recruiting_class, status,
   personal_email, phone, linkedin_url,
   -- twitter_url added in alumni migration 002 — use NULL if not present
-  TRY_CAST(NULL AS NVARCHAR(100)) AS twitter_url,
+  twitter_url,
   current_employer, current_job_title, current_city, current_state, current_country,
   is_donor, last_donation_date, total_donations, engagement_score,
   notes, created_at, updated_at

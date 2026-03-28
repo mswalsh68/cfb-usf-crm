@@ -96,8 +96,7 @@ BEGIN
 
   -- Resolve current team (first alphabetically)
   DECLARE @CurrentTeamId UNIQUEIDENTIFIER;
-  DECLARE @RosterDb      NVARCHAR(100) = '';
-  DECLARE @AlumniDb      NVARCHAR(100) = '';
+  DECLARE @AppDb         NVARCHAR(100) = '';
   DECLARE @DbServer      NVARCHAR(200) = '';
 
   IF @GlobalRole = 'platform_owner'
@@ -283,8 +282,7 @@ BEGIN
   IF @TeamsJson IS NULL SET @TeamsJson = '[]';
 
   DECLARE @ResolvedTeamId UNIQUEIDENTIFIER;
-  DECLARE @RosterDb       NVARCHAR(100) = '';
-  DECLARE @AlumniDb       NVARCHAR(100) = '';
+  DECLARE @AppDb          NVARCHAR(100) = '';
   DECLARE @DbServer       NVARCHAR(200) = '';
 
   -- Try to pin to the client's requested team first (validates access too)
