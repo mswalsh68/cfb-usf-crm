@@ -1101,7 +1101,7 @@ GO
 -- BULK OPERATIONS
 -- ============================================================
 
-﻿-- ============================================================
+-- ============================================================
 -- sp_BulkCreatePlayers
 -- Accepts a JSON array of players and inserts them all.
 -- Skips duplicates (same user_id or same jersey number on active players).
@@ -1287,7 +1287,7 @@ END;
 
 
 
-﻿-- ============================================================
+-- ============================================================
 -- sp_BulkCreateAlumni
 -- Accepts a JSON array of alumni and inserts them all.
 -- Run on: AppDB

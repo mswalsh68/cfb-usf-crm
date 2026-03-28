@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- sp_BulkCreateAlumni
 -- Accepts a JSON array of alumni and inserts them all.
 -- Run on: CfbAlumni database

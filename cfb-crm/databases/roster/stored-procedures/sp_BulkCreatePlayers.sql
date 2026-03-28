@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- sp_BulkCreatePlayers
 -- Accepts a JSON array of players and inserts them all.
 -- Skips duplicates (same user_id or same jersey number on active players).
