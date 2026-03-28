@@ -3,6 +3,9 @@
 -- Adds sport_id, user_classification, and Starter-tier fields
 -- to roster.players and alumni.alumni.
 -- Run on: each tenant AppDB after 003_rbac_infrastructure.sql
+--
+-- NOTE: Statements that reference newly-added columns use
+-- EXEC sp_executesql so they compile at runtime (not parse time).
 -- ============================================================
 
 -- ─── roster.players additions ────────────────────────────────
@@ -10,7 +13,7 @@
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('roster.players') AND name = 'sport_id')
 BEGIN
   ALTER TABLE roster.players ADD sport_id UNIQUEIDENTIFIER NULL REFERENCES dbo.sports(id);
-  CREATE INDEX IX_players_sport ON roster.players (sport_id) WHERE sport_id IS NOT NULL;
+  EXEC sp_executesql N'CREATE INDEX IX_players_sport ON roster.players (sport_id) WHERE sport_id IS NOT NULL;';
   PRINT 'Added roster.players.sport_id';
 END
 
@@ -25,7 +28,7 @@ END
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('alumni.alumni') AND name = 'sport_id')
 BEGIN
   ALTER TABLE alumni.alumni ADD sport_id UNIQUEIDENTIFIER NULL REFERENCES dbo.sports(id);
-  CREATE INDEX IX_alumni_sport ON alumni.alumni (sport_id) WHERE sport_id IS NOT NULL;
+  EXEC sp_executesql N'CREATE INDEX IX_alumni_sport ON alumni.alumni (sport_id) WHERE sport_id IS NOT NULL;';
   PRINT 'Added alumni.alumni.sport_id';
 END
 
@@ -46,8 +49,8 @@ BEGIN
   -- original_player_id: canonical name per directive.
   -- source_player_id already exists as legacy column — keep both during transition.
   ALTER TABLE alumni.alumni ADD original_player_id UNIQUEIDENTIFIER NULL;
-  -- Backfill from existing source_player_id
-  UPDATE alumni.alumni SET original_player_id = source_player_id WHERE original_player_id IS NULL AND source_player_id IS NOT NULL;
+  -- Backfill via dynamic SQL so the column reference compiles at runtime
+  EXEC sp_executesql N'UPDATE alumni.alumni SET original_player_id = source_player_id WHERE original_player_id IS NULL AND source_player_id IS NOT NULL;';
   PRINT 'Added alumni.alumni.original_player_id (backfilled from source_player_id)';
 END
 
@@ -59,11 +62,10 @@ END
 
 IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('alumni.alumni') AND name = 'city')
 BEGIN
-  -- city/state: Starter-tier self-service fields (current_city/current_state are Pro-tier labels)
   ALTER TABLE alumni.alumni ADD city  NVARCHAR(100) NULL;
   ALTER TABLE alumni.alumni ADD state NVARCHAR(50)  NULL;
-  -- Backfill from existing current_city/current_state
-  UPDATE alumni.alumni SET city = current_city, state = current_state WHERE city IS NULL AND current_city IS NOT NULL;
+  -- Backfill via dynamic SQL so the column references compile at runtime
+  EXEC sp_executesql N'UPDATE alumni.alumni SET city = current_city, state = current_state WHERE city IS NULL AND current_city IS NOT NULL;';
   PRINT 'Added alumni.alumni.city + state (backfilled from current_city/current_state)';
 END
 
