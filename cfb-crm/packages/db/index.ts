@@ -9,14 +9,46 @@ export interface DbTarget {
   trustCert: boolean;
 }
 
-// Cache pools by "server::database" so we don't reconnect on every request
+// ─── Output parameter type system ─────────────────────────────
+// Keeps mssql types internal to the db package.
+// API layer never imports sql directly.
+export type OutputType =
+  | 'int' | 'smallint' | 'tinyint' | 'bigint'
+  | 'nvarchar' | 'nvarchar50' | 'nvarchar100' | 'nvarcharmax'
+  | 'uniqueidentifier'
+  | 'bit' | 'decimal' | 'datetime2' | 'date';
+
+const OUTPUT_TYPES: Record<OutputType, sql.ISqlType | (() => sql.ISqlType)> = {
+  int:              sql.Int,
+  smallint:         sql.SmallInt,
+  tinyint:          sql.TinyInt,
+  bigint:           sql.BigInt,
+  nvarchar:         sql.NVarChar(sql.MAX),
+  nvarchar50:       sql.NVarChar(50),
+  nvarchar100:      sql.NVarChar(100),
+  nvarcharmax:      sql.NVarChar(sql.MAX),
+  uniqueidentifier: sql.UniqueIdentifier,
+  bit:              sql.Bit,
+  decimal:          sql.Decimal(10, 2),
+  datetime2:        sql.DateTime2,
+  date:             sql.Date,
+};
+
+export interface ExecResult<T = Record<string, unknown>> {
+  rows:         T[];
+  sets:         T[][];
+  output:       Record<string, unknown>;
+  rowsAffected: number[];
+}
+
+// ─── Connection pool cache ─────────────────────────────────────
 const pools = new Map<string, sql.ConnectionPool>();
 
-export async function getClientDb(target: DbTarget): Promise<sql.ConnectionPool> {
+async function getPool(target: DbTarget): Promise<sql.ConnectionPool> {
   const key = `${target.server}::${target.database}`;
   const existing = pools.get(key);
   if (existing?.connected) return existing;
-  if (existing) pools.delete(key); // stale pool — remove before reconnecting
+  if (existing) pools.delete(key); // stale — remove before reconnecting
 
   const config: sql.config = {
     server:   target.server,
@@ -35,7 +67,76 @@ export async function getClientDb(target: DbTarget): Promise<sql.ConnectionPool>
   const pool = await sql.connect(config);
   pools.set(key, pool);
   console.log(`[DB] Connected to ${target.database} on ${target.server}`);
+
+  pool.on('error', (err) => {
+    console.error(`[DB] Pool error on ${target.database}:`, err);
+    pools.delete(key);
+  });
+
   return pool;
 }
 
+// ─── Public API ────────────────────────────────────────────────
+
+/**
+ * Creates a tenant-scoped database executor.
+ *
+ * This is the ONLY sanctioned way to interact with a tenant database.
+ * All data operations must flow through execute().
+ * No other code in the application is permitted to execute database operations.
+ */
+export function createExecutor(target: DbTarget) {
+  return {
+    /**
+     * Execute a stored procedure.
+     *
+     * @param procedureName - SP name, e.g. 'dbo.sp_GetPlayers'
+     * @param inputs        - Input parameters (types auto-detected by mssql)
+     * @param outputs       - Output parameter names mapped to their SQL type string
+     *
+     * @example
+     * const { rows, output } = await db.execute(
+     *   'dbo.sp_GetPlayers',
+     *   { Search: 'Smith', Page: 1, PageSize: 50 },
+     *   { TotalCount: 'int' }
+     * );
+     */
+    async execute<T = Record<string, unknown>>(
+      procedureName: string,
+      inputs:  Record<string, unknown>    = {},
+      outputs: Record<string, OutputType> = {}
+    ): Promise<ExecResult<T>> {
+      const pool = await getPool(target);
+      const req  = pool.request();
+
+      for (const [key, value] of Object.entries(inputs)) {
+        req.input(key, value);
+      }
+      for (const [name, type] of Object.entries(outputs)) {
+        req.output(name, OUTPUT_TYPES[type]);
+      }
+
+      const result = await req.execute(procedureName);
+      return {
+        rows:         result.recordset  as T[],
+        sets:         result.recordsets as T[][],
+        output:       result.output     as Record<string, unknown>,
+        rowsAffected: result.rowsAffected,
+      };
+    },
+  };
+}
+
+/**
+ * @deprecated Use createExecutor(target).execute() instead.
+ * Kept for global-api health check and legacy code only.
+ */
+export async function getClientDb(target: DbTarget): Promise<sql.ConnectionPool> {
+  return getPool(target);
+}
+
+/**
+ * @deprecated mssql re-export for legacy code only.
+ * New code in the API layer must NOT import sql directly.
+ */
 export { sql };

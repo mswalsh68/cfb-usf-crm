@@ -193,3 +193,86 @@ export interface ApiError {
   code?: string;
   details?: unknown;
 }
+
+// ─── Sport Management ─────────────────────────────────────────────────────────
+
+export interface Sport {
+  id:          string;
+  name:        string;
+  abbr:        string;
+  colorOverride?: string;
+  customFields?: Record<string, unknown>;
+  createdAt:   string;
+}
+
+// ─── Sport-Scoped Role Model ──────────────────────────────────────────────────
+// Replaces app-scoped permissions. Each role assignment is per-sport within a tenant.
+
+export type StarterRole =
+  | 'account_owner'       // Billing / platform config — NOT a data role
+  | 'coach_admin'         // Full roster + alumni access within their sport(s)
+  | 'roster_only_admin';  // Roster data only — cannot see alumni
+
+export interface UserSportRole {
+  userId:    string;
+  sportId:   string;
+  sportName: string;
+  role:      StarterRole;
+  grantedAt: string;
+  grantedBy: string;
+}
+
+// ─── User Classification (enforces player/alumni wall) ────────────────────────
+export type UserClassification = 'roster' | 'alumni';
+
+// ─── Season Management ────────────────────────────────────────────────────────
+
+export type SeasonStatus = 'upcoming' | 'active' | 'completed' | 'archived';
+
+export interface Season {
+  id:        string;
+  sportId:   string;
+  name:      string;
+  startDate: string;
+  endDate:   string;
+  status:    SeasonStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Announcements (Broadcast CRM — Starter Tier) ─────────────────────────────
+
+export type AnnouncementAudience = 'roster' | 'alumni' | 'all';
+
+export interface Announcement {
+  id:             string;
+  sportId:        string;
+  title:          string;
+  body:           string;
+  targetAudience: AnnouncementAudience;
+  createdBy:      string;
+  createdAt:      string;
+}
+
+// ─── Updated Alumni type additions ────────────────────────────────────────────
+// communicationConsent: must be true to receive emails/notifications (CAN-SPAM)
+// originalPlayerId:     links back to the roster record this alumni was created from
+// yearsOnRoster:        e.g. "2018-2022"
+// city / state:         current location (Starter tier — alumni can self-edit)
+
+export interface AlumniExtended extends Alumni {
+  sportId:              string;
+  userClassification:   UserClassification;    // always 'alumni'
+  communicationConsent: boolean;
+  originalPlayerId?:    string;                // FK to roster.players
+  yearsOnRoster?:       string;               // e.g. "2018-2022"
+  city?:                string;
+  state?:               string;
+}
+
+// ─── Updated Player type additions ────────────────────────────────────────────
+
+export interface PlayerExtended extends Player {
+  sportId:            string;
+  userClassification: UserClassification;    // always 'roster'
+}

@@ -1,0 +1,31 @@
+{
+  "root": true,
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint", "no-restricted-syntax"],
+  "extends": ["eslint:recommended", "plugin:@typescript-eslint/recommended"],
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.property.name='query']",
+        "message": "Direct .query() calls are forbidden. All database access must go through db.execute() with a stored procedure. (LegacyLink directive §4.2)"
+      },
+      {
+        "selector": "TaggedTemplateExpression[tag.name='sql']",
+        "message": "SQL template literals are forbidden. All database access must go through db.execute() with a stored procedure. (LegacyLink directive §4.2)"
+      }
+    ],
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          { "name": "knex",      "message": "Query builders are forbidden. Use db.execute() only. (LegacyLink directive §4.2)" },
+          { "name": "sequelize", "message": "ORMs are forbidden. Use db.execute() only. (LegacyLink directive §4.2)" },
+          { "name": "prisma",    "message": "ORMs are forbidden. Use db.execute() only. (LegacyLink directive §4.2)" },
+          { "name": "@prisma/client", "message": "ORMs are forbidden. Use db.execute() only. (LegacyLink directive §4.2)" }
+        ]
+      }
+    ]
+  },
+  "ignorePatterns": ["node_modules/", "dist/", ".next/", "*.js"]
+}
