@@ -10,6 +10,10 @@ import { DEFAULT_POSITIONS, DEFAULT_ACADEMIC_YEARS } from '../constants';
 export const authRouter = Router();
 const hash = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
 
+function audit(event: string, details: Record<string, unknown>) {
+  console.log(JSON.stringify({ type: 'AUDIT', event, timestamp: new Date().toISOString(), ...details }));
+}
+
 const COOKIE_BASE = {
   httpOnly: true,
   secure:   process.env.NODE_ENV === 'production',
@@ -75,7 +79,10 @@ authRouter.post('/login', async (req, res) => {
     if (ErrorCode) return res.status(401).json({ success: false, error: 'Invalid credentials' });
 
     const ok = await bcrypt.compare(password, PasswordHash);
-    if (!ok) return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    if (!ok) {
+      audit('LOGIN_FAILED', { email: email.trim().toLowerCase(), ip: req.ip, reason: 'bad_password' });
+      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    }
 
     const user        = JSON.parse(UserJson);
     const accessToken = buildAccessToken(UserId, user);
@@ -88,6 +95,7 @@ authRouter.post('/login', async (req, res) => {
       .input('DeviceInfo', sql.NVarChar,         req.headers['user-agent'] ?? null)
       .execute('dbo.sp_StoreRefreshToken');
 
+    audit('LOGIN_SUCCESS', { userId: UserId, email: email.trim().toLowerCase(), ip: req.ip });
     return res
       .cookie('cfb_access_token',  accessToken,  ACCESS_COOKIE_OPTS)
       .cookie('cfb_refresh_token', refreshToken, REFRESH_COOKIE_OPTS)
@@ -258,6 +266,7 @@ authRouter.post('/logout', async (req, res) => {
       await db.request().input('TokenHash', sql.NVarChar, hash(refreshToken)).execute('dbo.sp_Logout');
     } catch { /* best effort */ }
   }
+  audit('LOGOUT', { ip: req.ip });
   return res
     .clearCookie('cfb_access_token',  { path: '/' })
     .clearCookie('cfb_refresh_token', { path: '/' })

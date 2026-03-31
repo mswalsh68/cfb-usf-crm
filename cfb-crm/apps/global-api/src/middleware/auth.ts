@@ -58,7 +58,7 @@ export function requireActiveTeam(req: Request, res: Response, next: NextFunctio
       if (!result.output.IsActive) {
         res.status(403).json({
           success: false,
-          error: 'Your subscription is inactive. Please contact LegacyLink support at support@legacylinkhq.com',
+          error: 'Your subscription is inactive. Please contact your administrator.',
         });
         return;
       }

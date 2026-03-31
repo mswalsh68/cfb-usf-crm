@@ -128,15 +128,15 @@ export function createExecutor(target: DbTarget) {
 }
 
 /**
- * @deprecated Use createExecutor(target).execute() instead.
- * Kept for global-api health check and legacy code only.
+ * Returns a raw connection pool for use in health checks only.
+ * Do NOT use this for data operations — use createExecutor(target).execute() instead.
  */
 export async function getClientDb(target: DbTarget): Promise<sql.ConnectionPool> {
   return getPool(target);
 }
 
 /**
- * @deprecated mssql re-export for legacy code only.
- * New code in the API layer must NOT import sql directly.
+ * mssql re-export for health-check use only.
+ * Application code must NOT import sql directly — use createExecutor instead.
  */
 export { sql };

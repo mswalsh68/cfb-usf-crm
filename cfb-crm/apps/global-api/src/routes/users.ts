@@ -12,6 +12,10 @@ permissionsRouter.use(requireAuth);
 
 const sha256 = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
 
+function audit(event: string, details: Record<string, unknown>) {
+  console.log(JSON.stringify({ type: 'AUDIT', event, timestamp: new Date().toISOString(), ...details }));
+}
+
 // GET /users — sp_GetUsers handles filtering, pagination, counts
 usersRouter.get('/', requireGlobalAdmin, async (req, res) => {
   const { search, role, page = '1', pageSize = '50' } = req.query as Record<string, string>;
@@ -94,6 +98,7 @@ usersRouter.post('/', requireGlobalAdmin, async (req, res) => {
       .input('ExpiresAt', sql.DateTime2,        expiresAt)
       .execute('dbo.sp_CreateInviteToken');
 
+    audit('USER_CREATED', { actorId: req.user!.sub, newUserId, email, globalRole });
     return res.status(201).json({ success: true, data: { id: newUserId, inviteToken: rawToken } });
   } catch (err) { console.error('[POST /users]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -111,8 +116,9 @@ usersRouter.patch('/:id', requireGlobalAdmin, async (req, res) => {
       .output('ErrorCode',   sql.NVarChar(50))
       .execute('dbo.sp_UpdateUser');
     if (r.output.ErrorCode) return res.status(400).json({ success: false, error: r.output.ErrorCode });
+    audit('USER_UPDATED', { actorId: req.user!.sub, targetUserId: req.params.id, globalRole: globalRole ?? null, isActive: isActive ?? null });
     return res.json({ success: true, message: 'User updated' });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[PATCH /users]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // GET /permissions/:userId — sp_GetUserPermissions
@@ -140,8 +146,9 @@ permissionsRouter.post('/', requireGlobalAdmin, async (req, res) => {
       .output('ErrorCode', sql.NVarChar(50))
       .execute('dbo.sp_GrantPermission');
     if (r.output.ErrorCode) return res.status(400).json({ success: false, error: r.output.ErrorCode });
+    audit('PERMISSION_GRANTED', { actorId: req.user!.sub, userId, appName, role });
     return res.status(201).json({ success: true, message: 'Permission granted' });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[POST /permissions]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // DELETE /permissions/:userId/:appName — sp_RevokePermission
@@ -155,6 +162,7 @@ permissionsRouter.delete('/:userId/:appName', requireGlobalAdmin, async (req, re
       .output('ErrorCode', sql.NVarChar(50))
       .execute('dbo.sp_RevokePermission');
     if (r.output.ErrorCode === 'PERMISSION_NOT_FOUND') return res.status(404).json({ success: false, error: 'Permission not found' });
+    audit('PERMISSION_REVOKED', { actorId: req.user!.sub, userId: req.params.userId, appName: req.params.appName });
     return res.json({ success: true, message: 'Permission revoked' });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[DELETE /permissions]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
