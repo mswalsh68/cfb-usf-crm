@@ -10,6 +10,42 @@ import { DEFAULT_POSITIONS, DEFAULT_ACADEMIC_YEARS } from '../constants';
 export const authRouter = Router();
 const hash = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
 
+// ─── TODO: Per-user token revocation ─────────────────────────────────────────
+//
+// Currently, logging out only invalidates the specific refresh token used.
+// If a user's account is compromised, there is no way to revoke ALL active
+// sessions for that user instantly.
+//
+// To implement full per-user token revocation, add the following to your DB:
+//
+//   1. Add a `token_families` table (or column on `users`):
+//        ALTER TABLE dbo.users ADD token_version INT NOT NULL DEFAULT 1;
+//
+//   2. Include `tokenVersion` in the access token payload (packages/auth/index.ts):
+//        payload: { sub, email, globalRole, ..., tokenVersion: user.tokenVersion }
+//
+//   3. In requireAuth middleware (middleware/auth.ts), after verifying the JWT,
+//      query the DB to confirm req.user.tokenVersion matches users.token_version:
+//        const r = await db.request()
+//          .input('UserId', sql.UniqueIdentifier, req.user.sub)
+//          .output('TokenVersion', sql.Int)
+//          .execute('dbo.sp_GetTokenVersion');
+//        if (r.output.TokenVersion !== req.user.tokenVersion) {
+//          return res.status(401).json({ success: false, error: 'Session revoked' });
+//        }
+//
+//   4. Add a "revoke all sessions" endpoint (or admin action) that increments
+//      token_version for a user:
+//        UPDATE dbo.users SET token_version = token_version + 1 WHERE id = @UserId;
+//      Any existing JWTs with the old tokenVersion will immediately fail auth.
+//
+//   5. Also increment token_version on password reset / account compromise.
+//
+// NOTE: Step 3 adds one DB round-trip per authenticated request. Consider
+// caching token versions in Redis (TTL = access token lifetime = 15 min)
+// to avoid hitting the DB on every request.
+// ─────────────────────────────────────────────────────────────────────────────
+
 function audit(event: string, details: Record<string, unknown>) {
   console.log(JSON.stringify({ type: 'AUDIT', event, timestamp: new Date().toISOString(), ...details }));
 }
