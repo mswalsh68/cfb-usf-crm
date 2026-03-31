@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { globalApi, getApiError } from '@/lib/api';
 import { setTokens } from '@/lib/auth';
+import { triggerThemeRefresh } from '@/components/ThemeProvider';
 
 const GOLD   = '#B8973D';
 const GOLD_L = '#D4AF5A';
@@ -26,6 +27,15 @@ export default function LoginPage() {
     try {
       const { data } = await globalApi.post('/auth/login', { email, password });
       setTokens(data.data.accessToken, data.data.refreshToken);
+
+      // Bust the cached config and re-apply the logged-in team's theme
+      // before navigating so the nav renders with the correct colors immediately.
+      try {
+        sessionStorage.removeItem('cfb_team_config');
+        const cfgRes = await globalApi.get('/config');
+        if (cfgRes.data?.data) triggerThemeRefresh(cfgRes.data.data);
+      } catch { /* non-fatal — theme will update on next load */ }
+
       router.push('/dashboard');
     } catch (err: unknown) {
       setError(getApiError(err, 'Login failed. Please try again.'));

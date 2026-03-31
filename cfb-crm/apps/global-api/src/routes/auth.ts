@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '@cfb-crm/auth';
-import type { AuthTokenPayload, TeamSummary } from '@cfb-crm/types';
+import type { AuthTokenPayload, TeamSummary, GlobalRole } from '@cfb-crm/types';
 import { getDb, sql } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { DEFAULT_POSITIONS, DEFAULT_ACADEMIC_YEARS } from '../constants';
@@ -12,7 +12,7 @@ const hash = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
 
 interface SpUserJson {
   email:          string;
-  globalRole:     string;
+  globalRole:     GlobalRole;
   currentTeamId?: string;
   teams?:         TeamSummary[];
   appPermissions?: AuthTokenPayload['appPermissions'];

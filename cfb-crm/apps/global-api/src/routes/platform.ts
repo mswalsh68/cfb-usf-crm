@@ -1,8 +1,19 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
 import { requireAuth, requirePlatformOwner } from '../middleware/auth';
 import { getDb, sql } from '../db';
 import * as mssql from 'mssql';
+
+/** Split a SQL file on GO batch separators and execute each batch. */
+async function executeSqlFile(pool: mssql.ConnectionPool, filePath: string): Promise<void> {
+  const content = fs.readFileSync(filePath, 'utf8');
+  const batches  = content.split(/^\s*GO\s*$/im).map(b => b.trim()).filter(Boolean);
+  for (const batch of batches) {
+    await pool.request().query(batch);
+  }
+}
 
 export const platformRouter = Router();
 
@@ -50,7 +61,7 @@ platformRouter.patch('/teams/:id', async (req, res) => {
 });
 
 // ─── POST /platform/onboard-client ───────────────────────────────────────────
-// Creates a new client's two databases (Roster + Alumni), applies full schema,
+// Creates a new client's unified app database, applies full schema + SPs,
 // seeds team_config, creates the first admin user, and registers in teams table.
 // Replaces the manual onboard-new-client.sql workflow from the web UI.
 platformRouter.post('/onboard-client', async (req, res) => {
@@ -78,8 +89,9 @@ platformRouter.post('/onboard-client', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Admin password must be at least 10 characters' });
   }
 
-  const rosterDb   = `${clientCode}_Roster`;
-  const alumniDb   = `${clientCode}_Alumni`;
+  const appDb      = `${clientCode}App`;          // e.g. PHSPanthersApp
+  const rosterDb   = `${clientCode}_Roster`;      // kept for legacy column compatibility
+  const alumniDb   = `${clientCode}_Alumni`;      // kept for legacy column compatibility
   const serverName = dbServer ?? process.env.DB_SERVER ?? 'localhost\\SQLEXPRESS';
 
   try {
@@ -93,6 +105,7 @@ platformRouter.post('/onboard-client', async (req, res) => {
       .input('Level',            sql.NVarChar, level)
       .input('RosterDb',         sql.NVarChar, rosterDb)
       .input('AlumniDb',         sql.NVarChar, alumniDb)
+      .input('AppDb',            sql.NVarChar, appDb)
       .input('DbServer',         sql.NVarChar, serverName)
       .input('SubscriptionTier', sql.NVarChar, subscriptionTier)
       .input('ActorId',          sql.UniqueIdentifier, req.user!.sub)
@@ -106,24 +119,16 @@ platformRouter.post('/onboard-client', async (req, res) => {
 
     const newTeamId: string = teamR.output.NewTeamId;
 
-    // 2. Create databases and apply schemas via dynamic SQL
-    //    (We run USE master so we can CREATE DATABASE)
-    const createDbSql = `
-      IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = @RosterDb)
-        CREATE DATABASE [${rosterDb}];
-      IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = @AlumniDb)
-        CREATE DATABASE [${alumniDb}];
-    `;
-    await db.request()
-      .input('RosterDb', sql.NVarChar, rosterDb)
-      .input('AlumniDb', sql.NVarChar, alumniDb)
-      .query(createDbSql);
+    // 2. Create the unified app database (idempotent)
+    await db.request().query(
+      `IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'${appDb}')
+         CREATE DATABASE [${appDb}];`
+    );
 
-    // 3. Apply Roster schema to new database
-    //    Connect to the new Roster DB and run schema + SPs
-    const rosterPool = await new mssql.ConnectionPool({
+    // 3. Apply schema + stored procedures to the new app database
+    const appPool = await new mssql.ConnectionPool({
       server:   serverName.replace('\\\\', '\\'),
-      database: rosterDb,
+      database: appDb,
       options:  { encrypt: false, trustServerCertificate: true },
       authentication: {
         type: 'default' as const,
@@ -131,119 +136,15 @@ platformRouter.post('/onboard-client', async (req, res) => {
       },
     }).connect();
 
-    await rosterPool.request().query(`
-      IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'players')
-      CREATE TABLE dbo.players (
-        id                    UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
-        user_id               UNIQUEIDENTIFIER NULL,
-        jersey_number         INT              NULL,
-        first_name            NVARCHAR(100)    NOT NULL,
-        last_name             NVARCHAR(100)    NOT NULL,
-        position              NVARCHAR(50)     NOT NULL,
-        academic_year         NVARCHAR(50)     NOT NULL,
-        status                NVARCHAR(50)     NOT NULL DEFAULT 'active',
-        height_inches         INT              NULL,
-        weight_lbs            INT              NULL,
-        home_town             NVARCHAR(100)    NULL,
-        home_state            NVARCHAR(50)     NULL,
-        high_school           NVARCHAR(100)    NULL,
-        recruiting_class      INT              NULL,
-        gpa                   DECIMAL(3,2)     NULL,
-        major                 NVARCHAR(100)    NULL,
-        phone                 NVARCHAR(30)     NULL,
-        email                 NVARCHAR(255)    NULL,
-        twitter_url           NVARCHAR(255)    NULL,
-        instagram_url         NVARCHAR(255)    NULL,
-        emergency_contact_name  NVARCHAR(100) NULL,
-        emergency_contact_phone NVARCHAR(30)  NULL,
-        notes                 NVARCHAR(MAX)    NULL,
-        created_at            DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
-        updated_at            DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
-      );
+    try {
+      const dbRoot = path.resolve(__dirname, '../../../../databases');
+      await executeSqlFile(appPool, path.join(dbRoot, 'app', 'migrations', '001_app_db_schema.sql'));
+      await executeSqlFile(appPool, path.join(dbRoot, 'app', 'stored-procedures', 'sp_App_AllProcedures.sql'));
+    } finally {
+      await appPool.close();
+    }
 
-      IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'player_stats')
-      CREATE TABLE dbo.player_stats (
-        id            UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
-        player_id     UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.players(id),
-        season        INT              NOT NULL,
-        stats_json    NVARCHAR(MAX)    NULL,
-        created_at    DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
-        updated_at    DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
-        CONSTRAINT UQ_player_season UNIQUE (player_id, season)
-      );
-    `);
-    await rosterPool.close();
-
-    // 4. Apply Alumni schema to new database
-    const alumniPool = await new mssql.ConnectionPool({
-      server:   serverName.replace('\\\\', '\\'),
-      database: alumniDb,
-      options:  { encrypt: false, trustServerCertificate: true },
-      authentication: {
-        type: 'default' as const,
-        options: { userName: process.env.DB_USER ?? '', password: process.env.DB_PASSWORD ?? '' },
-      },
-    }).connect();
-
-    await alumniPool.request().query(`
-      IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'alumni')
-      CREATE TABLE dbo.alumni (
-        id                    UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
-        source_player_id      UNIQUEIDENTIFIER NULL,
-        user_id               UNIQUEIDENTIFIER NULL,
-        first_name            NVARCHAR(100)    NOT NULL,
-        last_name             NVARCHAR(100)    NOT NULL,
-        graduation_year       INT              NOT NULL,
-        graduation_semester   NVARCHAR(20)     NOT NULL DEFAULT 'spring',
-        position              NVARCHAR(50)     NULL,
-        recruiting_class      INT              NULL,
-        status                NVARCHAR(50)     NOT NULL DEFAULT 'active',
-        current_employer      NVARCHAR(200)    NULL,
-        current_job_title     NVARCHAR(200)    NULL,
-        current_city          NVARCHAR(100)    NULL,
-        current_state         NVARCHAR(50)     NULL,
-        personal_email        NVARCHAR(255)    NULL,
-        phone                 NVARCHAR(30)     NULL,
-        linked_in_url         NVARCHAR(500)    NULL,
-        twitter_url           NVARCHAR(500)    NULL,
-        is_donor              BIT              NOT NULL DEFAULT 0,
-        last_donation_date    DATE             NULL,
-        total_donations       DECIMAL(12,2)    NULL,
-        engagement_score      INT              NULL,
-        notes                 NVARCHAR(MAX)    NULL,
-        created_at            DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
-        updated_at            DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
-      );
-
-      IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'interaction_log')
-      CREATE TABLE dbo.interaction_log (
-        id              UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
-        alumni_id       UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.alumni(id),
-        interaction_type NVARCHAR(50)    NOT NULL,
-        notes           NVARCHAR(MAX)    NULL,
-        logged_by       UNIQUEIDENTIFIER NULL,
-        interaction_date DATE            NOT NULL DEFAULT CAST(SYSUTCDATETIME() AS DATE),
-        created_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
-      );
-
-      IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'outreach_campaigns')
-      CREATE TABLE dbo.outreach_campaigns (
-        id               UNIQUEIDENTIFIER NOT NULL PRIMARY KEY DEFAULT NEWID(),
-        name             NVARCHAR(200)    NOT NULL,
-        description      NVARCHAR(MAX)    NULL,
-        target_audience  NVARCHAR(50)     NOT NULL DEFAULT 'all',
-        audience_filters NVARCHAR(MAX)    NULL,
-        status           NVARCHAR(50)     NOT NULL DEFAULT 'draft',
-        scheduled_at     DATETIME2        NULL,
-        completed_at     DATETIME2        NULL,
-        created_by       UNIQUEIDENTIFIER NULL,
-        created_at       DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
-        updated_at       DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
-      );
-    `);
-    await alumniPool.close();
-
-    // 5. Seed team_config for the new team
+    // 4. Seed team_config for the new team
     const configR = await db.request()
       .input('TeamId',       sql.UniqueIdentifier, newTeamId)
       .input('ColorPrimary', sql.NVarChar,         colorPrimary ?? null)
@@ -252,7 +153,7 @@ platformRouter.post('/onboard-client', async (req, res) => {
       .execute('dbo.sp_UpdateTeamConfig');
     // Ignore config errors — config will be auto-seeded on first GET /config call
 
-    // 6. Create the first admin user for this team
+    // 5. Create the first admin user for this team
     const passwordHash = await bcrypt.hash(adminPassword, 12);
     const userR = await db.request()
       .input('Email',        sql.NVarChar,         adminEmail.trim().toLowerCase())
@@ -275,9 +176,8 @@ platformRouter.post('/onboard-client', async (req, res) => {
     return res.status(201).json({
       success: true,
       data: {
-        teamId:   newTeamId,
-        rosterDb,
-        alumniDb,
+        teamId:    newTeamId,
+        appDb,
         adminEmail,
         message: `Client ${clientAbbr} provisioned. Admin user created — they can log in immediately.`,
       },

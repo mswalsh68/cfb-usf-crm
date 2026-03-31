@@ -83,6 +83,7 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreateTeam
   @Level            NVARCHAR(20)     = 'college',
   @RosterDb         NVARCHAR(100),
   @AlumniDb         NVARCHAR(100),
+  @AppDb            NVARCHAR(150)    = NULL,   -- unified app DB (new architecture)
   @DbServer         NVARCHAR(200)    = 'localhost\SQLEXPRESS',
   @SubscriptionTier NVARCHAR(20)     = 'starter',
   @ExpiresAt        DATETIME2        = NULL,
@@ -119,8 +120,8 @@ BEGIN
 
   SET @NewTeamId = NEWID();
 
-  INSERT INTO dbo.teams (id, name, abbr, sport, level, roster_db, alumni_db, db_server, subscription_tier, expires_at)
-  VALUES (@NewTeamId, @Name, @Abbr, @Sport, @Level, @RosterDb, @AlumniDb, @DbServer, @SubscriptionTier, @ExpiresAt);
+  INSERT INTO dbo.teams (id, name, abbr, sport, level, roster_db, alumni_db, app_db, db_server, subscription_tier, expires_at)
+  VALUES (@NewTeamId, @Name, @Abbr, @Sport, @Level, @RosterDb, @AlumniDb, @AppDb, @DbServer, @SubscriptionTier, @ExpiresAt);
 
   INSERT INTO dbo.audit_log (actor_id, action, target_type, target_id, payload)
   VALUES (
