@@ -13,7 +13,23 @@ import { platformRouter } from './routes/platform';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(helmet());
+app.use(helmet({
+  hsts: {
+    maxAge:            31536000, // 1 year
+    includeSubDomains: true,
+    preload:           true,
+  },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'"],
+      styleSrc:   ["'self'"],
+      imgSrc:     ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+}));
 app.use(cookieParser());
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') ?? ['http://localhost:8081'],

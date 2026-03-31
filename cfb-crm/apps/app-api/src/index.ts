@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import { verifyAccessToken, extractBearerToken, hasAppAccess, getAppRole, isAdmin } from '@cfb-crm/auth';
@@ -89,7 +90,24 @@ function validate<T>(schema: z.ZodType<T>, body: unknown, res: express.Response)
 const app  = express();
 const PORT = process.env.PORT || 3002;
 
-app.use(helmet());
+app.use(helmet({
+  hsts: {
+    maxAge:            31536000,
+    includeSubDomains: true,
+    preload:           true,
+  },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc:     ["'self'"],
+      scriptSrc:      ["'self'"],
+      styleSrc:       ["'self'"],
+      imgSrc:         ["'self'", 'data:'],
+      connectSrc:     ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+}));
+app.use(cookieParser());
 app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(','), credentials: true }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 app.use(express.json({ limit: '10kb' }));
@@ -128,9 +146,13 @@ function reqCtx(req: express.Request) {
   };
 }
 
+function parsePage(raw: string | undefined)     { return Math.max(parseInt(raw ?? '1')  || 1,  1); }
+function parsePageSize(raw: string | undefined) { return Math.min(Math.max(parseInt(raw ?? '50') || 50, 1), 200); }
+
 // ─── Auth middleware ──────────────────────────────────────────
+// Accepts token from Authorization header (mobile) or httpOnly cookie (web)
 function auth(req: express.Request, res: express.Response, next: express.NextFunction) {
-  const token = extractBearerToken(req.headers.authorization);
+  const token = extractBearerToken(req.headers.authorization) ?? req.cookies?.cfb_access_token ?? null;
   if (!token) return res.status(401).json({ success: false, error: 'Authentication required' });
   try { req.user = verifyAccessToken(token); next(); }
   catch { return res.status(401).json({ success: false, error: 'Invalid token' }); }
@@ -176,7 +198,8 @@ function alumniAdmin(req: express.Request, res: express.Response, next: express.
 
 // GET /players
 app.get('/players', auth, rosterAccess, async (req, res) => {
-  const { search, status, position, academicYear, recruitingClass, page = '1', pageSize = '50' } = req.query as Record<string, string>;
+  const { search, status, position, academicYear, recruitingClass, page, pageSize } = req.query as Record<string, string>;
+  const p = parsePage(page); const ps = parsePageSize(pageSize);
   try {
     const db = appDb(req.user!);
     const { rows, output } = await db.execute(
@@ -187,13 +210,13 @@ app.get('/players', auth, rosterAccess, async (req, res) => {
         Position:        position         || null,
         AcademicYear:    academicYear     || null,
         RecruitingClass: recruitingClass  ? parseInt(recruitingClass) : null,
-        Page:            parseInt(page),
-        PageSize:        Math.min(parseInt(pageSize) || 50, 200),
+        Page:            p,
+        PageSize:        ps,
         ...reqCtx(req),
       },
       { TotalCount: 'int' }
     );
-    return res.json({ success: true, data: rows, total: output.TotalCount, page: parseInt(page), pageSize: parseInt(pageSize) });
+    return res.json({ success: true, data: rows, total: output.TotalCount, page: p, pageSize: ps });
   } catch (err) { console.error('[GET /players]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
@@ -383,15 +406,23 @@ app.post('/players/transfer', auth, rosterAccess, rosterAdmin, async (req, res) 
 });
 
 // POST /players/bulk
+const bulkPlayerSchema = createPlayerSchema.omit({ userId: true }).extend({ userId: z.string().uuid().optional() });
 app.post('/players/bulk', auth, rosterAccess, rosterWrite, async (req, res) => {
   const { players } = req.body;
   if (!Array.isArray(players) || players.length === 0) return res.status(400).json({ success: false, error: 'players array is required' });
   if (players.length > 500) return res.status(400).json({ success: false, error: 'Maximum 500 players per upload' });
+  const validationErrors: Array<{ index: number; error: string }> = [];
+  const validPlayers = players.map((p, i) => {
+    const result = bulkPlayerSchema.safeParse(p);
+    if (!result.success) validationErrors.push({ index: i, error: result.error.errors[0]?.message ?? 'Invalid record' });
+    return result.success ? result.data : null;
+  });
+  if (validationErrors.length > 0) return res.status(400).json({ success: false, error: 'Validation failed', details: validationErrors });
   try {
     const db = appDb(req.user!);
     const { output } = await db.execute(
       'dbo.sp_BulkCreatePlayers',
-      { PlayersJson: JSON.stringify(players), CreatedBy: req.user!.sub, ...reqCtx(req) },
+      { PlayersJson: JSON.stringify(validPlayers), CreatedBy: req.user!.sub, ...reqCtx(req) },
       { SuccessCount: 'int', SkippedCount: 'int', ErrorJson: 'nvarcharmax' }
     );
     return res.json({
@@ -433,7 +464,8 @@ app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res)
 
 // GET /alumni
 app.get('/alumni', auth, alumniAccess, async (req, res) => {
-  const { search, status, isDonor, gradYear, position, page = '1', pageSize = '50' } = req.query as Record<string, string>;
+  const { search, status, isDonor, gradYear, position, page, pageSize } = req.query as Record<string, string>;
+  const p = parsePage(page); const ps = parsePageSize(pageSize);
   try {
     const db = appDb(req.user!);
     const { rows, output } = await db.execute(
@@ -444,13 +476,13 @@ app.get('/alumni', auth, alumniAccess, async (req, res) => {
         IsDonor:  isDonor  ? isDonor === 'true' : null,
         GradYear: gradYear ? parseInt(gradYear) : null,
         Position: position || null,
-        Page:     parseInt(page),
-        PageSize: Math.min(parseInt(pageSize) || 50, 200),
+        Page:     p,
+        PageSize: ps,
         ...reqCtx(req),
       },
       { TotalCount: 'int' }
     );
-    return res.json({ success: true, data: rows, total: output.TotalCount, page: parseInt(page), pageSize: parseInt(pageSize) });
+    return res.json({ success: true, data: rows, total: output.TotalCount, page: p, pageSize: ps });
   } catch (err) { console.error('[GET /alumni]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
@@ -574,11 +606,18 @@ app.post('/alumni/bulk', auth, alumniAccess, alumniWrite, async (req, res) => {
   const { alumni } = req.body;
   if (!Array.isArray(alumni) || alumni.length === 0) return res.status(400).json({ success: false, error: 'alumni array is required' });
   if (alumni.length > 500) return res.status(400).json({ success: false, error: 'Maximum 500 alumni per upload' });
+  const validationErrors: Array<{ index: number; error: string }> = [];
+  const validAlumni = alumni.map((a, i) => {
+    const result = createAlumniSchema.safeParse(a);
+    if (!result.success) validationErrors.push({ index: i, error: result.error.errors[0]?.message ?? 'Invalid record' });
+    return result.success ? result.data : null;
+  });
+  if (validationErrors.length > 0) return res.status(400).json({ success: false, error: 'Validation failed', details: validationErrors });
   try {
     const db = appDb(req.user!);
     const { output } = await db.execute(
       'dbo.sp_BulkCreateAlumni',
-      { AlumniJson: JSON.stringify(alumni), CreatedBy: req.user!.sub, ...reqCtx(req) },
+      { AlumniJson: JSON.stringify(validAlumni), CreatedBy: req.user!.sub, ...reqCtx(req) },
       { SuccessCount: 'int', SkippedCount: 'int', ErrorJson: 'nvarcharmax' }
     );
     return res.json({
