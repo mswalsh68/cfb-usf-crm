@@ -11,40 +11,71 @@ import { getHealthDb } from './db';
 
 // ─── Validation schemas ───────────────────────────────────────
 const createPlayerSchema = z.object({
-  userId:          z.string().uuid(),
-  firstName:       z.string().min(1),
-  lastName:        z.string().min(1),
-  position:        z.string().min(1),
-  academicYear:    z.string().min(1),
-  recruitingClass: z.number().int(),
-}).passthrough();
+  userId:                z.string().uuid(),
+  firstName:             z.string().min(1),
+  lastName:              z.string().min(1),
+  position:              z.string().min(1),
+  academicYear:          z.string().min(1),
+  recruitingClass:       z.number().int(),
+  jerseyNumber:          z.number().int().nullable().optional(),
+  heightInches:          z.number().int().nullable().optional(),
+  weightLbs:             z.number().int().nullable().optional(),
+  homeTown:              z.string().nullable().optional(),
+  homeState:             z.string().nullable().optional(),
+  highSchool:            z.string().nullable().optional(),
+  gpa:                   z.number().nullable().optional(),
+  major:                 z.string().nullable().optional(),
+  phone:                 z.string().nullable().optional(),
+  email:                 z.string().nullable().optional(),
+  instagram:             z.string().nullable().optional(),
+  twitter:               z.string().nullable().optional(),
+  snapchat:              z.string().nullable().optional(),
+  emergencyContactName:  z.string().nullable().optional(),
+  emergencyContactPhone: z.string().nullable().optional(),
+  notes:                 z.string().nullable().optional(),
+});
 
 const transferSchema = z.object({
   playerIds:        z.array(z.string().uuid()).min(1),
   transferReason:   z.enum(['graduated', 'transferred', 'withdrew', 'other']),
   transferYear:     z.number().int().min(2000).max(2100),
   transferSemester: z.enum(['spring', 'fall', 'summer']),
+  notes:            z.string().nullable().optional(),
 });
 
 const playerStatsSchema = z.object({
-  seasonYear: z.number().int(),
+  seasonYear:  z.number().int(),
+  gamesPlayed: z.number().int().nullable().optional(),
+  statsJson:   z.record(z.unknown()).nullable().optional(),
 });
 
 const createAlumniSchema = z.object({
-  firstName:      z.string().min(1),
-  lastName:       z.string().min(1),
-  graduationYear: z.number().int(),
-}).passthrough();
+  firstName:          z.string().min(1),
+  lastName:           z.string().min(1),
+  graduationYear:     z.number().int(),
+  userId:             z.string().uuid().nullable().optional(),
+  sourcePlayerId:     z.string().uuid().nullable().optional(),
+  graduationSemester: z.enum(['spring', 'fall', 'summer']).optional().default('spring'),
+  position:           z.string().nullable().optional(),
+  recruitingClass:    z.number().int().nullable().optional(),
+  phone:              z.string().nullable().optional(),
+  personalEmail:      z.string().nullable().optional(),
+});
 
 const logInteractionSchema = z.object({
-  channel: z.string().min(1),
-  summary: z.string().min(1),
+  channel:    z.string().min(1),
+  summary:    z.string().min(1),
+  outcome:    z.string().nullable().optional(),
+  followUpAt: z.string().datetime({ offset: true }).nullable().optional(),
 });
 
 const createCampaignSchema = z.object({
-  name:           z.string().min(1),
-  targetAudience: z.enum(['all', 'byClass', 'byPosition', 'byStatus', 'custom']),
-}).passthrough();
+  name:            z.string().min(1),
+  targetAudience:  z.enum(['all', 'byClass', 'byPosition', 'byStatus', 'custom']),
+  description:     z.string().nullable().optional(),
+  audienceFilters: z.record(z.unknown()).nullable().optional(),
+  scheduledAt:     z.string().datetime({ offset: true }).nullable().optional(),
+});
 
 function validate<T>(schema: z.ZodType<T>, body: unknown, res: express.Response): T | null {
   const result = schema.safeParse(body);
@@ -85,6 +116,16 @@ function appDb(user: AuthTokenPayload) {
     encrypt:   process.env.DB_ENCRYPT === 'true',
     trustCert: process.env.DB_TRUST_CERT === 'true',
   });
+}
+
+// ─── Session context helper ───────────────────────────────────
+// Returns the two params every SP needs to set its own session context
+// so RLS filter functions can identify the requesting user.
+function reqCtx(req: express.Request) {
+  return {
+    RequestingUserId:   req.user!.sub,
+    RequestingUserRole: req.user!.globalRole || '',
+  };
 }
 
 // ─── Auth middleware ──────────────────────────────────────────
@@ -148,6 +189,7 @@ app.get('/players', auth, rosterAccess, async (req, res) => {
         RecruitingClass: recruitingClass  ? parseInt(recruitingClass) : null,
         Page:            parseInt(page),
         PageSize:        Math.min(parseInt(pageSize) || 50, 200),
+        ...reqCtx(req),
       },
       { TotalCount: 'int' }
     );
@@ -161,7 +203,7 @@ app.get('/players/:id', auth, rosterAccess, async (req, res) => {
     const db = appDb(req.user!);
     const { sets, output } = await db.execute(
       'dbo.sp_GetPlayerById',
-      { PlayerId: req.params.id },
+      { PlayerId: req.params.id, ...reqCtx(req) },
       { ErrorCode: 'nvarchar50' }
     );
     if (output.ErrorCode) return res.status(404).json({ success: false, error: 'Player not found' });
@@ -179,28 +221,29 @@ app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
       'dbo.sp_CreatePlayer',
       {
         UserId:                b.userId,
-        JerseyNumber:          (b as any).jerseyNumber          ?? null,
+        JerseyNumber:          b.jerseyNumber          ?? null,
         FirstName:             b.firstName,
         LastName:              b.lastName,
         Position:              b.position,
         AcademicYear:          b.academicYear,
         RecruitingClass:       b.recruitingClass,
-        HeightInches:          (b as any).heightInches          ?? null,
-        WeightLbs:             (b as any).weightLbs             ?? null,
-        HomeTown:              (b as any).homeTown              ?? null,
-        HomeState:             (b as any).homeState             ?? null,
-        HighSchool:            (b as any).highSchool            ?? null,
-        Gpa:                   (b as any).gpa                   ?? null,
-        Major:                 (b as any).major                 ?? null,
-        Phone:                 (b as any).phone                 ?? null,
-        Email:                 (b as any).email                 ?? null,
-        Instagram:             (b as any).instagram             ?? null,
-        Twitter:               (b as any).twitter               ?? null,
-        Snapchat:              (b as any).snapchat              ?? null,
-        EmergencyContactName:  (b as any).emergencyContactName  ?? null,
-        EmergencyContactPhone: (b as any).emergencyContactPhone ?? null,
-        Notes:                 (b as any).notes                 ?? null,
+        HeightInches:          b.heightInches          ?? null,
+        WeightLbs:             b.weightLbs             ?? null,
+        HomeTown:              b.homeTown              ?? null,
+        HomeState:             b.homeState             ?? null,
+        HighSchool:            b.highSchool            ?? null,
+        Gpa:                   b.gpa                   ?? null,
+        Major:                 b.major                 ?? null,
+        Phone:                 b.phone                 ?? null,
+        Email:                 b.email                 ?? null,
+        Instagram:             b.instagram             ?? null,
+        Twitter:               b.twitter               ?? null,
+        Snapchat:              b.snapchat              ?? null,
+        EmergencyContactName:  b.emergencyContactName  ?? null,
+        EmergencyContactPhone: b.emergencyContactPhone ?? null,
+        Notes:                 b.notes                 ?? null,
         CreatedBy:             req.user!.sub,
+        ...reqCtx(req),
       },
       { NewPlayerId: 'uniqueidentifier', ErrorCode: 'nvarchar50' }
     );
@@ -225,10 +268,10 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
     if (!isWriter) {
       const { rows, output } = await db.execute(
         'dbo.sp_GetPlayerById',
-        { PlayerId: req.params.id },
+        { PlayerId: req.params.id, ...reqCtx(req) },
         { ErrorCode: 'nvarchar50' }
       );
-      const playerRow = rows[0] as any;
+      const playerRow = rows[0] as { userId?: string } | undefined;
       if (!playerRow || output.ErrorCode) return res.status(404).json({ success: false, error: 'Player not found' });
       if (playerRow.userId !== req.user!.sub) return res.status(403).json({ success: false, error: 'You can only edit your own profile' });
     }
@@ -254,6 +297,7 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
         EmergencyContactPhone: b.emergencyContactPhone ?? null,
         Notes:                 b.notes                 ?? null,
         UpdatedBy:             req.user!.sub,
+        ...reqCtx(req),
       },
       { ErrorCode: 'nvarchar50' }
     );
@@ -266,8 +310,7 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
 app.post('/players/transfer', auth, rosterAccess, rosterAdmin, async (req, res) => {
   const body = validate(transferSchema, req.body, res);
   if (!body) return;
-  const { playerIds, transferReason, transferYear, transferSemester } = body;
-  const notes = (req.body as any).notes ?? null;
+  const { playerIds, transferReason, transferYear, transferSemester, notes = null } = body;
   try {
     const db = appDb(req.user!);
 
@@ -281,6 +324,7 @@ app.post('/players/transfer', auth, rosterAccess, rosterAdmin, async (req, res) 
         TransferSemester: transferSemester,
         Notes:            notes,
         TriggeredBy:      req.user!.sub,
+        ...reqCtx(req),
       },
       {
         TransactionId: 'uniqueidentifier',
@@ -310,6 +354,7 @@ app.post('/players/transfer', auth, rosterAccess, rosterAdmin, async (req, res) 
             RecruitingClass:    p.recruitingClass,
             Phone:              p.phone        ?? null,
             PersonalEmail:      p.email        ?? null,
+            ...reqCtx(req),
           },
           { NewAlumniId: 'uniqueidentifier', ErrorCode: 'nvarchar50' }
         );
@@ -317,8 +362,8 @@ app.post('/players/transfer', auth, rosterAccess, rosterAdmin, async (req, res) 
         if (ao.ErrorCode && ao.ErrorCode !== 'ALUMNI_ALREADY_EXISTS') {
           alumniFailures.push({ playerId: p.playerId, reason: ao.ErrorCode as string });
         }
-      } catch (err: any) {
-        alumniFailures.push({ playerId: p.playerId, reason: err?.message ?? 'Failed to create alumni record' });
+      } catch (err: unknown) {
+        alumniFailures.push({ playerId: p.playerId, reason: err instanceof Error ? err.message : 'Failed to create alumni record' });
       }
     }
 
@@ -346,7 +391,7 @@ app.post('/players/bulk', auth, rosterAccess, rosterWrite, async (req, res) => {
     const db = appDb(req.user!);
     const { output } = await db.execute(
       'dbo.sp_BulkCreatePlayers',
-      { PlayersJson: JSON.stringify(players), CreatedBy: req.user!.sub },
+      { PlayersJson: JSON.stringify(players), CreatedBy: req.user!.sub, ...reqCtx(req) },
       { SuccessCount: 'int', SkippedCount: 'int', ErrorJson: 'nvarcharmax' }
     );
     return res.json({
@@ -364,7 +409,6 @@ app.post('/players/bulk', auth, rosterAccess, rosterWrite, async (req, res) => {
 app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res) => {
   const body = validate(playerStatsSchema, req.body, res);
   if (!body) return;
-  const { gamesPlayed, statsJson } = req.body as any;
   try {
     const db = appDb(req.user!);
     const { output } = await db.execute(
@@ -372,8 +416,9 @@ app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res)
       {
         PlayerId:    req.params.id,
         SeasonYear:  body.seasonYear,
-        GamesPlayed: gamesPlayed ?? null,
-        StatsJson:   statsJson ? JSON.stringify(statsJson) : null,
+        GamesPlayed: body.gamesPlayed ?? null,
+        StatsJson:   body.statsJson ? JSON.stringify(body.statsJson) : null,
+        ...reqCtx(req),
       },
       { ErrorCode: 'nvarchar50' }
     );
@@ -401,6 +446,7 @@ app.get('/alumni', auth, alumniAccess, async (req, res) => {
         Position: position || null,
         Page:     parseInt(page),
         PageSize: Math.min(parseInt(pageSize) || 50, 200),
+        ...reqCtx(req),
       },
       { TotalCount: 'int' }
     );
@@ -414,7 +460,7 @@ app.get('/alumni/:id', auth, alumniAccess, async (req, res) => {
     const db = appDb(req.user!);
     const { sets, output } = await db.execute(
       'dbo.sp_GetAlumniById',
-      { AlumniId: req.params.id },
+      { AlumniId: req.params.id, ...reqCtx(req) },
       { ErrorCode: 'nvarchar50' }
     );
     if (output.ErrorCode) return res.status(404).json({ success: false, error: 'Alumni not found' });
@@ -431,16 +477,17 @@ app.post('/alumni', auth, alumniAccess, async (req, res) => {
     const { output } = await db.execute(
       'dbo.sp_CreateAlumniFromPlayer',
       {
-        UserId:             (b as any).userId             ?? null,
-        SourcePlayerId:     (b as any).sourcePlayerId     ?? null,
+        UserId:             b.userId             ?? null,
+        SourcePlayerId:     b.sourcePlayerId     ?? null,
         FirstName:          b.firstName,
         LastName:           b.lastName,
         GraduationYear:     b.graduationYear,
-        GraduationSemester: (b as any).graduationSemester ?? 'spring',
-        Position:           (b as any).position           ?? null,
-        RecruitingClass:    (b as any).recruitingClass    ?? null,
-        Phone:              (b as any).phone              ?? null,
-        PersonalEmail:      (b as any).personalEmail      ?? null,
+        GraduationSemester: b.graduationSemester,
+        Position:           b.position           ?? null,
+        RecruitingClass:    b.recruitingClass    ?? null,
+        Phone:              b.phone              ?? null,
+        PersonalEmail:      b.personalEmail      ?? null,
+        ...reqCtx(req),
       },
       { NewAlumniId: 'uniqueidentifier', ErrorCode: 'nvarchar50' }
     );
@@ -463,10 +510,10 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
     if (!isWriter) {
       const { rows, output: chk } = await db.execute(
         'dbo.sp_GetAlumniById',
-        { AlumniId: req.params.id },
+        { AlumniId: req.params.id, ...reqCtx(req) },
         { ErrorCode: 'nvarchar50' }
       );
-      const alumniRow = rows[0] as any;
+      const alumniRow = rows[0] as { userId?: string } | undefined;
       if (!alumniRow || chk.ErrorCode) return res.status(404).json({ success: false, error: 'Alumni not found' });
       if (alumniRow.userId !== req.user!.sub) return res.status(403).json({ success: false, error: 'You can only edit your own profile' });
     }
@@ -489,6 +536,7 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
         CurrentState:     b.currentState     ?? null,
         Notes:            b.notes            ?? null,
         UpdatedBy:        req.user!.sub,
+        ...reqCtx(req),
       },
       { ErrorCode: 'nvarchar50' }
     );
@@ -501,7 +549,6 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
 app.post('/alumni/:id/interactions', auth, alumniAccess, alumniWrite, async (req, res) => {
   const body = validate(logInteractionSchema, req.body, res);
   if (!body) return;
-  const { outcome, followUpAt } = req.body as any;
   try {
     const db = appDb(req.user!);
     const { output } = await db.execute(
@@ -511,8 +558,9 @@ app.post('/alumni/:id/interactions', auth, alumniAccess, alumniWrite, async (req
         LoggedBy:   req.user!.sub,
         Channel:    body.channel,
         Summary:    body.summary,
-        Outcome:    outcome    ?? null,
-        FollowUpAt: followUpAt ? new Date(followUpAt) : null,
+        Outcome:    body.outcome    ?? null,
+        FollowUpAt: body.followUpAt ? new Date(body.followUpAt) : null,
+        ...reqCtx(req),
       },
       { ErrorCode: 'nvarchar50' }
     );
@@ -530,7 +578,7 @@ app.post('/alumni/bulk', auth, alumniAccess, alumniWrite, async (req, res) => {
     const db = appDb(req.user!);
     const { output } = await db.execute(
       'dbo.sp_BulkCreateAlumni',
-      { AlumniJson: JSON.stringify(alumni), CreatedBy: req.user!.sub },
+      { AlumniJson: JSON.stringify(alumni), CreatedBy: req.user!.sub, ...reqCtx(req) },
       { SuccessCount: 'int', SkippedCount: 'int', ErrorJson: 'nvarcharmax' }
     );
     return res.json({
@@ -552,7 +600,7 @@ app.post('/alumni/bulk', auth, alumniAccess, alumniWrite, async (req, res) => {
 app.get('/campaigns', auth, alumniAccess, async (req, res) => {
   try {
     const db = appDb(req.user!);
-    const { rows } = await db.execute('dbo.sp_GetCampaigns');
+    const { rows } = await db.execute('dbo.sp_GetCampaigns', { ...reqCtx(req) });
     return res.json({ success: true, data: rows });
   } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
 });
@@ -561,18 +609,18 @@ app.get('/campaigns', auth, alumniAccess, async (req, res) => {
 app.post('/campaigns', auth, alumniAccess, alumniAdmin, async (req, res) => {
   const body = validate(createCampaignSchema, req.body, res);
   if (!body) return;
-  const { description, audienceFilters, scheduledAt } = req.body as any;
   try {
     const db = appDb(req.user!);
     const { output } = await db.execute(
       'dbo.sp_CreateCampaign',
       {
         Name:            body.name,
-        Description:     description     || null,
+        Description:     body.description     ?? null,
         TargetAudience:  body.targetAudience,
-        AudienceFilters: audienceFilters ? JSON.stringify(audienceFilters) : null,
-        ScheduledAt:     scheduledAt ? new Date(scheduledAt) : null,
+        AudienceFilters: body.audienceFilters ? JSON.stringify(body.audienceFilters) : null,
+        ScheduledAt:     body.scheduledAt ? new Date(body.scheduledAt) : null,
         CreatedBy:       req.user!.sub,
+        ...reqCtx(req),
       },
       { NewCampaignId: 'uniqueidentifier', ErrorCode: 'nvarchar50' }
     );
@@ -585,9 +633,9 @@ app.post('/campaigns', auth, alumniAccess, alumniAdmin, async (req, res) => {
 app.get('/stats', auth, alumniAccess, async (req, res) => {
   try {
     const db = appDb(req.user!);
-    const { rows } = await db.execute('dbo.sp_GetAlumniStats');
-    const row = rows[0] as any;
-    if (row?.classCounts) row.classCounts = JSON.parse(row.classCounts);
+    const { rows } = await db.execute('dbo.sp_GetAlumniStats', { ...reqCtx(req) });
+    const row = rows[0] as Record<string, unknown> | undefined;
+    if (row?.classCounts) row.classCounts = JSON.parse(row.classCounts as string);
     return res.json({ success: true, data: row });
   } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
 });

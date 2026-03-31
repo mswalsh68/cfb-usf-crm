@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@cfb-crm/assets": "*",
     "@tanstack/react-query": "^5.91.2",
     "@tanstack/react-query-devtools": "^5.91.3",
     "axios": "^1.13.6",

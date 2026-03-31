@@ -2,17 +2,22 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { globalApi } from '@/lib/api';
+import Image from 'next/image';
+import { globalApi, getApiError } from '@/lib/api';
 import { setTokens } from '@/lib/auth';
-import { useTeamConfig } from '@/lib/teamConfig';
+
+const GOLD   = '#B8973D';
+const GOLD_L = '#D4AF5A';
+const BLACK  = '#0D0D0D';
+const CARD_D = '#111111';
+const BORDER = '#2A2A2A';
 
 export default function LoginPage() {
   const router = useRouter();
-  const config = useTeamConfig();
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,83 +27,147 @@ export default function LoginPage() {
       const { data } = await globalApi.post('/auth/login', { email, password });
       setTokens(data.data.accessToken, data.data.refreshToken);
       router.push('/dashboard');
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Login failed. Please try again.');
+    } catch (err: unknown) {
+      setError(getApiError(err, 'Login failed. Please try again.'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4" style={{ backgroundColor: config.colorPrimary }}>
-      <div className="w-full max-w-md">
+    <div className="relative min-h-screen flex items-center justify-center px-4 py-12">
 
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-xl mb-4" style={{ backgroundColor: config.colorAccent }}>
-            <span className="text-2xl font-bold" style={{ color: config.colorPrimary }}>{config.teamAbbr}</span>
-          </div>
-          <h1 className="text-white text-3xl font-bold">{config.teamName}</h1>
-          <p className="mt-1" style={{ color: 'rgba(255,255,255,0.65)' }}>Sign in to continue</p>
+      {/* Full-screen background image */}
+      <Image
+        src="/login-background.jpg"
+        alt=""
+        fill
+        priority
+        unoptimized
+        style={{ objectFit: 'cover', objectPosition: 'center' }}
+      />
+
+      {/* Dark scrim over background */}
+      <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.62)' }} />
+
+      {/* Card */}
+      <div
+        className="relative w-full max-w-md rounded-2xl overflow-hidden"
+        style={{ boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}
+      >
+
+        {/* ── Top: white logo panel ── */}
+        <div
+          className="flex items-center justify-center px-6 py-8"
+          style={{ backgroundColor: '#FFFFFF' }}
+        >
+          <Image
+            src="/logo-full.jpg"
+            alt="LegacyLink — Where rosters become legacies"
+            width={420}
+            height={160}
+            priority
+            unoptimized
+            style={{ objectFit: 'contain', width: '100%', height: 'auto' }}
+          />
         </div>
 
-        {/* Form */}
-        <div className="bg-white rounded-2xl p-8 shadow-xl">
+        {/* Gold divider */}
+        <div style={{ height: 3, backgroundColor: GOLD }} />
+
+        {/* ── Bottom: dark form panel ── */}
+        <div className="px-8 py-8" style={{ backgroundColor: CARD_D }}>
+
+          <h2
+            className="text-base font-semibold mb-6 tracking-wide"
+            style={{ color: 'rgba(255,255,255,0.65)' }}
+          >
+            Sign in to your account
+          </h2>
+
           <form onSubmit={handleLogin} className="space-y-5">
 
             {error && (
-              <div className="px-4 py-3 rounded-lg text-sm" style={{ backgroundColor: '#FDECEA', color: '#C0392B', border: '1px solid #f5c6c6' }}>
+              <div
+                className="px-4 py-3 rounded-lg text-sm"
+                style={{
+                  backgroundColor: 'rgba(192,57,43,0.15)',
+                  color: '#E74C3C',
+                  border: '1px solid rgba(192,57,43,0.3)',
+                }}
+              >
                 {error}
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: '#4B5563' }}>
+              <label
+                className="block text-xs font-semibold uppercase tracking-widest mb-2"
+                style={{ color: 'rgba(255,255,255,0.4)' }}
+              >
                 Email
               </label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="coach@usf.edu"
+                placeholder="you@yourprogram.com"
                 required
-                className="w-full rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2"
-                style={{ border: '1.5px solid #E5E7EB' }}
+                className="w-full rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none transition-all"
+                style={{ backgroundColor: BLACK, border: `1.5px solid ${BORDER}` }}
+                onFocus={e => (e.target.style.borderColor = GOLD)}
+                onBlur={e  => (e.target.style.borderColor = BORDER)}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium mb-1" style={{ color: '#4B5563' }}>
+              <label
+                className="block text-xs font-semibold uppercase tracking-widest mb-2"
+                style={{ color: 'rgba(255,255,255,0.4)' }}
+              >
                 Password
               </label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="••••••••••"
                 required
-                className="w-full rounded-lg px-4 py-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2"
-                style={{ border: '1.5px solid #E5E7EB' }}
+                className="w-full rounded-lg px-4 py-3 text-white placeholder-gray-600 focus:outline-none transition-all"
+                style={{ backgroundColor: BLACK, border: `1.5px solid ${BORDER}` }}
+                onFocus={e => (e.target.style.borderColor = GOLD)}
+                onBlur={e  => (e.target.style.borderColor = BORDER)}
               />
             </div>
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full text-white py-3 rounded-lg font-semibold text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ backgroundColor: loading ? config.colorPrimaryDark : config.colorPrimary }}
+              className="w-full py-3 rounded-lg font-bold text-sm uppercase tracking-widest transition-all disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              style={{ backgroundColor: loading ? '#8a6e2a' : GOLD, color: BLACK }}
+              onMouseEnter={e => { if (!loading) (e.currentTarget.style.backgroundColor = GOLD_L); }}
+              onMouseLeave={e => { if (!loading) (e.currentTarget.style.backgroundColor = GOLD);   }}
             >
-              {loading ? 'Signing in...' : 'Sign In'}
+              {loading ? 'Signing in…' : 'Sign In'}
             </button>
 
           </form>
 
-          <p className="text-center text-sm mt-6" style={{ color: '#9CA3AF' }}>
+          <p className="text-center text-xs mt-6" style={{ color: 'rgba(255,255,255,0.2)' }}>
             Contact your program administrator for access.
           </p>
-        </div>
 
+        </div>
       </div>
+
+      {/* Footer */}
+      <p
+        className="absolute bottom-4 text-xs"
+        style={{ color: 'rgba(255,255,255,0.25)' }}
+      >
+        &copy; {new Date().getFullYear()} LegacyLink &mdash; All rights reserved
+      </p>
+
     </div>
   );
 }

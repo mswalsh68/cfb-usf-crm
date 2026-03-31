@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
-  TouchableOpacity, Alert,
+  TouchableOpacity, Alert, type KeyboardTypeOptions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { appApi } from '../../../hooks/useApiClient';
+import { appApi, getApiError } from '../../../hooks/useApiClient';
 import { useAuth } from '../../../hooks/useAuth';
 import {
   Card, Badge, Button, Input, Divider, StatPill,
@@ -43,8 +43,8 @@ export default function PlayerDetailScreen() {
       setEditing(false);
       setEditFields({});
     },
-    onError: (err: any) => {
-      Alert.alert('Update Failed', err?.response?.data?.error ?? 'Could not update player.');
+    onError: (err: Error) => {
+      Alert.alert('Update Failed', getApiError(err, 'Could not update player.'));
     },
   });
 
@@ -195,7 +195,7 @@ function InfoRow({
   value?: string | number | null;
   editable?: boolean;
   onEdit?: (v: string) => void;
-  keyboardType?: any;
+  keyboardType?: KeyboardTypeOptions;
 }) {
   return (
     <View style={infoStyles.row}>

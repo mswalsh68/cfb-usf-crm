@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isGlobalAdmin } from '@/lib/auth';
-import { appApi, globalApi } from '@/lib/api';
+import { appApi, globalApi, getApiError } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { useTeamConfig } from '@/lib/teamConfig';
 import { PageLayout, Button, Input, Select, Alert } from '@/components';
@@ -141,8 +141,8 @@ export default function AddPlayerPage() {
       });
 
       setInviteUrl(`${window.location.origin}/invite/${inviteToken}`);
-    } catch (err: any) {
-      setAlert({ msg: err?.response?.data?.error ?? 'Failed to create player.', type: 'error' });
+    } catch (err: unknown) {
+      setAlert({ msg: getApiError(err, 'Failed to create player.'), type: 'error' });
     } finally {
       setSaving(false);
     }

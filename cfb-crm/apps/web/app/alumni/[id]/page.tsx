@@ -2,11 +2,21 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { appApi } from '@/lib/api';
+import type { Alumni } from '@cfb-crm/types';
+import { appApi, getApiError } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { getUser, isGlobalAdmin } from '@/lib/auth';
 import { useTeamConfig } from '@/lib/teamConfig';
 import { PageLayout, Button, Input, Select, Badge, Alert, Modal, Card } from '@/components';
+
+interface Interaction {
+  id:         string;
+  channel:    string;
+  summary:    string;
+  outcome?:   string;
+  loggedAt:   string;
+  followUpAt?: string;
+}
 
 const STATUS_OPTIONS = [
   { value: 'active',       label: 'Active'        },
@@ -22,8 +32,12 @@ const CHANNEL_OPTIONS = [
   { value: 'event',     label: 'Event'       },
 ];
 
-const statusBadge = (s: string): 'green' | 'warning' | 'danger' | 'gray' =>
-  ({ active: 'green', lostContact: 'warning', doNotContact: 'danger', deceased: 'gray' }[s] ?? 'gray') as any;
+const statusBadge = (s: string): 'green' | 'warning' | 'danger' | 'gray' => {
+  const map: Record<string, 'green' | 'warning' | 'danger' | 'gray'> = {
+    active: 'green', lostContact: 'warning', doNotContact: 'danger', deceased: 'gray',
+  };
+  return map[s] ?? 'gray';
+};
 
 function EngagementBar({ score }: { score: number }) {
   const pct = Math.min(100, Math.max(0, score));
@@ -46,8 +60,8 @@ export default function AlumniDetailPage() {
   const { id }    = useParams<{ id: string }>();
   const { positions, classLabel, alumniLabel } = useTeamConfig();
 
-  const [alumni,       setAlumni]       = useState<any>(null);
-  const [interactions, setInteractions] = useState<any[]>([]);
+  const [alumni,       setAlumni]       = useState<Alumni | null>(null);
+  const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [error,        setError]        = useState('');
   const [success,      setSuccess]      = useState('');
@@ -118,8 +132,8 @@ export default function AlumniDetailPage() {
       setSuccess('Saved successfully.');
       setShowEdit(false);
       fetchAlumni();
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Save failed.');
+    } catch (err: unknown) {
+      setError(getApiError(err, 'Save failed.'));
     } finally {
       setSaving(false);
     }
@@ -139,8 +153,8 @@ export default function AlumniDetailPage() {
       setSuccess('Interaction logged.');
       setInteraction({ channel: 'phone', summary: '', outcome: '', followUpAt: '' });
       fetchAlumni();
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Failed to log interaction.');
+    } catch (err: unknown) {
+      setError(getApiError(err, 'Failed to log interaction.'));
     } finally {
       setLoggingInteraction(false);
     }
@@ -330,7 +344,7 @@ export default function AlumniDetailPage() {
               <div style={{ textAlign: 'center', padding: 32, color: theme.gray400, fontSize: 13 }}>No interactions logged yet</div>
             ) : (
               <div style={{ maxHeight: 480, overflowY: 'auto' }}>
-                {interactions.map((it: any) => (
+                {interactions.map((it) => (
                   <div key={it.id} style={{ padding: '14px 24px', borderBottom: `1px solid ${theme.gray100}` }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
                       <Badge label={it.channel} variant="gray" />

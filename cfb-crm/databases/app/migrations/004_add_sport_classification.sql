@@ -1,3 +1,6 @@
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
 -- ============================================================
 -- APP DB — ADD SPORT + CLASSIFICATION COLUMNS
 -- Adds sport_id, user_classification, and Starter-tier fields

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { appApi } from '../../hooks/useApiClient';
+import { appApi, getApiError } from '../../hooks/useApiClient';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Card, Badge, Button, Input, EmptyState, Divider,
@@ -56,7 +56,7 @@ export default function OutreachScreen() {
       setShowCreate(false);
       setForm({ name: '', description: '', targetAudience: 'all', scheduledAt: '' });
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.error ?? 'Could not create campaign.'),
+    onError: (err: Error) => Alert.alert('Error', getApiError(err, 'Could not create campaign.')),
   });
 
   const stats = statsQuery.data;

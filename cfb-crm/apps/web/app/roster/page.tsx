@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { Player } from '@cfb-crm/types';
 import { appApi } from '@/lib/api';
 import { isGlobalAdmin } from '@/lib/auth';
 import { theme } from '@/lib/theme';
@@ -23,7 +24,7 @@ const statusBadge = (status: string) => {
 export default function RosterPage() {
   const router = useRouter();
   const { positions, academicYears } = useTeamConfig();
-  const [players,  setPlayers]  = useState<any[]>([]);
+  const [players,  setPlayers]  = useState<Player[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
   const [search,   setSearch]   = useState('');
@@ -40,16 +41,16 @@ export default function RosterPage() {
   const fetchPlayers = async () => {
     setLoading(true);
     try {
-      const params: any = { page, pageSize: 50 };
-      if (search)            params.search      = search;
-      if (position !== 'All') params.position   = position;
-      if (status)            params.status      = status;
-      if (year)              params.academicYear = year;
+      const params: Record<string, string | number> = { page, pageSize: 50 };
+      if (search)             params.search      = search;
+      if (position !== 'All') params.position    = position;
+      if (status)             params.status      = status;
+      if (year)               params.academicYear = year;
       const { data } = await appApi.get('/players', { params });
       setPlayers(data.data ?? []);
       setTotal(data.total ?? 0);
     } catch {
-      setError('Failed to load players. Make sure the Roster API is running.');
+      setError('Failed to load players. Make sure the app API is running.');
     } finally {
       setLoading(false);
     }

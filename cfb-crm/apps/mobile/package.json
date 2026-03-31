@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cfb-crm/assets": "*",
     "@cfb-crm/types": "*",
     "@cfb-crm/ui":    "*",
     "@cfb-crm/auth":  "*",

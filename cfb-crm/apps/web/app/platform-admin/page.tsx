@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { globalApi } from '@/lib/api';
+import { globalApi, getApiError } from '@/lib/api';
 import { isPlatformOwner, switchTeam } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { triggerThemeRefresh } from '@/components/ThemeProvider';
@@ -133,8 +133,8 @@ export default function PlatformAdminPage() {
         subscriptionTier: 'starter',
       });
       fetchTeams();
-    } catch (err: any) {
-      setFormError(err?.response?.data?.error ?? 'Failed to provision client.');
+    } catch (err: unknown) {
+      setFormError(getApiError(err, 'Failed to provision client.'));
     } finally {
       setSubmitting(false);
     }

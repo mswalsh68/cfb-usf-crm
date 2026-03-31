@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { Alumni } from '@cfb-crm/types';
 import { appApi } from '@/lib/api';
 import { isGlobalAdmin } from '@/lib/auth';
 import { theme } from '@/lib/theme';
@@ -30,7 +31,7 @@ export default function AlumniPage() {
     { value: '', label: 'All Positions' },
     ...positions.map(p => ({ value: p, label: p })),
   ];
-  const [alumni,    setAlumni]    = useState<any[]>([]);
+  const [alumni,    setAlumni]    = useState<Alumni[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
   const [search,    setSearch]    = useState('');
@@ -50,7 +51,7 @@ export default function AlumniPage() {
   const fetchAlumni = async () => {
     setLoading(true);
     try {
-      const params: any = { page, pageSize: 50 };
+      const params: Record<string, string | number | boolean> = { page, pageSize: 50 };
       if (search)   params.search   = search;
       if (status)   params.status   = status;
       if (position) params.position = position;
@@ -59,7 +60,7 @@ export default function AlumniPage() {
       setAlumni(data.data ?? []);
       setTotal(data.total ?? 0);
     } catch {
-      setError('Failed to load alumni. Make sure the Alumni API is running.');
+      setError('Failed to load alumni. Make sure the app API is running.');
     } finally {
       setLoading(false);
     }

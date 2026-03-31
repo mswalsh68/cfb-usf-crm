@@ -3,8 +3,8 @@ import "./globals.css";
 import ThemeProvider from "@/components/ThemeProvider";
 
 export const metadata: Metadata = {
-  title:       process.env.NEXT_PUBLIC_TEAM_NAME ?? "USF Bulls Team Portal",
-  description: "Team CRM Portal",
+  title: "LegacyLink",
+  description: "Where rosters become legacies",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

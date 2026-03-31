@@ -2,23 +2,15 @@ import { Router } from 'express';
 import { requireAuth, requireGlobalAdmin } from '../middleware/auth';
 import { extractBearerToken, verifyAccessToken } from '@cfb-crm/auth';
 import { getDb, sql } from '../db';
+import { DEFAULT_POSITIONS, DEFAULT_ACADEMIC_YEARS } from '../constants';
 
 export const configRouter = Router();
 
-const DEFAULT_POSITIONS      = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'];
-const DEFAULT_ACADEMIC_YEARS = [
-  { value: 'freshman',  label: 'Freshman'  },
-  { value: 'sophomore', label: 'Sophomore' },
-  { value: 'junior',    label: 'Junior'    },
-  { value: 'senior',    label: 'Senior'    },
-  { value: 'graduate',  label: 'Graduate'  },
-];
-
-function parseConfigRow(row: any) {
+function parseConfigRow(row: Record<string, unknown>) {
   return {
     ...row,
-    positions:     row.positionsJson     ? JSON.parse(row.positionsJson)     : DEFAULT_POSITIONS,
-    academicYears: row.academicYearsJson ? JSON.parse(row.academicYearsJson) : DEFAULT_ACADEMIC_YEARS,
+    positions:     row.positionsJson     ? JSON.parse(row.positionsJson as string)     : DEFAULT_POSITIONS,
+    academicYears: row.academicYearsJson ? JSON.parse(row.academicYearsJson as string) : DEFAULT_ACADEMIC_YEARS,
     positionsJson:     undefined,
     academicYearsJson: undefined,
   };

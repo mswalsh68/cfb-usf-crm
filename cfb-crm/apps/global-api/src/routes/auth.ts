@@ -5,12 +5,23 @@ import { signAccessToken, signRefreshToken, verifyRefreshToken } from '@cfb-crm/
 import type { AuthTokenPayload, TeamSummary } from '@cfb-crm/types';
 import { getDb, sql } from '../db';
 import { requireAuth } from '../middleware/auth';
+import { DEFAULT_POSITIONS, DEFAULT_ACADEMIC_YEARS } from '../constants';
 
 export const authRouter = Router();
 const hash = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
 
+interface SpUserJson {
+  email:          string;
+  globalRole:     string;
+  currentTeamId?: string;
+  teams?:         TeamSummary[];
+  appPermissions?: AuthTokenPayload['appPermissions'];
+  appDb?:         string;
+  dbServer?:      string;
+}
+
 /** Build access token payload from sp_Login / sp_RefreshToken JSON output */
-function buildAccessToken(userId: string, user: any, overrideTeamId?: string): string {
+function buildAccessToken(userId: string, user: SpUserJson, overrideTeamId?: string): string {
   const teams: TeamSummary[] = user.teams ?? [];
 
   // Honour the client's currentTeamId if it's still in their team list
@@ -148,16 +159,6 @@ authRouter.post('/switch-team', requireAuth, async (req, res) => {
       dbServer:       teamData.dbServer,
     });
 
-    // Parse and normalise the team config for ThemeProvider
-    const DEFAULT_POSITIONS      = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'];
-    const DEFAULT_ACADEMIC_YEARS = [
-      { value: 'freshman',  label: 'Freshman'  },
-      { value: 'sophomore', label: 'Sophomore' },
-      { value: 'junior',    label: 'Junior'    },
-      { value: 'senior',    label: 'Senior'    },
-      { value: 'graduate',  label: 'Graduate'  },
-    ];
-
     const teamConfig = {
       ...teamData,
       positions:     teamData.positionsJson     ? JSON.parse(teamData.positionsJson)     : DEFAULT_POSITIONS,
@@ -201,14 +202,11 @@ authRouter.post('/accept-invite', async (req, res) => {
       .input('PasswordHash', sql.NVarChar, passwordHash)
       .output('ErrorCode',   sql.NVarChar(50))
       .output('UserId',      sql.UniqueIdentifier)
+      .output('Email',       sql.NVarChar(255))
       .execute('dbo.sp_RedeemInviteToken');
     if (r.output.ErrorCode) return res.status(400).json({ success: false, error: 'Invite link is invalid or has expired' });
 
-    const db2  = await getDb();
-    const ur   = await db2.request()
-      .input('UserId', sql.UniqueIdentifier, r.output.UserId)
-      .query('SELECT email FROM dbo.users WHERE id = @UserId');
-    const email = ur.recordset[0]?.email ?? '';
+    const email = (r.output.Email as string | null) ?? '';
     return res.json({ success: true, data: { email } });
   } catch (err) {
     console.error('[accept-invite]', err);

@@ -2,9 +2,25 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { globalApi } from '@/lib/api';
+import { globalApi, getApiError } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Badge, Modal, Alert } from '@/components';
+
+// Matches the shape returned by sp_GetUsers (mix of snake/camel from SQL)
+interface AdminUser {
+  id:         string;
+  email:      string;
+  first_name: string;
+  last_name:  string;
+  globalRole: string;
+  is_active:  boolean;
+}
+
+interface AdminPermission {
+  appName:    string;
+  role:       string;
+  revokedAt:  string | null;
+}
 
 const ROLE_OPTIONS = [
   { value: 'readonly',     label: 'Read Only'    },
@@ -22,11 +38,11 @@ const APP_OPTIONS = [
 
 export default function AdminPage() {
   const router = useRouter();
-  const [users,        setUsers]        = useState<any[]>([]);
+  const [users,        setUsers]        = useState<AdminUser[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [search,       setSearch]       = useState('');
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [permissions,  setPermissions]  = useState<any[]>([]);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [permissions,  setPermissions]  = useState<AdminPermission[]>([]);
   const [showCreate,   setShowCreate]   = useState(false);
   const [error,        setError]        = useState('');
   const [success,      setSuccess]      = useState('');
@@ -48,7 +64,7 @@ export default function AdminPage() {
 
   const fetchUsers = async () => {
     try {
-      const params: any = { pageSize: 100 };
+      const params: Record<string, string | number> = { pageSize: 100 };
       if (search) params.search = search;
       const { data } = await globalApi.get('/users', { params });
       setUsers(data.data ?? []);
@@ -68,7 +84,7 @@ export default function AdminPage() {
     }
   };
 
-  const selectUser = (user: any) => {
+  const selectUser = (user: AdminUser) => {
     if (selectedUser?.id === user.id) {
       setSelectedUser(null);
       setPermissions([]);
@@ -83,7 +99,7 @@ export default function AdminPage() {
     setTimeout(() => type === 'success' ? setSuccess('') : setError(''), 3000);
   };
 
-  const toggleActive = async (user: any) => {
+  const toggleActive = async (user: AdminUser) => {
     try {
       await globalApi.patch(`/users/${user.id}`, { isActive: !user.is_active });
       flash(`${user.first_name} ${user.last_name} ${!user.is_active ? 'activated' : 'deactivated'}`);
@@ -122,12 +138,12 @@ export default function AdminPage() {
       setInviteUrl(`${window.location.origin}/invite/${inviteToken}`);
       setNewUser({ email: '', firstName: '', lastName: '', globalRole: 'readonly', grantAppName: '', grantAppRole: 'readonly' });
       fetchUsers();
-    } catch (err: any) {
-      flash(err?.response?.data?.error ?? 'Failed to create user', 'error');
+    } catch (err: unknown) {
+      flash(getApiError(err, 'Failed to create user'), 'error');
     }
   };
 
-  const activePerms = permissions.filter((p: any) => !p.revokedAt);
+  const activePerms = permissions.filter((p) => !p.revokedAt);
 
   return (
     <PageLayout currentPage="Global Admin">
@@ -201,7 +217,7 @@ export default function AdminPage() {
                       label={user.is_active ? 'Deactivate' : 'Activate'}
                       variant={user.is_active ? 'danger' : 'primary'}
                       size="sm"
-                      onClick={(e: any) => { e.stopPropagation(); toggleActive(user); }}
+                      onClick={(e) => { e?.stopPropagation(); toggleActive(user); }}
                     />
                   </td>
                 </tr>
@@ -214,7 +230,7 @@ export default function AdminPage() {
                       </p>
                       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                         {(['roster', 'alumni', 'global-admin'] as const).map((app) => {
-                          const existing = activePerms.find((p: any) => p.appName === app);
+                          const existing = activePerms.find((p) => p.appName === app);
                           return (
                             <div key={app} style={{ display: 'flex', alignItems: 'center', gap: 8, backgroundColor: theme.white, border: `1px solid ${theme.gray200}`, borderRadius: 10, padding: '8px 14px' }}>
                               <span style={{ fontSize: 13, fontWeight: 500, color: theme.gray800, textTransform: 'capitalize' }}>{app}</span>
