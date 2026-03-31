@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { authRouter } from './routes/auth';
 import { usersRouter, permissionsRouter } from './routes/users';
@@ -13,6 +14,7 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(helmet());
+app.use(cookieParser());
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') ?? ['http://localhost:8081'],
   credentials: true,

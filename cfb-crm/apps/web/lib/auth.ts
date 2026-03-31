@@ -3,56 +3,45 @@ import type { TeamConfig } from './teamConfig';
 
 const GLOBAL_API = process.env.NEXT_PUBLIC_GLOBAL_API_URL ?? 'http://localhost:3001';
 
-// ─── Token storage ────────────────────────────────────────────────────────────
-
-export function getAccessToken(): string | null {
-  if (typeof window === 'undefined') return null;
-  return localStorage.getItem('cfb_access_token');
-}
-
-export function setTokens(accessToken: string, refreshToken: string) {
-  localStorage.setItem('cfb_access_token', accessToken);
-  localStorage.setItem('cfb_refresh_token', refreshToken);
-  // 7-day persistent cookie — matches refresh token lifetime
-  document.cookie = 'cfb_access_token=1; path=/; SameSite=Strict; Max-Age=604800';
-}
-
-export function setAccessToken(accessToken: string) {
-  localStorage.setItem('cfb_access_token', accessToken);
-}
-
-export function clearTokens() {
-  localStorage.removeItem('cfb_access_token');
-  localStorage.removeItem('cfb_refresh_token');
-  document.cookie = 'cfb_access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Strict';
-}
-
-// ─── Token decode ─────────────────────────────────────────────────────────────
+// ─── User info storage ────────────────────────────────────────────────────────
+// Auth tokens are stored in httpOnly cookies by the server (not readable by JS).
+// We store only the decoded user profile here for UI/routing use.
 
 export function getUser() {
-  const token = getAccessToken();
-  if (!token) return null;
+  if (typeof window === 'undefined') return null;
   try {
-    // JWTs use base64url (- and _ instead of + and /). atob() needs standard base64.
-    const base64url = token.split('.')[1];
-    const base64    = base64url.replace(/-/g, '+').replace(/_/g, '/');
-    const padded    = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
-    return JSON.parse(atob(padded));
+    const raw = localStorage.getItem('cfb_user');
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
 }
 
+function storeUserFromToken(accessToken: string) {
+  try {
+    const base64url = accessToken.split('.')[1];
+    const base64    = base64url.replace(/-/g, '+').replace(/_/g, '/');
+    const padded    = base64.padEnd(base64.length + (4 - (base64.length % 4)) % 4, '=');
+    localStorage.setItem('cfb_user', JSON.stringify(JSON.parse(atob(padded))));
+  } catch { /* ignore */ }
+}
+
+export function setTokens(accessToken: string, _refreshToken: string) {
+  storeUserFromToken(accessToken);
+}
+
+export function setAccessToken(accessToken: string) {
+  storeUserFromToken(accessToken);
+}
+
+export function clearTokens() {
+  localStorage.removeItem('cfb_user');
+}
+
 // ─── Auth state ───────────────────────────────────────────────────────────────
 
 export function isLoggedIn(): boolean {
-  const user = getUser();
-  if (!user) return false;
-  if (user.exp < Date.now() / 1000) {
-    clearTokens();
-    return false;
-  }
-  return true;
+  return getUser() !== null;
 }
 
 // ─── Role checks ──────────────────────────────────────────────────────────────
@@ -102,16 +91,13 @@ export function hasTeamAccess(teamId: string): boolean {
  * Returns null on failure.
  */
 export async function switchTeam(teamId: string): Promise<TeamConfig | null> {
-  const token = getAccessToken();
-  if (!token) return null;
+  if (!isLoggedIn()) return null;
   try {
     const res = await fetch(`${GLOBAL_API}/auth/switch-team`, {
-      method:  'POST',
-      headers: {
-        'Content-Type':  'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify({ teamId }),
+      method:      'POST',
+      headers:     { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body:        JSON.stringify({ teamId }),
     });
     if (!res.ok) return null;
     const { data } = await res.json();

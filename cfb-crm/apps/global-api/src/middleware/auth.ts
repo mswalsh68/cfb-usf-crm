@@ -22,7 +22,8 @@ declare global {
 
 // ─── Base Auth Middleware ─────────────────────────────────────────────────────
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const token = extractBearerToken(req.headers.authorization);
+  // Accept token from Authorization header (mobile) or httpOnly cookie (web)
+  const token = extractBearerToken(req.headers.authorization) ?? req.cookies?.cfb_access_token ?? null;
   if (!token) {
     return res.status(401).json({ success: false, error: 'Authentication required' });
   }
