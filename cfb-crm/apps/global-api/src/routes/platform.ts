@@ -74,6 +74,10 @@ platformRouter.post('/onboard-client', async (req, res) => {
   if (!clientCode || !clientName || !clientAbbr || !sport || !level || !adminEmail || !adminPassword) {
     return res.status(400).json({ success: false, error: 'clientCode, clientName, clientAbbr, sport, level, adminEmail, adminPassword are required' });
   }
+  // clientCode is interpolated into database names — must be strictly alphanumeric
+  if (!/^[A-Za-z0-9_]{1,20}$/.test(clientCode)) {
+    return res.status(400).json({ success: false, error: 'clientCode must be 1–20 alphanumeric characters or underscores' });
+  }
   if (adminPassword.length < 10) {
     return res.status(400).json({ success: false, error: 'Admin password must be at least 10 characters' });
   }
