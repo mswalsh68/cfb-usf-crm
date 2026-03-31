@@ -4,6 +4,10 @@ import { requireAuth, requirePlatformOwner } from '../middleware/auth';
 import { getDb, sql } from '../db';
 import * as mssql from 'mssql';
 
+function audit(event: string, details: Record<string, unknown>) {
+  console.log(JSON.stringify({ type: 'AUDIT', event, timestamp: new Date().toISOString(), ...details }));
+}
+
 export const platformRouter = Router();
 
 // All /platform routes require platform_owner role
@@ -276,6 +280,7 @@ platformRouter.post('/onboard-client', async (req, res) => {
       return res.status(400).json({ success: false, error: `User creation failed: ${userR.output.ErrorCode}` });
     }
 
+    audit('CLIENT_ONBOARDED', { actorId: req.user!.sub, teamId: newTeamId, clientCode, clientAbbr, rosterDb, alumniDb, adminEmail });
     return res.status(201).json({
       success: true,
       data: {

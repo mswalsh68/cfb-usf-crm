@@ -231,7 +231,7 @@ app.get('/players/:id', auth, rosterAccess, async (req, res) => {
     );
     if (output.ErrorCode) return res.status(404).json({ success: false, error: 'Player not found' });
     return res.json({ success: true, data: { ...(sets[0]?.[0] ?? {}), stats: sets[1] ?? [] } });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[GET /players/:id]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // POST /players
@@ -326,7 +326,7 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
     );
     if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
     return res.json({ success: true, message: 'Player updated' });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[PATCH /players/:id]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // POST /players/transfer
@@ -455,7 +455,7 @@ app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res)
     );
     if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
     return res.json({ success: true, message: 'Stats updated' });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[POST /players/:id/stats]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // ══════════════════════════════════════════════════════════════
@@ -497,7 +497,7 @@ app.get('/alumni/:id', auth, alumniAccess, async (req, res) => {
     );
     if (output.ErrorCode) return res.status(404).json({ success: false, error: 'Alumni not found' });
     return res.json({ success: true, data: { ...(sets[0]?.[0] ?? {}), interactions: sets[1] ?? [] } });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[GET /alumni/:id]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // POST /alumni
@@ -574,7 +574,7 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
     );
     if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
     return res.json({ success: true, message: 'Alumni updated' });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[PATCH /alumni/:id]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // POST /alumni/:id/interactions
@@ -598,7 +598,7 @@ app.post('/alumni/:id/interactions', auth, alumniAccess, alumniWrite, async (req
     );
     if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
     return res.status(201).json({ success: true, message: 'Interaction logged' });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[POST /alumni/:id/interactions]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // POST /alumni/bulk
@@ -641,7 +641,7 @@ app.get('/campaigns', auth, alumniAccess, async (req, res) => {
     const db = appDb(req.user!);
     const { rows } = await db.execute('dbo.sp_GetCampaigns', { ...reqCtx(req) });
     return res.json({ success: true, data: rows });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[GET /campaigns]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // POST /campaigns
@@ -665,7 +665,7 @@ app.post('/campaigns', auth, alumniAccess, alumniAdmin, async (req, res) => {
     );
     if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
     return res.status(201).json({ success: true, data: { id: output.NewCampaignId } });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[POST /campaigns]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // GET /stats
@@ -676,7 +676,7 @@ app.get('/stats', auth, alumniAccess, async (req, res) => {
     const row = rows[0] as Record<string, unknown> | undefined;
     if (row?.classCounts) row.classCounts = JSON.parse(row.classCounts as string);
     return res.json({ success: true, data: row });
-  } catch (err) { return res.status(500).json({ success: false, error: 'Server error' }); }
+  } catch (err) { console.error('[GET /stats]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // ══════════════════════════════════════════════════════════════
