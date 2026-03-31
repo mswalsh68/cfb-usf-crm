@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { appApi } from '../../hooks/useApiClient';
+import { appApi, getApiError } from '../../hooks/useApiClient';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Button, Card, Badge, SectionHeader, Input, EmptyState,
@@ -59,8 +59,8 @@ export default function GraduateScreen() {
 
       Alert.alert('Graduation Complete', msg);
     },
-    onError: (err: any) => {
-      Alert.alert('Graduation Failed', err?.response?.data?.error ?? 'An error occurred. No changes were made.');
+    onError: (err: Error) => {
+      Alert.alert('Graduation Failed', getApiError(err, 'An error occurred. No changes were made.'));
     },
   });
 
@@ -239,5 +239,5 @@ const styles = StyleSheet.create({
   playerInfo:     { flex: 1 },
   playerName:     { fontSize: Typography.base, fontWeight: Typography.semibold, color: Colors.textPrimary },
   playerSub:      { fontSize: Typography.xs, color: Colors.textSecondary, marginTop: 2 },
-  ctaBar:         { position: 'absolute', bottom: 0, left: 0, right: 0, padding: Spacing.base, backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.border, ...Shadows.lg as any },
+  ctaBar:         { position: 'absolute', bottom: 0, left: 0, right: 0, padding: Spacing.base, backgroundColor: Colors.surface, borderTopWidth: 1, borderTopColor: Colors.border, ...Shadows.lg },
 });

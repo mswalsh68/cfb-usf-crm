@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../hooks/useAuth';
+import { getApiError } from '../../hooks/useApiClient';
 import { Button, Input, Colors, Typography, Spacing, Radii } from '@cfb-crm/ui';
 
 export default function LoginScreen() {
@@ -28,10 +29,10 @@ export default function LoginScreen() {
     try {
       await signIn(email.trim().toLowerCase(), password);
       // AuthContext route guard handles redirect automatically
-    } catch (err: any) {
+    } catch (err: unknown) {
       Alert.alert(
         'Sign In Failed',
-        err?.response?.data?.error ?? 'Please check your credentials and try again.',
+        getApiError(err, 'Please check your credentials and try again.'),
       );
     } finally {
       setLoading(false);

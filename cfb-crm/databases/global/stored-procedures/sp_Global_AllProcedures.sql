@@ -847,13 +847,15 @@ GO
 CREATE OR ALTER PROCEDURE dbo.sp_RedeemInviteToken
   @TokenHash    VARCHAR(128),
   @PasswordHash VARCHAR(255),
-  @ErrorCode    NVARCHAR(50) OUTPUT,
-  @UserId       UNIQUEIDENTIFIER OUTPUT
+  @ErrorCode    NVARCHAR(50)  OUTPUT,
+  @UserId       UNIQUEIDENTIFIER OUTPUT,
+  @Email        NVARCHAR(255) OUTPUT
 AS
 BEGIN
   SET NOCOUNT ON;
   SET @ErrorCode = NULL;
   SET @UserId    = NULL;
+  SET @Email     = NULL;
 
   SELECT @UserId = it.user_id
   FROM   dbo.invite_tokens it
@@ -866,6 +868,8 @@ BEGIN
     SET @ErrorCode = 'INVALID_OR_EXPIRED';
     RETURN;
   END
+
+  SELECT @Email = email FROM dbo.users WHERE id = @UserId;
 
   BEGIN TRANSACTION;
   BEGIN TRY
@@ -884,6 +888,29 @@ BEGIN
     ROLLBACK TRANSACTION;
     SET @ErrorCode = 'TRANSACTION_FAILED';
   END CATCH
+END;
+GO
+
+-- ============================================================
+-- sp_CheckTeamActive
+-- Returns whether a team's subscription is currently active.
+-- Used by requireActiveTeam middleware.
+-- ============================================================
+IF OBJECT_ID('dbo.sp_CheckTeamActive', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_CheckTeamActive;
+GO
+
+CREATE PROCEDURE dbo.sp_CheckTeamActive
+  @TeamId   UNIQUEIDENTIFIER,
+  @IsActive BIT OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET @IsActive = 0;
+
+  SELECT @IsActive = CAST(is_active AS BIT)
+  FROM   dbo.teams
+  WHERE  id = @TeamId;
 END;
 GO
 

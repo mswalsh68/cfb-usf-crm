@@ -1,4 +1,5 @@
-import type { TeamSummary } from '@cfb-crm/types';
+import type { TeamSummary, AppPermission } from '@cfb-crm/types';
+import type { TeamConfig } from './teamConfig';
 
 const GLOBAL_API = process.env.NEXT_PUBLIC_GLOBAL_API_URL ?? 'http://localhost:3001';
 
@@ -61,7 +62,7 @@ export function hasAppAccess(app: string): boolean {
   if (!user) return false;
   if (user.globalRole === 'platform_owner') return true;
   if (user.globalRole === 'global_admin') return true;
-  return user.appPermissions?.some((p: any) => p.app === app) ?? false;
+  return user.appPermissions?.some((p: AppPermission) => p.app === app) ?? false;
 }
 
 export function isGlobalAdmin(): boolean {
@@ -100,7 +101,7 @@ export function hasTeamAccess(teamId: string): boolean {
  * and returns the new team's config for ThemeProvider to apply.
  * Returns null on failure.
  */
-export async function switchTeam(teamId: string): Promise<any | null> {
+export async function switchTeam(teamId: string): Promise<TeamConfig | null> {
   const token = getAccessToken();
   if (!token) return null;
   try {

@@ -5,7 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { appApi } from '../../hooks/useApiClient';
+import { appApi, getApiError } from '../../hooks/useApiClient';
 import { useAuth } from '../../hooks/useAuth';
 import {
   Card, Button, Input, EmptyState,
@@ -91,7 +91,7 @@ export default function AddPlayerScreen() {
         { text: 'OK', onPress: () => router.back() },
       ]);
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.error ?? 'Could not add player.'),
+    onError: (err: Error) => Alert.alert('Error', getApiError(err, 'Could not add player.')),
   });
 
   if (!canWrite('roster')) {

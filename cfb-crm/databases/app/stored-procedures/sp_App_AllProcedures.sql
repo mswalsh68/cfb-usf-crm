@@ -25,10 +25,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_GetPlayers
   @RecruitingClass SMALLINT  = NULL,
   @Page       INT           = 1,
   @PageSize   INT           = 50,
-  @TotalCount INT           OUTPUT
+  @TotalCount INT           OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
 
   DECLARE @Offset     INT          = (@Page - 1) * @PageSize;
   DECLARE @SearchWild NVARCHAR(257) = '%' + ISNULL(@Search, '') + '%';
@@ -89,10 +99,20 @@ GO
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GetPlayerById
   @PlayerId  UNIQUEIDENTIFIER,
-  @ErrorCode NVARCHAR(50) OUTPUT
+  @ErrorCode NVARCHAR(50) OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @ErrorCode = NULL;
 
   IF NOT EXISTS (SELECT 1 FROM roster.players WHERE id = @PlayerId)
@@ -159,10 +179,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreatePlayer
   @CreatedBy             UNIQUEIDENTIFIER,
   -- Output
   @NewPlayerId           UNIQUEIDENTIFIER OUTPUT,
-  @ErrorCode             NVARCHAR(50)     OUTPUT
+  @ErrorCode             NVARCHAR(50)     OUTPUT,
+  @RequestingUserId      UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole    NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @ErrorCode = NULL;
 
   -- Validate academic year
@@ -235,10 +265,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_UpdatePlayer
   @EmergencyContactPhone NVARCHAR(20)     = NULL,
   @Notes                 NVARCHAR(MAX)    = NULL,
   @UpdatedBy             UNIQUEIDENTIFIER,
-  @ErrorCode             NVARCHAR(50)     OUTPUT
+  @ErrorCode             NVARCHAR(50)     OUTPUT,
+  @RequestingUserId      UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole    NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @ErrorCode = NULL;
 
   IF NOT EXISTS (SELECT 1 FROM roster.players WHERE id = @PlayerId)
@@ -302,10 +342,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_UpsertPlayerStats
   @SeasonYear  SMALLINT,
   @GamesPlayed TINYINT       = NULL,
   @StatsJson   NVARCHAR(MAX) = NULL,
-  @ErrorCode   NVARCHAR(50)  OUTPUT
+  @ErrorCode   NVARCHAR(50)  OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @ErrorCode = NULL;
 
   IF NOT EXISTS (SELECT 1 FROM roster.players WHERE id = @PlayerId)
@@ -505,10 +555,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_TransferToAlumni
   @TransactionId     UNIQUEIDENTIFIER OUTPUT,
   @SuccessCount      INT              OUTPUT,
   @FailureJson       NVARCHAR(MAX)    OUTPUT,
-  @PlayersJson       NVARCHAR(MAX)    OUTPUT
+  @PlayersJson       NVARCHAR(MAX)    OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET XACT_ABORT ON;
 
   SET @TransactionId = NEWID();
@@ -661,10 +721,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreateAlumniFromPlayer
   @Phone              NVARCHAR(20)     = NULL,
   @PersonalEmail      NVARCHAR(255)    = NULL,
   @NewAlumniId        UNIQUEIDENTIFIER OUTPUT,
-  @ErrorCode          NVARCHAR(50)     OUTPUT
+  @ErrorCode          NVARCHAR(50)     OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @ErrorCode = NULL;
 
   -- Idempotent: already exists — return the existing ID
@@ -700,10 +770,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_GetAlumni
   @Position        NVARCHAR(10)  = NULL,
   @Page            INT           = 1,
   @PageSize        INT           = 50,
-  @TotalCount      INT           OUTPUT
+  @TotalCount      INT           OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
 
   DECLARE @Offset     INT           = (@Page - 1) * @PageSize;
   DECLARE @SearchWild NVARCHAR(257) = '%' + ISNULL(@Search, '') + '%';
@@ -763,10 +843,20 @@ GO
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GetAlumniById
   @AlumniId  UNIQUEIDENTIFIER,
-  @ErrorCode NVARCHAR(50) OUTPUT
+  @ErrorCode NVARCHAR(50) OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @ErrorCode = NULL;
 
   IF NOT EXISTS (SELECT 1 FROM alumni.alumni WHERE id = @AlumniId)
@@ -826,10 +916,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_UpdateAlumni
   @TotalDonations  DECIMAL(10,2)  = NULL,
   @Notes           NVARCHAR(MAX)  = NULL,
   @UpdatedBy       UNIQUEIDENTIFIER,
-  @ErrorCode       NVARCHAR(50)   OUTPUT
+  @ErrorCode       NVARCHAR(50)   OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @ErrorCode = NULL;
 
   IF NOT EXISTS (SELECT 1 FROM alumni.alumni WHERE id = @AlumniId)
@@ -889,10 +989,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_LogInteraction
   @Summary    NVARCHAR(MAX),
   @Outcome    NVARCHAR(50)  = NULL,
   @FollowUpAt DATETIME2     = NULL,
-  @ErrorCode  NVARCHAR(50)  OUTPUT
+  @ErrorCode  NVARCHAR(50)  OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @ErrorCode = NULL;
 
   IF NOT EXISTS (SELECT 1 FROM alumni.alumni WHERE id = @AlumniId)
@@ -934,11 +1044,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreateCampaign
   @AudienceFilters  NVARCHAR(MAX)  = NULL,   -- JSON blob
   @ScheduledAt      DATETIME2      = NULL,
   @CreatedBy        UNIQUEIDENTIFIER,
-  @NewCampaignId    UNIQUEIDENTIFIER OUTPUT,
-  @ErrorCode        NVARCHAR(50)   OUTPUT
+  @NewCampaignId      UNIQUEIDENTIFIER OUTPUT,
+  @ErrorCode          NVARCHAR(50)     OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @ErrorCode = NULL;
 
   IF LEN(LTRIM(RTRIM(@Name))) = 0
@@ -981,9 +1100,18 @@ GO
 -- Returns all campaigns with computed message metrics.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GetCampaigns
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
 
   SELECT
     c.id,
@@ -1021,9 +1149,19 @@ GO
 -- Dashboard summary stats — all computed in SQL.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GetAlumniStats
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
 
   SELECT
     COUNT(*)                                                      AS totalAlumni,
@@ -1054,10 +1192,20 @@ GO
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_ResolveAudienceForCampaign
   @CampaignId UNIQUEIDENTIFIER,
-  @ErrorCode  NVARCHAR(50) OUTPUT
+  @ErrorCode  NVARCHAR(50) OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @ErrorCode = NULL;
 
   DECLARE @Audience       NVARCHAR(20);
@@ -1113,10 +1261,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_BulkCreatePlayers
   @CreatedBy    UNIQUEIDENTIFIER,
   @SuccessCount INT OUTPUT,
   @SkippedCount INT OUTPUT,
-  @ErrorJson    NVARCHAR(MAX) OUTPUT
+  @ErrorJson    NVARCHAR(MAX) OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @SuccessCount = 0;
   SET @SkippedCount = 0;
   SET @ErrorJson    = '[]';
@@ -1298,10 +1456,20 @@ CREATE OR ALTER PROCEDURE dbo.sp_BulkCreateAlumni
   @CreatedBy    UNIQUEIDENTIFIER,
   @SuccessCount INT OUTPUT,
   @SkippedCount INT OUTPUT,
-  @ErrorJson    NVARCHAR(MAX) OUTPUT
+  @ErrorJson    NVARCHAR(MAX) OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
 AS
 BEGIN
   SET NOCOUNT ON;
+  -- Set session context so RLS filter functions can identify the caller
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_s_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_s_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_s_uid;
+    EXEC sp_set_session_context N'user_role', @_s_role;
+  END
   SET @SuccessCount = 0;
   SET @SkippedCount = 0;
   SET @ErrorJson    = '[]';

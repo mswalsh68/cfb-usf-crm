@@ -2,11 +2,19 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { appApi } from '@/lib/api';
+import type { Player, AppPermission } from '@cfb-crm/types';
+import { appApi, getApiError } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { getUser, isGlobalAdmin } from '@/lib/auth';
 import { PageLayout, Button, Input, Select, Badge, Alert, Card } from '@/components';
 import { useTeamConfig } from '@/lib/teamConfig';
+
+interface PlayerStat {
+  id:          string;
+  seasonYear:  number;
+  gamesPlayed?: number;
+  statsJson?:  string;
+}
 
 const STATUS_OPTIONS = [
   { value: 'active',      label: 'Active'      },
@@ -24,13 +32,13 @@ export default function PlayerDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { positions, academicYears } = useTeamConfig();
 
-  const [player,  setPlayer]  = useState<any>(null);
-  const [stats,   setStats]   = useState<any[]>([]);
+  const [player,  setPlayer]  = useState<Player | null>(null);
+  const [stats,   setStats]   = useState<PlayerStat[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving,  setSaving]  = useState(false);
   const [alert,   setAlert]   = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
-  const [form,    setForm]    = useState<any>({});
+  const [form,    setForm]    = useState<Partial<Player>>({});
 
   useEffect(() => { if (id) fetchPlayer(); }, [id]);
 
@@ -69,14 +77,14 @@ export default function PlayerDetailPage() {
       setAlert({ msg: 'Player updated successfully', type: 'success' });
       setEditing(false);
       fetchPlayer();
-    } catch (err: any) {
-      setAlert({ msg: err?.response?.data?.error ?? 'Update failed', type: 'error' });
+    } catch (err: unknown) {
+      setAlert({ msg: getApiError(err, 'Update failed'), type: 'error' });
     } finally {
       setSaving(false);
     }
   };
 
-  const set = (key: string) => (val: string) => setForm((p: any) => ({ ...p, [key]: val }));
+  const set = (key: keyof Player) => (val: string) => setForm((p) => ({ ...p, [key]: val }));
 
   if (loading) return (
     <PageLayout currentPage="Roster">
@@ -85,7 +93,7 @@ export default function PlayerDetailPage() {
   );
 
   const user        = getUser();
-  const isWriter    = isGlobalAdmin() || user?.appPermissions?.some((p: any) => p.app === 'roster' && ['global_admin','app_admin','coach_staff'].includes(p.role));
+  const isWriter    = isGlobalAdmin() || user?.appPermissions?.some((p: AppPermission) => p.app === 'roster' && ['global_admin','app_admin','coach_staff'].includes(p.role));
   const canEdit     = isWriter || user?.sub === player?.userId;
 
   if (!player) return (
@@ -230,7 +238,7 @@ export default function PlayerDetailPage() {
           {editing ? (
             <textarea
               value={form.notes ?? ''}
-              onChange={(e) => setForm((p: any) => ({ ...p, notes: e.target.value }))}
+              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
               rows={6}
               style={{ width: '100%', border: `1.5px solid ${theme.gray200}`, borderRadius: 10, padding: '10px 14px', fontSize: 14, color: theme.gray900, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
             />
@@ -274,7 +282,7 @@ export default function PlayerDetailPage() {
               </tr>
             </thead>
             <tbody>
-              {stats.map((s: any) => (
+              {stats.map((s) => (
                 <tr key={s.seasonYear} style={{ borderBottom: `1px solid ${theme.gray100}` }}>
                   <td style={{ padding: '10px 0', color: theme.gray900, fontWeight: 500 }}>{s.seasonYear}</td>
                   <td style={{ padding: '10px 0', color: theme.gray600 }}>{s.gamesPlayed ?? '—'}</td>

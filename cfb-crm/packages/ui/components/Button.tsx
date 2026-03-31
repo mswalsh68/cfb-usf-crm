@@ -93,7 +93,7 @@ export function Button({
         sStyle.container,
         fullWidth && styles.fullWidth,
         isDisabled && styles.disabled,
-        ...Shadows.sm as any,
+        Shadows.sm,
         style,
       ]}
     >

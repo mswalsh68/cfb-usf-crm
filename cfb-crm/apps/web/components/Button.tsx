@@ -7,7 +7,7 @@ type Size    = 'sm' | 'md' | 'lg';
 
 interface ButtonProps {
   label:       string;
-  onClick?:    (e?: any) => void;
+  onClick?:    (e?: React.MouseEvent<HTMLButtonElement>) => void;
   type?:       'button' | 'submit' | 'reset';
   variant?:    Variant;
   size?:       Size;

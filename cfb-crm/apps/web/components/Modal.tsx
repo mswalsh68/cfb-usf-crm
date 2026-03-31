@@ -2,14 +2,27 @@
 
 import React, { useEffect, useRef } from 'react';
 
+type ModalSize = 'sm' | 'md' | 'lg' | 'xl';
+
+const sizeWidths: Record<ModalSize, number> = {
+  sm: 400,
+  md: 520,
+  lg: 700,
+  xl: 900,
+};
+
 interface ModalProps {
   title:    string;
   onClose:  () => void;
   children: React.ReactNode;
+  isOpen?:  boolean;
+  size?:    ModalSize;
   width?:   number;
 }
 
-export default function Modal({ title, onClose, children, width = 520 }: ModalProps) {
+export default function Modal({ title, onClose, children, isOpen = true, size, width }: ModalProps) {
+  const resolvedWidth = width ?? (size ? sizeWidths[size] : sizeWidths.md);
+  if (!isOpen) return null;
   const dialogRef  = useRef<HTMLDivElement>(null);
   const titleId    = React.useId();
 
@@ -62,7 +75,7 @@ export default function Modal({ title, onClose, children, width = 520 }: ModalPr
           borderRadius:    'var(--radius-xl)',
           padding:         32,
           width:           '100%',
-          maxWidth:        width,
+          maxWidth:        resolvedWidth,
           maxHeight:       '90vh',
           overflowY:       'auto',
           boxShadow:       'var(--shadow-lg)',

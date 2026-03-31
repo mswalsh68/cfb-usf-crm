@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { appApi } from '../../../hooks/useApiClient';
+import { appApi, getApiError } from '../../../hooks/useApiClient';
 import { useAuth } from '../../../hooks/useAuth';
 import {
   Card, Badge, Button, Input, Divider, StatPill,
@@ -14,6 +14,15 @@ import {
   AlumniStatusColor,
 } from '@cfb-crm/ui';
 import type { Alumni } from '@cfb-crm/types';
+
+interface Interaction {
+  id:          string;
+  channel:     string;
+  summary:     string;
+  outcome?:    string;
+  logged_at:   string;
+  follow_up_at?: string;
+}
 
 export default function AlumniDetailScreen() {
   const { id }  = useLocalSearchParams<{ id: string }>();
@@ -46,7 +55,7 @@ export default function AlumniDetailScreen() {
       setEditing(false);
       setEditFields({});
     },
-    onError: (err: any) => Alert.alert('Update Failed', err?.response?.data?.error ?? 'Could not update.'),
+    onError: (err: Error) => Alert.alert('Update Failed', getApiError(err, 'Could not update.')),
   });
 
   const logMutation = useMutation({
@@ -61,7 +70,7 @@ export default function AlumniDetailScreen() {
       setLogSummary('');
       setShowLogForm(false);
     },
-    onError: (err: any) => Alert.alert('Error', err?.response?.data?.error ?? 'Could not log interaction.'),
+    onError: (err: Error) => Alert.alert('Error', getApiError(err, 'Could not log interaction.')),
   });
 
   if (isLoading || !data) {
@@ -240,7 +249,7 @@ export default function AlumniDetailScreen() {
         {(data.interactions ?? []).length === 0 ? (
           <Text style={styles.noInteractions}>No interactions logged yet.</Text>
         ) : (
-          (data.interactions as any[]).map((interaction: any) => (
+          (data.interactions as Interaction[]).map((interaction) => (
             <Card key={interaction.id} style={styles.interactionCard}>
               <View style={styles.interactionHeader}>
                 <Badge label={interaction.channel} variant="info" />

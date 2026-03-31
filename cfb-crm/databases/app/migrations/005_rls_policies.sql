@@ -10,6 +10,13 @@
 --   body never references the table by name — columns are
 --   bound via the CREATE SECURITY POLICY statement.
 --
+-- NULL sport_id bypass:
+--   Rows with sport_id IS NULL were created before migration 004
+--   added sport scoping. Any authenticated user (valid UUID in
+--   session context) may access these rows during the transition
+--   period. Once seed_usf_sport.sql is run and all rows have a
+--   sport_id, this clause becomes unreachable.
+--
 -- Run on: each tenant AppDB after 004_add_sport_classification.sql
 -- ============================================================
 
@@ -35,8 +42,9 @@ GO
 --
 -- Allows access if:
 --   1. Caller is coach_admin or roster_only_admin for this sport, OR
---   2. Caller IS the player (their own row, classification = 'roster')
--- Alumni users always get ZERO rows.
+--   2. Caller IS the player (their own row, classification = 'roster'), OR
+--   3. Row has no sport_id yet (migration transition bypass — any authenticated user)
+-- Alumni users always get ZERO rows (via classification check).
 
 CREATE OR ALTER FUNCTION dbo.fn_roster_access(
   @session_user_id    NVARCHAR(100),   -- from SESSION_CONTEXT('user_id')
@@ -64,6 +72,13 @@ RETURN
     (
       @row_user_id            = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
       AND @row_classification = 'roster'
+    )
+    OR
+    -- Transition bypass: rows not yet assigned to a sport are visible
+    -- to any authenticated user. Remove once seed_usf_sport.sql has run.
+    (
+      @row_sport_id IS NULL
+      AND TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER) IS NOT NULL
     );
 GO
 
@@ -74,7 +89,8 @@ GO
 -- Allows access if:
 --   1. Caller is coach_admin for this sport
 --      (roster_only_admin CANNOT see alumni — zero rows), OR
---   2. Caller IS the alumni member (their own row, classification = 'alumni')
+--   2. Caller IS the alumni member (their own row, classification = 'alumni'), OR
+--   3. Row has no sport_id yet (migration transition bypass — any authenticated user)
 -- Roster/player users always get ZERO rows.
 
 CREATE OR ALTER FUNCTION dbo.fn_alumni_access(
@@ -103,6 +119,13 @@ RETURN
     (
       @row_user_id            = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
       AND @row_classification = 'alumni'
+    )
+    OR
+    -- Transition bypass: rows not yet assigned to a sport are visible
+    -- to any authenticated user. Remove once seed_usf_sport.sql has run.
+    (
+      @row_sport_id IS NULL
+      AND TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER) IS NOT NULL
     );
 GO
 
@@ -135,4 +158,5 @@ PRINT 'Created and activated alumni_security_policy on alumni.alumni';
 
 PRINT '=== 005_rls_policies complete ===';
 PRINT 'RLS is now ACTIVE. All subsequent development and testing must run with RLS enforced.';
+PRINT 'NOTE: NULL sport_id transition bypass is active. Run seed_usf_sport.sql to assign sport_id to all rows.';
 GO

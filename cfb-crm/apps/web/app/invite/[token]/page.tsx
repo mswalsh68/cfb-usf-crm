@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { globalApi } from '@/lib/api';
+import { globalApi, getApiError } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { Button, Input, Alert } from '@/components';
 import { useTeamConfig } from '@/lib/teamConfig';
@@ -39,8 +39,8 @@ export default function AcceptInvitePage() {
       setStep('done');
       // Redirect to login with email prefilled after a short delay
       setTimeout(() => router.push(`/?email=${encodeURIComponent(data.data.email)}`), 2000);
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Something went wrong. The link may have expired.');
+    } catch (err: unknown) {
+      setError(getApiError(err, 'Something went wrong. The link may have expired.'));
     } finally {
       setSaving(false);
     }

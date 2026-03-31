@@ -4,9 +4,14 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import * as XLSX from 'xlsx';
 import { isGlobalAdmin } from '@/lib/auth';
-import { appApi } from '@/lib/api';
+import { appApi, getApiError } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Alert, Badge } from '@/components';
+
+type XlsxRow    = Record<string, unknown>;
+interface ParsedPlayer { [key: string]: unknown }
+interface RowError    { rowNum: number; reason: string }
+interface UploadResult { inserted: number; skipped: number; errors: RowError[] }
 
 // ─── Template columns ─────────────────────────────────────────
 const TEMPLATE_HEADERS = [
@@ -33,11 +38,11 @@ export default function RosterUploadPage() {
     if (!isGlobalAdmin()) router.push('/unauthorized');
   }, []);
 
-  const [preview,  setPreview]  = useState<any[]>([]);
-  const [errors,   setErrors]   = useState<any[]>([]);
+  const [preview,  setPreview]  = useState<ParsedPlayer[]>([]);
+  const [errors,   setErrors]   = useState<RowError[]>([]);
   const [fileName, setFileName] = useState('');
   const [uploading,setUploading]= useState(false);
-  const [result,   setResult]   = useState<any>(null);
+  const [result,   setResult]   = useState<UploadResult | null>(null);
   const [alert,    setAlert]    = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
 
   // ─── Download template ──────────────────────────────────────
@@ -66,7 +71,7 @@ export default function RosterUploadPage() {
         const data   = new Uint8Array(ev.target!.result as ArrayBuffer);
         const wb     = XLSX.read(data, { type: 'array' });
         const ws     = wb.Sheets[wb.SheetNames[0]];
-        const rows   = XLSX.utils.sheet_to_json(ws, { defval: '' }) as any[];
+        const rows   = XLSX.utils.sheet_to_json(ws, { defval: '' }) as XlsxRow[];
 
         if (rows.length === 0) {
           setAlert({ msg: 'File is empty or has no data rows.', type: 'error' });
@@ -74,8 +79,8 @@ export default function RosterUploadPage() {
         }
 
         // Validate and transform rows
-        const validRows:   any[] = [];
-        const errorRows:   any[] = [];
+        const validRows:   ParsedPlayer[] = [];
+        const errorRows:   RowError[]    = [];
 
         rows.forEach((row, i) => {
           const rowErrors: string[] = [];
@@ -149,8 +154,8 @@ export default function RosterUploadPage() {
         msg: `Done! ${data.data.inserted} players imported, ${data.data.skipped} skipped.`,
         type: data.data.skipped > 0 ? 'warning' : 'success',
       });
-    } catch (err: any) {
-      setAlert({ msg: err?.response?.data?.error ?? 'Upload failed', type: 'error' });
+    } catch (err: unknown) {
+      setAlert({ msg: getApiError(err, 'Upload failed'), type: 'error' });
     } finally {
       setUploading(false);
     }
@@ -323,7 +328,7 @@ export default function RosterUploadPage() {
           {result.errors?.length > 0 && (
             <>
               <p style={{ fontSize: 12, fontWeight: 600, color: theme.danger, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>Skip reasons</p>
-              {result.errors.map((e: any, i: number) => (
+              {result.errors.map((e, i) => (
                 <div key={i} style={{ backgroundColor: theme.dangerLight, borderRadius: 8, padding: '6px 12px', marginBottom: 4, fontSize: 13, color: theme.danger }}>
                   Row {e.rowNum}: {e.reason}
                 </div>

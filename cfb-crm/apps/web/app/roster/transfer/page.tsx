@@ -2,8 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import type { Player } from '@cfb-crm/types';
 import { isGlobalAdmin } from '@/lib/auth';
-import { appApi } from '@/lib/api';
+import { appApi, getApiError } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Select, Alert, Badge } from '@/components';
 
@@ -33,7 +34,7 @@ const YEAR_OPTIONS = Array.from({ length: 10 }, (_, i) => ({
 
 export default function TransferPage() {
   const router = useRouter();
-  const [players,         setPlayers]         = useState<any[]>([]);
+  const [players,         setPlayers]         = useState<Player[]>([]);
   const [loading,         setLoading]         = useState(true);
   const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set());
   const [transferReason,  setTransferReason]  = useState('graduated');
@@ -42,7 +43,7 @@ export default function TransferPage() {
   const [notes,           setNotes]           = useState('');
   const [submitting,      setSubmitting]      = useState(false);
   const [alert,           setAlert]           = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
-  const [result,          setResult]          = useState<any>(null);
+  const [result,          setResult]          = useState<{ transferredCount: number; failures: Array<{ reason: string }> } | null>(null);
   const [search,          setSearch]          = useState('');
 
   useEffect(() => {
@@ -60,7 +61,7 @@ export default function TransferPage() {
       });
       setPlayers(data.data ?? []);
     } catch {
-      setAlert({ msg: 'Failed to load players. Make sure the Roster API is running.', type: 'error' });
+      setAlert({ msg: 'Failed to load players. Make sure the app API is running.', type: 'error' });
     } finally {
       setLoading(false);
     }
@@ -104,8 +105,8 @@ export default function TransferPage() {
         msg: `${data.data.transferredCount} player(s) moved to Alumni successfully.`,
         type: data.data.failures?.length > 0 ? 'warning' : 'success',
       });
-    } catch (err: any) {
-      setAlert({ msg: err?.response?.data?.error ?? 'Transfer failed. No changes were made.', type: 'error' });
+    } catch (err: unknown) {
+      setAlert({ msg: getApiError(err, 'Transfer failed. No changes were made.'), type: 'error' });
     } finally {
       setSubmitting(false);
     }
@@ -315,7 +316,7 @@ export default function TransferPage() {
           <h2 style={{ fontSize: 15, fontWeight: 600, color: theme.gray900, marginBottom: 12, marginTop: 0 }}>
             Transfer failures ({result.failures.length})
           </h2>
-          {result.failures.map((f: any, i: number) => (
+          {result.failures.map((f, i) => (
             <div key={i} style={{ backgroundColor: theme.dangerLight, borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontSize: 13, color: theme.danger }}>
               {f.reason}
             </div>

@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { isGlobalAdmin } from '@/lib/auth';
-import { globalApi } from '@/lib/api';
+import { globalApi, getApiError } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Input, Select, Alert } from '@/components';
 
@@ -189,8 +189,8 @@ export default function TeamSettingsPage() {
         classLabel:        form.classLabel,
       });
       setSuccess('Team settings saved. Reload the page to see updated colors and labels.');
-    } catch (err: any) {
-      setError(err?.response?.data?.error ?? 'Failed to save settings.');
+    } catch (err: unknown) {
+      setError(getApiError(err, 'Failed to save settings.'));
     } finally {
       setSaving(false);
     }

@@ -49,12 +49,12 @@ export function requireActiveTeam(req: Request, res: Response, next: NextFunctio
   getDb()
     .then(db =>
       db.request()
-        .input('TeamId', sql.UniqueIdentifier, req.user!.currentTeamId)
-        .query('SELECT is_active FROM dbo.teams WHERE id = @TeamId')
+        .input('TeamId',   sql.UniqueIdentifier, req.user!.currentTeamId)
+        .output('IsActive', sql.Bit)
+        .execute('dbo.sp_CheckTeamActive')
     )
     .then(result => {
-      const row = result.recordset[0];
-      if (!row || row.is_active === false || row.is_active === 0) {
+      if (!result.output.IsActive) {
         res.status(403).json({
           success: false,
           error: 'Your subscription is inactive. Please contact LegacyLink support at support@legacylinkhq.com',

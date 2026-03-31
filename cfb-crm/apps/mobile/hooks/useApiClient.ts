@@ -100,3 +100,12 @@ function createApiClient(baseURL: string): AxiosInstance {
 
 export const globalApi = createApiClient(GLOBAL_API);
 export const appApi   = createApiClient(APP_API);
+
+/** Extracts the API error message from an axios error, falling back to a default. */
+export function getApiError(err: unknown, fallback: string): string {
+  if (axios.isAxiosError(err)) {
+    const msg = (err.response?.data as { error?: string } | undefined)?.error;
+    if (msg) return msg;
+  }
+  return fallback;
+}

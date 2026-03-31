@@ -13,6 +13,12 @@ import {
 } from '@cfb-crm/ui';
 import type { User } from '@cfb-crm/types';
 
+interface AppPerm {
+  app_name:   string;
+  role:       string;
+  revoked_at: string | null;
+}
+
 export default function GlobalAdminScreen() {
   const { isGlobalAdmin } = useAuth();
   const queryClient = useQueryClient();
@@ -138,7 +144,7 @@ export default function GlobalAdminScreen() {
                   <Text style={styles.permsTitle}>App Permissions</Text>
 
                   {(['roster', 'alumni', 'global-admin'] as const).map((app) => {
-                    const existing = permsData?.find((p: any) => p.app_name === app && !p.revoked_at);
+                    const existing = (permsData as AppPerm[] | undefined)?.find((p) => p.app_name === app && !p.revoked_at);
                     return (
                       <View key={app} style={styles.permRow}>
                         <View style={{ flex: 1 }}>

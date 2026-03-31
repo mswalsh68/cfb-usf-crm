@@ -1,3 +1,6 @@
+SET QUOTED_IDENTIFIER ON;
+SET ANSI_NULLS ON;
+GO
 -- ============================================================
 -- APP DB — RBAC INFRASTRUCTURE
 -- Phase 0: Foundation tables required before any feature work.
