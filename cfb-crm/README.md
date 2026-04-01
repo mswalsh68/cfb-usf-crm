@@ -35,7 +35,7 @@ cfb-crm/
 ## Prerequisites
 
 - Node.js 20+
-- Yarn (classic, v1)
+- npm 10+
 - Azure subscription (SQL Server + App Service or Container Apps)
 - Expo CLI: `npm install -g expo-cli`
 
@@ -43,10 +43,35 @@ cfb-crm/
 
 ## Local Setup
 
-### 1. Install dependencies
+### 1. Clone the repo
 
 ```bash
-yarn install
+git clone https://github.com/mswalsh68/cfb-usf-crm.git
+cd cfb-usf-crm/cfb-crm
+```
+
+### 2. Install dependencies & activate Git hooks
+
+```bash
+npm install
+npm run setup
+```
+
+> `npm run setup` points Git at the `.githooks/` folder stored in the repo.
+> This protects `main` — you will be blocked from committing or pushing directly to it.
+
+### 3. Always work on a branch
+
+```bash
+# Pull latest main first
+git checkout main
+git pull
+
+# Create your branch
+git checkout -b feature/your-feature-name
+
+# When done, push and open a PR on GitHub — never push to main directly
+git push origin feature/your-feature-name
 ```
 
 ### 2. Configure environment variables
@@ -90,22 +115,21 @@ Before running the graduation stored proc in production:
 2. Set up a SQL Server Linked Server from Roster → Global named `[GLOBAL_DB]`
 3. Enable MSDTC on both servers for distributed transactions
 
-### 5. Start APIs
+### 7. Start APIs
 
 ```bash
-# All three APIs in parallel:
-yarn dev
+# Both APIs in parallel:
+npm run dev
 
 # Or individually:
-yarn global-api   # port 3001
-yarn roster-api   # port 3002
-yarn alumni-api   # port 3003
+npm run global-api   # port 3001
+npm run app-api      # port 3002
 ```
 
-### 6. Start mobile app
+### 8. Start mobile app
 
 ```bash
-yarn mobile
+npm run mobile
 # Then press i for iOS simulator or a for Android emulator
 # Scan QR with Expo Go app for physical device
 ```
