@@ -9,6 +9,7 @@
     "packages/*"
   ],
   "scripts": {
+    "setup":      "git config core.hooksPath .githooks && echo 'Git hooks activated. You are protected from committing or pushing to main.'",
     "mobile":     "npm run start --workspace=apps/mobile",
     "global-api": "npm run dev --workspace=apps/global-api",
     "app-api":    "npm run dev --workspace=apps/app-api",

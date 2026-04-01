@@ -1,0 +1,15 @@
+#!/bin/sh
+# Blocks pushing directly to the remote 'main' branch.
+# All changes to main must go through a PR on GitHub.
+
+while read local_ref local_sha remote_ref remote_sha; do
+  if [ "$remote_ref" = "refs/heads/main" ]; then
+    echo ""
+    echo "  ERROR: Direct pushes to 'main' are not allowed."
+    echo "  Push to a feature branch and open a PR on GitHub instead:"
+    echo ""
+    echo "    git push origin your-branch-name"
+    echo ""
+    exit 1
+  fi
+done
