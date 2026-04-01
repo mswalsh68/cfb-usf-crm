@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '@cfb-crm/auth';
-import type { AuthTokenPayload, TeamSummary } from '@cfb-crm/types';
+import type { AuthTokenPayload, TeamSummary, GlobalRole } from '@cfb-crm/types';
 import { getDb, sql } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { DEFAULT_POSITIONS, DEFAULT_ACADEMIC_YEARS } from '../constants';
@@ -10,41 +10,6 @@ import { DEFAULT_POSITIONS, DEFAULT_ACADEMIC_YEARS } from '../constants';
 export const authRouter = Router();
 const hash = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
 
-// ─── TODO: Per-user token revocation ─────────────────────────────────────────
-//
-// Currently, logging out only invalidates the specific refresh token used.
-// If a user's account is compromised, there is no way to revoke ALL active
-// sessions for that user instantly.
-//
-// To implement full per-user token revocation, add the following to your DB:
-//
-//   1. Add a `token_families` table (or column on `users`):
-//        ALTER TABLE dbo.users ADD token_version INT NOT NULL DEFAULT 1;
-//
-//   2. Include `tokenVersion` in the access token payload (packages/auth/index.ts):
-//        payload: { sub, email, globalRole, ..., tokenVersion: user.tokenVersion }
-//
-//   3. In requireAuth middleware (middleware/auth.ts), after verifying the JWT,
-//      query the DB to confirm req.user.tokenVersion matches users.token_version:
-//        const r = await db.request()
-//          .input('UserId', sql.UniqueIdentifier, req.user.sub)
-//          .output('TokenVersion', sql.Int)
-//          .execute('dbo.sp_GetTokenVersion');
-//        if (r.output.TokenVersion !== req.user.tokenVersion) {
-//          return res.status(401).json({ success: false, error: 'Session revoked' });
-//        }
-//
-//   4. Add a "revoke all sessions" endpoint (or admin action) that increments
-//      token_version for a user:
-//        UPDATE dbo.users SET token_version = token_version + 1 WHERE id = @UserId;
-//      Any existing JWTs with the old tokenVersion will immediately fail auth.
-//
-//   5. Also increment token_version on password reset / account compromise.
-//
-// NOTE: Step 3 adds one DB round-trip per authenticated request. Consider
-// caching token versions in Redis (TTL = access token lifetime = 15 min)
-// to avoid hitting the DB on every request.
-// ─────────────────────────────────────────────────────────────────────────────
 
 function audit(event: string, details: Record<string, unknown>) {
   console.log(JSON.stringify({ type: 'AUDIT', event, timestamp: new Date().toISOString(), ...details }));
@@ -61,12 +26,13 @@ const REFRESH_COOKIE_OPTS = { ...COOKIE_BASE, maxAge: 7 * 24 * 60 * 60 * 1000 };
 
 interface SpUserJson {
   email:          string;
-  globalRole:     string;
+  globalRole:     GlobalRole;
   currentTeamId?: string;
   teams?:         TeamSummary[];
   appPermissions?: AuthTokenPayload['appPermissions'];
   appDb?:         string;
   dbServer?:      string;
+  tokenVersion?:  number;
 }
 
 /** Build access token payload from sp_Login / sp_RefreshToken JSON output */
@@ -88,8 +54,9 @@ function buildAccessToken(userId: string, user: SpUserJson, overrideTeamId?: str
     currentTeamId,
     teams,
     appPermissions: user.appPermissions ?? [],
-    appDb:    user.appDb    ?? '',
-    dbServer:  user.dbServer  ?? '',
+    appDb:        user.appDb        ?? '',
+    dbServer:     user.dbServer     ?? '',
+    tokenVersion: user.tokenVersion ?? 1,
   };
 
   return signAccessToken(payload);
@@ -218,6 +185,7 @@ authRouter.post('/switch-team', requireAuth, async (req, res) => {
       appPermissions: updatedUser.appPermissions ?? [],
       appDb:          teamData.appDb,
       dbServer:       teamData.dbServer,
+      tokenVersion:   req.user!.tokenVersion,
     });
 
     const teamConfig = {
@@ -273,6 +241,36 @@ authRouter.post('/accept-invite', async (req, res) => {
     return res.json({ success: true, data: { email } });
   } catch (err) {
     console.error('[accept-invite]', err);
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
+// ─── POST /auth/revoke-all-sessions ──────────────────────────────────────────
+// Increments token_version, instantly invalidating all existing JWTs for the
+// target user. Also revokes all refresh tokens.
+// A user may revoke their own sessions; global admins may target any user.
+authRouter.post('/revoke-all-sessions', requireAuth, async (req, res) => {
+  const targetUserId: string = req.body.userId ?? req.user!.sub;
+  const isSelf = targetUserId === req.user!.sub;
+
+  if (!isSelf && req.user!.globalRole !== 'global_admin' && req.user!.globalRole !== 'platform_owner') {
+    return res.status(403).json({ success: false, error: 'Not authorised to revoke another user\'s sessions' });
+  }
+
+  try {
+    const db = await getDb();
+    await db.request()
+      .input('UserId',  sql.UniqueIdentifier, targetUserId)
+      .input('ActorId', sql.UniqueIdentifier, req.user!.sub)
+      .execute('dbo.sp_RevokeAllSessions');
+
+    audit('SESSIONS_REVOKED', { targetUserId, actorId: req.user!.sub, ip: req.ip });
+    return res
+      .clearCookie('cfb_access_token',  { path: '/' })
+      .clearCookie('cfb_refresh_token', { path: '/' })
+      .json({ success: true, message: 'All sessions revoked' });
+  } catch (err) {
+    console.error('[revoke-all-sessions]', err);
     return res.status(500).json({ success: false, error: 'Server error' });
   }
 });

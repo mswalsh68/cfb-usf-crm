@@ -132,6 +132,7 @@ BEGIN
       u.global_role                         AS globalRole,
       u.is_active                           AS isActive,
       u.created_at                          AS createdAt,
+      u.token_version                       AS tokenVersion,
       CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
       @AppDb                                AS appDb,
       @DbServer                             AS dbServer,
@@ -319,6 +320,7 @@ BEGIN
       u.last_name                           AS lastName,
       u.global_role                         AS globalRole,
       u.is_active                           AS isActive,
+      u.token_version                       AS tokenVersion,
       CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
       @AppDb                                AS appDb,
       @DbServer                             AS dbServer,
@@ -911,6 +913,57 @@ BEGIN
   SELECT @IsActive = CAST(is_active AS BIT)
   FROM   dbo.teams
   WHERE  id = @TeamId;
+END;
+GO
+
+-- ============================================================
+-- sp_GetTokenVersion
+-- Returns the current token_version for a user.
+-- Called by requireAuth middleware to detect revoked sessions.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_GetTokenVersion
+  @UserId       UNIQUEIDENTIFIER,
+  @TokenVersion INT OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SELECT @TokenVersion = token_version FROM dbo.users WHERE id = @UserId;
+END;
+GO
+
+-- ============================================================
+-- sp_RevokeAllSessions
+-- Increments token_version (invalidating all existing JWTs)
+-- and revokes all active refresh tokens for a user.
+-- Called by POST /auth/revoke-all-sessions.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_RevokeAllSessions
+  @UserId  UNIQUEIDENTIFIER,
+  @ActorId UNIQUEIDENTIFIER
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET XACT_ABORT ON;
+
+  BEGIN TRANSACTION;
+
+    UPDATE dbo.users
+    SET token_version = token_version + 1,
+        updated_at    = SYSUTCDATETIME()
+    WHERE id = @UserId;
+
+    UPDATE dbo.refresh_tokens
+    SET revoked_at = SYSUTCDATETIME()
+    WHERE user_id  = @UserId
+      AND revoked_at IS NULL;
+
+    INSERT INTO dbo.audit_log (actor_id, action, target_type, target_id, payload)
+    VALUES (
+      @ActorId, 'sessions_revoked', 'user', CAST(@UserId AS NVARCHAR(100)),
+      JSON_OBJECT('revokedBy': CAST(@ActorId AS NVARCHAR(100)))
+    );
+
+  COMMIT TRANSACTION;
 END;
 GO
 

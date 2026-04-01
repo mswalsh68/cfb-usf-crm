@@ -21,18 +21,40 @@ declare global {
 }
 
 // ─── Base Auth Middleware ─────────────────────────────────────────────────────
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   // Accept token from Authorization header (mobile) or httpOnly cookie (web)
   const token = extractBearerToken(req.headers.authorization) ?? req.cookies?.cfb_access_token ?? null;
   if (!token) {
-    return res.status(401).json({ success: false, error: 'Authentication required' });
+    res.status(401).json({ success: false, error: 'Authentication required' });
+    return;
   }
+
+  let decoded: AuthTokenPayload;
   try {
-    req.user = verifyAccessToken(token);
-    next();
+    decoded = verifyAccessToken(token);
   } catch {
-    return res.status(401).json({ success: false, error: 'Invalid or expired token' });
+    res.status(401).json({ success: false, error: 'Invalid or expired token' });
+    return;
   }
+
+  req.user = decoded;
+
+  // Confirm the token hasn't been superseded by a revoke-all-sessions call
+  getDb()
+    .then(db =>
+      db.request()
+        .input('UserId',       sql.UniqueIdentifier, decoded.sub)
+        .output('TokenVersion', sql.Int)
+        .execute('dbo.sp_GetTokenVersion')
+    )
+    .then(result => {
+      if (result.output.TokenVersion !== decoded.tokenVersion) {
+        res.status(401).json({ success: false, error: 'Session revoked' });
+        return;
+      }
+      next();
+    })
+    .catch(() => res.status(503).json({ success: false, error: 'Service temporarily unavailable' }));
 }
 
 // ─── Team Active Check ────────────────────────────────────────────────────────
