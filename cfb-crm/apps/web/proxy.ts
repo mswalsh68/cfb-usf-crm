@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server';
 const PUBLIC_PATHS = ['/'];
 const PUBLIC_PREFIXES = ['/invite', '/accept-invite', '/unauthorized'];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths
