@@ -5,7 +5,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
-import { verifyAccessToken, extractBearerToken, hasAppAccess, getAppRole, isAdmin } from '@cfb-crm/auth';
+import { verifyAccessToken, extractBearerToken, hasAppAccess, getAppRole, isAdmin, canWrite } from '@cfb-crm/auth';
 import type { AuthTokenPayload } from '@cfb-crm/types';
 import { createExecutor } from '@cfb-crm/db';
 import { getHealthDb } from './db';
@@ -164,15 +164,13 @@ function rosterAccess(req: express.Request, res: express.Response, next: express
   next();
 }
 function rosterWrite(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (req.user?.globalRole === 'global_admin') return next();
   const role = req.user ? getAppRole(req.user, 'roster') : null;
-  if (!role || !['global_admin', 'app_admin', 'coach_staff'].includes(role)) return res.status(403).json({ success: false, error: 'Write access required' });
+  if (!canWrite(role)) return res.status(403).json({ success: false, error: 'Write access required' });
   next();
 }
 function rosterAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
-  if (req.user?.globalRole === 'global_admin') return next();
   const role = req.user ? getAppRole(req.user, 'roster') : null;
-  if (!role || !isAdmin(role)) return res.status(403).json({ success: false, error: 'Admin access required' });
+  if (!isAdmin(role)) return res.status(403).json({ success: false, error: 'Admin access required' });
   next();
 }
 
@@ -183,12 +181,12 @@ function alumniAccess(req: express.Request, res: express.Response, next: express
 }
 function alumniWrite(req: express.Request, res: express.Response, next: express.NextFunction) {
   const role = req.user ? getAppRole(req.user, 'alumni') : null;
-  if (!role || !['global_admin', 'app_admin', 'coach_staff'].includes(role)) return res.status(403).json({ success: false, error: 'Write access required' });
+  if (!canWrite(role)) return res.status(403).json({ success: false, error: 'Write access required' });
   next();
 }
 function alumniAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const role = req.user ? getAppRole(req.user, 'alumni') : null;
-  if (!role || !isAdmin(role)) return res.status(403).json({ success: false, error: 'Admin access required' });
+  if (!isAdmin(role)) return res.status(403).json({ success: false, error: 'Admin access required' });
   next();
 }
 
@@ -283,7 +281,7 @@ app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
 app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
   const b    = req.body;
   const role = req.user ? getAppRole(req.user, 'roster') : null;
-  const isWriter = req.user?.globalRole === 'global_admin' || !!(role && ['global_admin', 'app_admin', 'coach_staff'].includes(role));
+  const isWriter = canWrite(role);
   try {
     const db = appDb(req.user!);
 
@@ -534,7 +532,7 @@ app.post('/alumni', auth, alumniAccess, async (req, res) => {
 app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
   const b    = req.body;
   const role = req.user ? getAppRole(req.user, 'alumni') : null;
-  const isWriter = role && ['global_admin', 'app_admin', 'coach_staff'].includes(role);
+  const isWriter = canWrite(role);
   try {
     const db = appDb(req.user!);
 
