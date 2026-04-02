@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { isGlobalAdmin } from '@/lib/auth';
 import { globalApi, getApiError } from '@/lib/api';
 import { theme } from '@/lib/theme';
+import { applyTheme, triggerThemeRefresh } from '@/components/ThemeProvider';
 import { PageLayout, Button, Input, Select, Alert } from '@/components';
 
 const SPORT_OPTIONS = [
@@ -170,7 +171,7 @@ export default function TeamSettingsPage() {
 
     setSaving(true);
     try {
-      await globalApi.patch('/config', {
+      const newConfig = {
         teamName:          form.teamName,
         teamAbbr:          form.teamAbbr,
         sport:             form.sport,
@@ -187,8 +188,16 @@ export default function TeamSettingsPage() {
         alumniLabel:       form.alumniLabel,
         rosterLabel:       form.rosterLabel,
         classLabel:        form.classLabel,
-      });
-      setSuccess('Team settings saved. Reload the page to see updated colors and labels.');
+      };
+      await globalApi.patch('/config', newConfig);
+
+      // Bust the ThemeProvider sessionStorage cache so the new config is
+      // fetched fresh on next load, then apply colors immediately.
+      try { sessionStorage.removeItem('cfb_team_config'); } catch { /* ignore */ }
+      applyTheme(newConfig);
+      triggerThemeRefresh(newConfig);
+
+      setSuccess('Team settings saved successfully.');
     } catch (err: unknown) {
       setError(getApiError(err, 'Failed to save settings.'));
     } finally {
