@@ -10,7 +10,7 @@ GO
 DECLARE @ClientCode  NVARCHAR(10)  = 'HSFC';
 DECLARE @ClientName  NVARCHAR(100) = 'Hillsborough High School Football';
 DECLARE @ClientAbbr  NVARCHAR(10)  = 'HSFC';
-DECLARE @AppDbName   NVARCHAR(150) = 'PlantPanthersApp';
+DECLARE @AppDbName   NVARCHAR(150) = 'PHSPanthersApp';
 DECLARE @Sport       NVARCHAR(50)  = 'football';
 DECLARE @Level       NVARCHAR(20)  = 'high_school';
 DECLARE @DbServer    NVARCHAR(200) = 'localhost\SQLEXPRESS';
@@ -33,7 +33,7 @@ GO
 DECLARE @ClientCode  NVARCHAR(10)  = 'HSFC';
 DECLARE @ClientName  NVARCHAR(100) = 'Hillsborough High School Football';
 DECLARE @ClientAbbr  NVARCHAR(10)  = 'HSFC';
-DECLARE @AppDbName   NVARCHAR(150) = 'PlantPanthersApp';
+DECLARE @AppDbName   NVARCHAR(150) = 'PHSPanthersApp';
 DECLARE @Sport       NVARCHAR(50)  = 'football';
 DECLARE @Level       NVARCHAR(20)  = 'high_school';
 DECLARE @DbServer    NVARCHAR(200) = 'localhost\SQLEXPRESS';

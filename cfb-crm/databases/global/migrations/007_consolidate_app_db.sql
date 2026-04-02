@@ -22,11 +22,11 @@ ELSE
 GO
 
 -- ─── 2. Populate app_db from existing tenant names ────────────
--- Convention: {TeamName}App  (e.g. USFBullsApp, PlantPanthersApp)
+-- Convention: {TeamName}App  (e.g. USFBullsApp, PHSPanthersApp)
 -- Update these values to match the actual DB names you created.
 
-UPDATE dbo.teams SET app_db = 'USFBullsApp'      WHERE abbr = 'USF'  AND app_db IS NULL;
-UPDATE dbo.teams SET app_db = 'PlantPanthersApp'  WHERE abbr = 'HSFC' AND app_db IS NULL;
+UPDATE dbo.teams SET app_db = 'USFBullsApp'     WHERE abbr = 'USF'  AND app_db IS NULL;
+UPDATE dbo.teams SET app_db = 'PHSPanthersApp'  WHERE abbr = 'HSFC' AND app_db IS NULL;
 
 PRINT CONCAT('Populated app_db for ', @@ROWCOUNT, ' team(s)');
 GO
