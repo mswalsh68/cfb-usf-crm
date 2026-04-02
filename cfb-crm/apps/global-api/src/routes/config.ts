@@ -26,8 +26,9 @@ configRouter.get('/', async (req, res) => {
     const db = await getDb();
 
     // Try to resolve teamId from JWT (optional auth)
+    // Accept token from Authorization header (mobile) OR httpOnly cookie (web)
     let teamId: string | null = null;
-    const token = extractBearerToken(req.headers.authorization);
+    const token = extractBearerToken(req.headers.authorization) ?? req.cookies?.cfb_access_token ?? null;
     if (token) {
       try {
         const decoded = verifyAccessToken(token);
