@@ -1,7 +1,11 @@
 -- ============================================================
--- APP DB — DATA MIGRATION
--- Migrates existing data from separate Roster + Alumni DBs
+-- APP DB — ONE-TIME DATA MIGRATION (ALREADY RUN — DO NOT RE-RUN)
+-- Migrated existing data from separate Roster + Alumni DBs
 -- into the unified AppDB (roster schema + alumni schema).
+--
+-- !! This script was a one-time migration and has already been
+-- !! applied to USFBullsApp and PHSPanthersApp. Do NOT run this
+-- !! on a fresh tenant DB — use 001_app_db_schema.sql instead.
 --
 -- Run on: the AppDB (e.g. USFBullsApp)
 -- Prerequisites:
