@@ -286,31 +286,63 @@ BEGIN
   DECLARE @AppDb          NVARCHAR(100) = '';
   DECLARE @DbServer       NVARCHAR(200) = '';
 
-  -- Try to pin to the client's requested team first (validates access too)
+  -- Try to pin to the client's requested team (validates access too).
+  -- platform_owner can access any active team; everyone else must have a user_teams row.
   IF @CurrentTeamId IS NOT NULL
   BEGIN
-    SELECT TOP 1
-      @CurrentTeamId = t.id,
-      @AppDb         = t.app_db,
-      @DbServer      = t.db_server
-    FROM dbo.teams t
-    WHERE t.is_active = 1
-    ORDER BY t.name;
+    IF @GlobalRole = 'platform_owner'
+    BEGIN
+      SELECT
+        @ResolvedTeamId = t.id,
+        @AppDb          = t.app_db,
+        @DbServer       = t.db_server
+      FROM dbo.teams t
+      WHERE t.id        = @CurrentTeamId
+        AND t.is_active = 1;
+    END
+    ELSE
+    BEGIN
+      SELECT
+        @ResolvedTeamId = t.id,
+        @AppDb          = t.app_db,
+        @DbServer       = t.db_server
+      FROM dbo.user_teams ut
+      JOIN dbo.teams t ON t.id = ut.team_id
+      WHERE ut.user_id   = @UserId
+        AND t.id         = @CurrentTeamId
+        AND t.is_active  = 1
+        AND ut.is_active = 1;
+    END
   END
 
-  -- Fall back to first-alphabetical team if requested team not found / not provided
+  -- Fall back to first-alphabetical team if requested team is not accessible or not provided
   IF @ResolvedTeamId IS NULL
   BEGIN
-    SELECT TOP 1
-      @CurrentTeamId = t.id,
-      @AppDb         = t.app_db,
-      @DbServer      = t.db_server
-    FROM dbo.user_teams ut
-    JOIN dbo.teams t ON t.id = ut.team_id
-    WHERE ut.user_id  = @UserId
-      AND ut.is_active = 1
-    ORDER BY t.name;
+    IF @GlobalRole = 'platform_owner'
+    BEGIN
+      SELECT TOP 1
+        @ResolvedTeamId = t.id,
+        @AppDb          = t.app_db,
+        @DbServer       = t.db_server
+      FROM dbo.teams t
+      WHERE t.is_active = 1
+      ORDER BY t.name;
+    END
+    ELSE
+    BEGIN
+      SELECT TOP 1
+        @ResolvedTeamId = t.id,
+        @AppDb          = t.app_db,
+        @DbServer       = t.db_server
+      FROM dbo.user_teams ut
+      JOIN dbo.teams t ON t.id = ut.team_id
+      WHERE ut.user_id   = @UserId
+        AND ut.is_active = 1
+      ORDER BY t.name;
+    END
   END
+
+  SET @CurrentTeamId = @ResolvedTeamId;
 
   SELECT @UserJson = (
     SELECT

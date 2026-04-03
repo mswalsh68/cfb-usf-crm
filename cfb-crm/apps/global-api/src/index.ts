@@ -44,6 +44,8 @@ const switchTeamLimiter  = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, messa
 
 app.use(globalLimiter);
 app.use(express.json({ limit: '10kb' }));
+app.disable('etag');
+app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
 // Request logging
 app.use((req, res, next) => {
