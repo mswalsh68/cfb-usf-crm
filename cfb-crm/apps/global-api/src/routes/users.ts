@@ -103,6 +103,86 @@ usersRouter.post('/', requireGlobalAdmin, async (req, res) => {
   } catch (err) { console.error('[POST /users]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
+// POST /users/bulk — creates multiple player accounts at once, returns userId + inviteToken per player
+const bulkCreateSchema = z.object({
+  users: z.array(z.object({
+    email:     z.string().email(),
+    firstName: z.string().min(1),
+    lastName:  z.string().min(1),
+  })).min(1).max(500),
+  teamId: z.string().uuid().optional(),
+});
+usersRouter.post('/bulk', requireGlobalAdmin, async (req, res) => {
+  const p = bulkCreateSchema.safeParse(req.body);
+  if (!p.success) return res.status(400).json({ success: false, error: p.error.flatten() });
+  const { users, teamId } = p.data;
+  const db = await getDb();
+  const results: Array<{ email: string; userId: string; inviteToken: string }> = [];
+  const skipped: Array<{ email: string; reason: string }> = [];
+  const expiresAt = new Date(Date.now() + 72 * 60 * 60 * 1000);
+
+  await Promise.all(users.map(async (u) => {
+    try {
+      const placeholderHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 12);
+      const r = await db.request()
+        .input('Email',        sql.NVarChar,         u.email.trim().toLowerCase())
+        .input('PasswordHash', sql.NVarChar,         placeholderHash)
+        .input('FirstName',    sql.NVarChar,         u.firstName.trim())
+        .input('LastName',     sql.NVarChar,         u.lastName.trim())
+        .input('GlobalRole',   sql.NVarChar,         'player')
+        .input('CreatedBy',    sql.UniqueIdentifier, req.user!.sub)
+        .input('TeamId',       sql.UniqueIdentifier, teamId || null)
+        .input('GrantAppName', sql.NVarChar,         'roster')
+        .input('GrantAppRole', sql.NVarChar,         'player')
+        .output('NewUserId',   sql.UniqueIdentifier)
+        .output('ErrorCode',   sql.NVarChar(50))
+        .execute('dbo.sp_CreateUser');
+
+      if (r.output.ErrorCode === 'EMAIL_ALREADY_EXISTS') {
+        // Reuse existing account — fetch their ID and issue a fresh invite token
+        const existing = await db.request()
+          .input('Search',     sql.NVarChar, u.email.trim().toLowerCase())
+          .input('GlobalRole', sql.NVarChar, null)
+          .input('Page',       sql.Int,      1)
+          .input('PageSize',   sql.Int,      1)
+          .output('TotalCount', sql.Int)
+          .execute('dbo.sp_GetUsers');
+        const existingUser = existing.recordset?.[0];
+        if (!existingUser) { skipped.push({ email: u.email, reason: 'Email already exists, could not retrieve user' }); return; }
+        const rawToken  = crypto.randomBytes(32).toString('hex');
+        const tokenHash = sha256(rawToken);
+        await db.request()
+          .input('UserId',    sql.UniqueIdentifier, existingUser.id)
+          .input('TokenHash', sql.NVarChar,         tokenHash)
+          .input('ExpiresAt', sql.DateTime2,        expiresAt)
+          .execute('dbo.sp_CreateInviteToken');
+        results.push({ email: u.email, userId: existingUser.id, inviteToken: rawToken });
+        return;
+      }
+      if (r.output.ErrorCode) {
+        skipped.push({ email: u.email, reason: r.output.ErrorCode });
+        return;
+      }
+
+      const rawToken  = crypto.randomBytes(32).toString('hex');
+      const tokenHash = sha256(rawToken);
+      await db.request()
+        .input('UserId',    sql.UniqueIdentifier, r.output.NewUserId)
+        .input('TokenHash', sql.NVarChar,         tokenHash)
+        .input('ExpiresAt', sql.DateTime2,        expiresAt)
+        .execute('dbo.sp_CreateInviteToken');
+
+      results.push({ email: u.email, userId: r.output.NewUserId, inviteToken: rawToken });
+      audit('USER_CREATED', { actorId: req.user!.sub, newUserId: r.output.NewUserId, email: u.email, globalRole: 'player' });
+    } catch (err) {
+      skipped.push({ email: u.email, reason: 'Server error' });
+      console.error('[POST /users/bulk] error for', u.email, err);
+    }
+  }));
+
+  return res.status(201).json({ success: true, data: { created: results, skipped } });
+});
+
 // PATCH /users/:id — sp_UpdateUser handles validation + audit
 usersRouter.patch('/:id', requireGlobalAdmin, async (req, res) => {
   const { globalRole, isActive } = req.body;

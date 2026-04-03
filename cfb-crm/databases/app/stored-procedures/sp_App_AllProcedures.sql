@@ -1283,6 +1283,7 @@ BEGIN
 
   DECLARE @players TABLE (
     row_num              INT,
+    user_id              UNIQUEIDENTIFIER,
     first_name           NVARCHAR(100),
     last_name            NVARCHAR(100),
     jersey_number        TINYINT,
@@ -1304,12 +1305,13 @@ BEGIN
 
   -- Parse JSON array
   INSERT INTO @players (
-    row_num, first_name, last_name, jersey_number, position, academic_year,
+    row_num, user_id, first_name, last_name, jersey_number, position, academic_year,
     recruiting_class, height_inches, weight_lbs, home_town, home_state,
     high_school, gpa, major, phone, emergency_contact_name, emergency_contact_phone, notes
   )
   SELECT
     ROW_NUMBER() OVER (ORDER BY (SELECT NULL)),
+    TRY_CAST(JSON_VALUE(value, '$.userId')           AS UNIQUEIDENTIFIER),
     JSON_VALUE(value, '$.firstName'),
     JSON_VALUE(value, '$.lastName'),
     TRY_CAST(JSON_VALUE(value, '$.jerseyNumber')     AS TINYINT),
@@ -1331,6 +1333,7 @@ BEGIN
 
   -- Process each player
   DECLARE @rowNum     INT;
+  DECLARE @userId     UNIQUEIDENTIFIER;
   DECLARE @firstName  NVARCHAR(100);
   DECLARE @lastName   NVARCHAR(100);
   DECLARE @jersey     TINYINT;
@@ -1350,14 +1353,14 @@ BEGIN
   DECLARE @notes      NVARCHAR(MAX);
 
   DECLARE player_cursor CURSOR FOR
-    SELECT row_num, first_name, last_name, jersey_number, position, academic_year,
+    SELECT row_num, user_id, first_name, last_name, jersey_number, position, academic_year,
            recruiting_class, height_inches, weight_lbs, home_town, home_state,
            high_school, gpa, major, phone, emergency_contact_name, emergency_contact_phone, notes
     FROM @players;
 
   OPEN player_cursor;
   FETCH NEXT FROM player_cursor INTO
-    @rowNum, @firstName, @lastName, @jersey, @position, @acYear,
+    @rowNum, @userId, @firstName, @lastName, @jersey, @position, @acYear,
     @recClass, @heightIn, @weightLbs, @town, @state,
     @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
 
@@ -1369,7 +1372,7 @@ BEGIN
       BEGIN
         INSERT INTO @errors VALUES (@rowNum, 'First name is required');
         SET @SkippedCount += 1;
-        FETCH NEXT FROM player_cursor INTO @rowNum, @firstName, @lastName, @jersey, @position, @acYear, @recClass, @heightIn, @weightLbs, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
+        FETCH NEXT FROM player_cursor INTO @rowNum, @userId, @firstName, @lastName, @jersey, @position, @acYear, @recClass, @heightIn, @weightLbs, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
         CONTINUE;
       END
 
@@ -1377,7 +1380,7 @@ BEGIN
       BEGIN
         INSERT INTO @errors VALUES (@rowNum, 'Last name is required');
         SET @SkippedCount += 1;
-        FETCH NEXT FROM player_cursor INTO @rowNum, @firstName, @lastName, @jersey, @position, @acYear, @recClass, @heightIn, @weightLbs, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
+        FETCH NEXT FROM player_cursor INTO @rowNum, @userId, @firstName, @lastName, @jersey, @position, @acYear, @recClass, @heightIn, @weightLbs, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
         CONTINUE;
       END
 
@@ -1385,7 +1388,7 @@ BEGIN
       BEGIN
         INSERT INTO @errors VALUES (@rowNum, 'Invalid position: ' + ISNULL(@position, 'NULL'));
         SET @SkippedCount += 1;
-        FETCH NEXT FROM player_cursor INTO @rowNum, @firstName, @lastName, @jersey, @position, @acYear, @recClass, @heightIn, @weightLbs, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
+        FETCH NEXT FROM player_cursor INTO @rowNum, @userId, @firstName, @lastName, @jersey, @position, @acYear, @recClass, @heightIn, @weightLbs, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
         CONTINUE;
       END
 
@@ -1393,7 +1396,7 @@ BEGIN
       BEGIN
         INSERT INTO @errors VALUES (@rowNum, 'Invalid recruiting class year');
         SET @SkippedCount += 1;
-        FETCH NEXT FROM player_cursor INTO @rowNum, @firstName, @lastName, @jersey, @position, @acYear, @recClass, @heightIn, @weightLbs, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
+        FETCH NEXT FROM player_cursor INTO @rowNum, @userId, @firstName, @lastName, @jersey, @position, @acYear, @recClass, @heightIn, @weightLbs, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
         CONTINUE;
       END
 
@@ -1404,18 +1407,18 @@ BEGIN
       BEGIN
         INSERT INTO @errors VALUES (@rowNum, 'Jersey #' + CAST(@jersey AS NVARCHAR) + ' already in use');
         SET @SkippedCount += 1;
-        FETCH NEXT FROM player_cursor INTO @rowNum, @firstName, @lastName, @jersey, @position, @acYear, @recClass, @heightIn, @weightLbs, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
+        FETCH NEXT FROM player_cursor INTO @rowNum, @userId, @firstName, @lastName, @jersey, @position, @acYear, @recClass, @heightIn, @weightLbs, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
         CONTINUE;
       END
 
-      -- Insert player (no user_id for bulk uploads — admin links accounts later)
+      -- Insert player with user_id from bulk user creation
       INSERT INTO roster.players (
         user_id, first_name, last_name, jersey_number, position, academic_year,
         recruiting_class, height_inches, weight_lbs, home_town, home_state,
         high_school, gpa, major, phone, emergency_contact_name, emergency_contact_phone, notes
       )
       VALUES (
-        NEWID(), @firstName, @lastName, @jersey, @position, @acYear,
+        @userId, @firstName, @lastName, @jersey, @position, @acYear,
         @recClass, @heightIn, @weightLbs, @town, @state,
         @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes
       );
