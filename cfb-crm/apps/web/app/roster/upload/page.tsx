@@ -134,7 +134,7 @@ export default function RosterUploadPage() {
           setAlert({ msg: `${validRows.length} players ready to import. Review below and click Upload.`, type: 'success' });
         }
       } catch {
-        setAlert({ msg: 'Could not read file. Make sure it is a valid .xlsx file.', type: 'error' });
+        setAlert({ msg: 'Could not read file. Make sure it is a valid .xlsx or .csv file.', type: 'error' });
       }
     };
     reader.readAsArrayBuffer(file);
@@ -211,7 +211,7 @@ export default function RosterUploadPage() {
           <div style={{ width: 40, height: 40, borderRadius: 10, backgroundColor: theme.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>2️⃣</div>
           <div>
             <h2 style={{ fontSize: 16, fontWeight: 600, color: theme.gray900, margin: 0 }}>Upload your file</h2>
-            <p style={{ fontSize: 13, color: theme.gray500, marginTop: 4 }}>Select your filled-in Excel file (.xlsx)</p>
+            <p style={{ fontSize: 13, color: theme.gray500, marginTop: 4 }}>Select your filled-in Excel or CSV file (.xlsx, .csv)</p>
           </div>
         </div>
 
@@ -234,9 +234,9 @@ export default function RosterUploadPage() {
             {fileName ? fileName : 'Click to select your Excel file'}
           </p>
           <p style={{ fontSize: 13, color: theme.gray400, marginTop: 6 }}>
-            .xlsx files only — max 500 players per upload
+            .xlsx or .csv — max 500 players per upload
           </p>
-          <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} style={{ display: 'none' }} />
+          <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} style={{ display: 'none' }} />
         </div>
       </div>
 
