@@ -46,10 +46,8 @@ USE CfbGlobal;
 DELETE FROM dbo.invite_tokens;
 DELETE FROM dbo.refresh_tokens;
 DELETE FROM dbo.audit_log;
-DELETE FROM dbo.app_permissions
-WHERE user_id IN (
-  SELECT id FROM dbo.users WHERE global_role != 'platform_owner'
-);
+-- Delete all app_permissions — covers both user_id and granted_by FK references
+DELETE FROM dbo.app_permissions;
 DELETE FROM dbo.user_teams
 WHERE user_id IN (
   SELECT id FROM dbo.users WHERE global_role != 'platform_owner'
