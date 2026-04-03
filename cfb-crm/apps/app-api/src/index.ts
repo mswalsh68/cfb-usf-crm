@@ -111,6 +111,8 @@ app.use(cookieParser());
 app.use(cors({ origin: process.env.ALLOWED_ORIGINS?.split(','), credentials: true }));
 app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 500 }));
 app.use(express.json({ limit: '10kb' }));
+app.disable('etag');
+app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
 // Request logging
 app.use((req, res, next) => {
