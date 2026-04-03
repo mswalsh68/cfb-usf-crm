@@ -13,9 +13,17 @@ USE USFBullsApp; -- change to target DB before running
 ALTER SECURITY POLICY dbo.roster_security_policy WITH (STATE = OFF);
 DROP SECURITY POLICY dbo.roster_security_policy;
 
--- Drop unique index (will be recreated as filtered index below)
+-- Drop explicit unique index if it exists
 IF EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'idx_players_user_id' AND object_id = OBJECT_ID('roster.players'))
   DROP INDEX idx_players_user_id ON roster.players;
+
+-- Drop system-generated unique constraint on user_id (created by inline UNIQUE in 001)
+DECLARE @uqName NVARCHAR(200);
+SELECT @uqName = name FROM sys.indexes
+WHERE object_id = OBJECT_ID('roster.players') AND is_unique = 1 AND is_primary_key = 0
+  AND name LIKE 'UQ__players__%';
+IF @uqName IS NOT NULL
+  EXEC('ALTER TABLE roster.players DROP CONSTRAINT ' + @uqName);
 
 ALTER TABLE roster.players ALTER COLUMN user_id UNIQUEIDENTIFIER NULL;
 
