@@ -39,10 +39,16 @@ interface SpUserJson {
 function buildAccessToken(userId: string, user: SpUserJson, overrideTeamId?: string): string {
   const teams: TeamSummary[] = user.teams ?? [];
 
-  // Honour the client's currentTeamId if it's still in their team list
+  // Honour the client's currentTeamId if it's still in their team list.
+  // On first login (no stored team) prefer the LegacyLink home team (abbr='LL'),
+  // falling back to the first team in the list.
+  const defaultTeamAbbr = process.env.DEFAULT_TEAM_ABBR ?? 'LL';
   let currentTeamId = overrideTeamId ?? user.currentTeamId ?? '';
   const teamStillValid = teams.some(t => t.teamId === currentTeamId);
-  if (!teamStillValid && teams.length > 0) currentTeamId = teams[0].teamId;
+  if (!teamStillValid && teams.length > 0) {
+    const defaultTeam = teams.find(t => t.abbr === defaultTeamAbbr);
+    currentTeamId = defaultTeam ? defaultTeam.teamId : teams[0].teamId;
+  }
 
   // Resolve DB routing from the matching team (if available) or fall back to top-level fields
   const currentTeam = teams.find(t => t.teamId === currentTeamId);
