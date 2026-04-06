@@ -4,9 +4,8 @@
 -- Replaces roster_db + alumni_db with a single app_db column.
 -- ============================================================
 
-USE CfbGlobal;
+USE DevLegacyLinkGlobal
 GO
-
 -- ─── 1. Add app_db column ─────────────────────────────────────
 
 IF NOT EXISTS (

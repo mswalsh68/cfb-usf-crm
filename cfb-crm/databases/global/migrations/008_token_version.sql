@@ -3,6 +3,9 @@
 -- Run on: CfbGlobal database
 -- ============================================================
 
+USE DevLegacyLinkGlobal
+GO
+
 ALTER TABLE dbo.users
   ADD token_version INT NOT NULL DEFAULT 1;
 GO

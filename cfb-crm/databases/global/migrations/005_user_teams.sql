@@ -11,8 +11,7 @@
 --   5. Add 'platform_owner' as valid globalRole
 --   6. Seed mswalsh68@gmail.com as platform_owner + user_teams for USF + HSFC
 -- ============================================================
-
-USE CfbGlobal;
+USE DevLegacyLinkGlobal
 GO
 
 -- ─── 1. user_teams junction table ────────────────────────────────────────────
