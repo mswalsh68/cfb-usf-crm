@@ -15,7 +15,7 @@ async function main() {
 
   const pool = await mssql.connect({
     server:   process.env.GLOBAL_DB_SERVER  || 'localhost\\SQLEXPRESS',
-    database: process.env.GLOBAL_DB_NAME    || 'CfbGlobal',
+    database: process.env.GLOBAL_DB_NAME    || 'LegacyLinkGlobal',
     options:  { encrypt: false, trustServerCertificate: true },
     authentication: {
       type:    'default',

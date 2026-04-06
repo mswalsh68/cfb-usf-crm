@@ -1,49 +1,72 @@
 -- ============================================================
--- CLEAR TEST DATA
--- Run each section against the correct database.
--- The seed global admin (admin@yourprogram.com) is preserved.
+-- CLEAR TEST DATA — Single AppDB Architecture
+-- Run each section against the correct database in SSMS.
+-- RLS is disabled per-block so DELETEs are not filtered.
 -- ============================================================
 
 -- ────────────────────────────────────────────────────────────
--- 1. CfbRoster  — run this block against CfbRoster
+-- 1. USFBullsApp — clears all roster + alumni data
 -- ────────────────────────────────────────────────────────────
-USE CfbRoster;
+USE USFBullsApp;
 
-DELETE FROM dbo.graduation_log;
-DELETE FROM dbo.player_documents;
-DELETE FROM dbo.player_stats;
-DELETE FROM dbo.players;
+ALTER SECURITY POLICY dbo.roster_security_policy WITH (STATE = OFF);
+ALTER SECURITY POLICY dbo.alumni_security_policy WITH (STATE = OFF);
 
-PRINT 'CfbRoster cleared';
+DELETE FROM roster.graduation_log;
+DELETE FROM roster.player_documents;
+DELETE FROM roster.player_stats;
+DELETE FROM roster.players;
+DELETE FROM alumni.outreach_messages;
+DELETE FROM alumni.outreach_campaigns;
+DELETE FROM alumni.interaction_log;
+DELETE FROM alumni.alumni;
+
+ALTER SECURITY POLICY dbo.roster_security_policy WITH (STATE = ON);
+ALTER SECURITY POLICY dbo.alumni_security_policy WITH (STATE = ON);
+
+PRINT 'USFBullsApp cleared';
 GO
 
 -- ────────────────────────────────────────────────────────────
--- 2. CfbAlumni  — run this block against CfbAlumni
+-- 2. PHSPanthersApp — clears all roster + alumni data
 -- ────────────────────────────────────────────────────────────
-USE CfbAlumni;
+USE PHSPanthersApp;
 
-DELETE FROM dbo.outreach_messages;
-DELETE FROM dbo.outreach_campaigns;
-DELETE FROM dbo.interaction_log;
-DELETE FROM dbo.alumni;
+ALTER SECURITY POLICY dbo.roster_security_policy WITH (STATE = OFF);
+ALTER SECURITY POLICY dbo.alumni_security_policy WITH (STATE = OFF);
 
-PRINT 'CfbAlumni cleared';
+DELETE FROM roster.graduation_log;
+DELETE FROM roster.player_documents;
+DELETE FROM roster.player_stats;
+DELETE FROM roster.players;
+DELETE FROM alumni.outreach_messages;
+DELETE FROM alumni.outreach_campaigns;
+DELETE FROM alumni.interaction_log;
+DELETE FROM alumni.alumni;
+
+ALTER SECURITY POLICY dbo.roster_security_policy WITH (STATE = ON);
+ALTER SECURITY POLICY dbo.alumni_security_policy WITH (STATE = ON);
+
+PRINT 'PHSPanthersApp cleared';
 GO
 
 -- ────────────────────────────────────────────────────────────
--- 3. CfbGlobal  — run this block against CfbGlobal
---    Keeps the seed admin account (admin@yourprogram.com)
+-- 3. CfbGlobal — clears users, tokens, audit log
+--    Keeps platform_owner account(s) intact
 -- ────────────────────────────────────────────────────────────
-USE CfbGlobal;
+USE LegacyLinkGlobal;
 
 DELETE FROM dbo.invite_tokens;
-DELETE FROM dbo.password_reset_tokens;
 DELETE FROM dbo.refresh_tokens;
 DELETE FROM dbo.audit_log;
-DELETE FROM dbo.app_permissions
-WHERE user_id != (SELECT id FROM dbo.users WHERE email = 'admin@yourprogram.com');
+-- Delete all app_permissions — covers both user_id and granted_by FK references
+DELETE FROM dbo.app_permissions;
+DELETE FROM dbo.user_teams
+WHERE user_id IN (
+  SELECT id FROM dbo.users WHERE global_role != 'platform_owner'
+);
 DELETE FROM dbo.users
-WHERE email != 'admin@yourprogram.com';
+WHERE global_role != 'platform_owner';
 
-PRINT 'CfbGlobal cleared (seed admin preserved)';
+PRINT 'LegacyLinkGlobal cleared (platform_owner accounts preserved)';
 GO

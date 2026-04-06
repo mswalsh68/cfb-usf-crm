@@ -927,3 +927,97 @@ BEGIN
      OR revoked_at < DATEADD(DAY, -30, SYSUTCDATETIME());
 END;
 GO
+
+-- ============================================================
+-- sp_GetOrCreateUser
+-- Idempotent user lookup/creation for the app-DB create-player
+-- and bulk-import flows.
+--
+-- If a user with @Email already exists: returns their ID.
+-- If not: creates the account with global_role = 'player' and
+--   a placeholder password hash (account requires invite to
+--   set a real password before they can log in).
+--
+-- Called from AppDB stored procedures via linked server:
+--   EXEC [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser ...
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_GetOrCreateUser
+  @Email     NVARCHAR(255),
+  @FirstName NVARCHAR(100),
+  @LastName  NVARCHAR(100),
+  @TeamId    UNIQUEIDENTIFIER = NULL,
+  @CreatedBy UNIQUEIDENTIFIER = NULL,   -- who triggered the import; NULL = system
+  -- Output
+  @UserId    UNIQUEIDENTIFIER OUTPUT,
+  @ErrorCode NVARCHAR(50)     OUTPUT    -- NULL = success; 'CREATED' = new account made
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET XACT_ABORT ON;
+  SET @ErrorCode = NULL;
+  SET @UserId    = NULL;
+
+  -- Validate team if provided
+  IF @TeamId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.teams WHERE id = @TeamId AND is_active = 1)
+  BEGIN
+    SET @ErrorCode = 'TEAM_NOT_FOUND';
+    RETURN;
+  END
+
+  -- Return existing user if email already registered
+  IF EXISTS (SELECT 1 FROM dbo.users WHERE email = @Email)
+  BEGIN
+    SELECT @UserId = id FROM dbo.users WHERE email = @Email;
+    -- Ensure they are linked to this team
+    IF @TeamId IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM dbo.user_teams WHERE user_id = @UserId AND team_id = @TeamId)
+    BEGIN
+      INSERT INTO dbo.user_teams (user_id, team_id, role)
+      VALUES (@UserId, @TeamId, 'readonly');
+    END
+    RETURN;   -- @ErrorCode stays NULL — caller treats this as success
+  END
+
+  -- Create new account
+  -- Password hash is a sentinel value; account cannot log in until the
+  -- user redeems an invite token and sets a real password.
+  BEGIN TRANSACTION;
+
+    SET @UserId = NEWID();
+
+    INSERT INTO dbo.users (id, email, password_hash, first_name, last_name, global_role, team_id)
+    VALUES (
+      @UserId,
+      @Email,
+      'INVITE_PENDING',   -- bcrypt never matches this; login blocked until invite redeemed
+      @FirstName,
+      @LastName,
+      'player',
+      @TeamId
+    );
+
+    IF @TeamId IS NOT NULL
+    BEGIN
+      INSERT INTO dbo.user_teams (user_id, team_id, role)
+      VALUES (@UserId, @TeamId, 'readonly');
+    END
+
+    INSERT INTO dbo.audit_log (actor_id, action, target_type, target_id, payload)
+    VALUES (
+      @CreatedBy,
+      'user_created',
+      'user',
+      CAST(@UserId AS NVARCHAR(100)),
+      JSON_OBJECT(
+        'email':      @Email,
+        'globalRole': 'player',
+        'source':     'bulk_import',
+        'teamId':     ISNULL(CAST(@TeamId AS NVARCHAR(100)), '')
+      )
+    );
+
+  COMMIT TRANSACTION;
+
+  SET @ErrorCode = 'CREATED';   -- informational: caller knows a new account was made
+END;
+GO

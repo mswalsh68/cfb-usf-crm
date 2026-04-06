@@ -56,7 +56,7 @@ SELECT
   @SportId      AS sport_id,
   'coach_admin' AS role,
   u.id          AS granted_by   -- self-bootstrapped
-FROM CfbGlobal.dbo.users u
+FROM LegacyLinkGlobal.dbo.users u
 WHERE NOT EXISTS (
   SELECT 1 FROM dbo.user_roles ur
   WHERE ur.user_id  = u.id

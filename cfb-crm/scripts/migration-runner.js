@@ -165,7 +165,7 @@ async function main() {
   try {
     globalPool = await connect(
       process.env.GLOBAL_DB_SERVER,
-      process.env.GLOBAL_DB_NAME || 'CfbGlobal'
+      process.env.GLOBAL_DB_NAME || 'LegacyLinkGlobal'
     );
   } catch (err) {
     console.error('Failed to connect to global DB:', err.message);

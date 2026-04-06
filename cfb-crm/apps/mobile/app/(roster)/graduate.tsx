@@ -23,7 +23,6 @@ export default function GraduateScreen() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [gradYear,    setGradYear]    = useState(String(new Date().getFullYear()));
   const [semester,    setSemester]    = useState<Semester>('spring');
-  const [notes,       setNotes]       = useState('');
 
   // Only show active players eligible for graduation
   const { data, isLoading } = useQuery({
@@ -40,10 +39,8 @@ export default function GraduateScreen() {
     mutationFn: async () => {
       const { data } = await appApi.post('/players/transfer', {
         playerIds:        Array.from(selectedIds),
-        transferReason:   'graduated',
         transferYear:     parseInt(gradYear),
         transferSemester: semester,
-        notes:            notes || undefined,
       });
       return data.data as GraduationResult;
     },
@@ -137,13 +134,6 @@ export default function GraduateScreen() {
             </View>
           </View>
         </View>
-        <Input
-          label="Notes (optional)"
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="e.g. Spring 2025 graduating class"
-          containerStyle={{ marginTop: Spacing.md }}
-        />
       </Card>
 
       {/* Select all row */}

@@ -17,7 +17,7 @@
 -- their roster_db or alumni_db using dynamic SQL.
 -- ============================================================
 
-USE CfbGlobal;
+USE LegacyLinkGlobal;
 GO
 
 -- ─── ADMIN: Configure these two variables ───────────────────

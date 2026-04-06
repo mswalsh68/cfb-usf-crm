@@ -65,7 +65,7 @@ export default function AddPlayerScreen() {
         : undefined;
 
       await appApi.post('/players', {
-        userId:               user!.id,
+        email:                user!.email,
         firstName:            form.firstName.trim(),
         lastName:             form.lastName.trim(),
         jerseyNumber:         form.jerseyNumber ? parseInt(form.jerseyNumber) : undefined,
