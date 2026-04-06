@@ -8,18 +8,6 @@ import { appApi, getApiError } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { PageLayout, Button, Select, Alert, Badge } from '@/components';
 
-const TRANSFER_REASONS = [
-  { value: 'graduated',         label: '🎓 Graduated',           desc: 'Completed eligibility / degree'       },
-  { value: 'nfl_draft',         label: '🏆 NFL Draft',           desc: 'Selected in NFL Draft'                },
-  { value: 'transferred',       label: '🔄 Transferred',         desc: 'Transferred to another program'       },
-  { value: 'injury_retirement', label: '🏥 Injury Retirement',   desc: 'Career-ending injury'                 },
-  { value: 'medical',           label: '⚕️ Medical',             desc: 'Medical hardship / withdrawal'        },
-  { value: 'retired',           label: '🛑 Retired',             desc: 'Voluntarily retired from football'    },
-  { value: 'dismissed',         label: '⚠️ Dismissed',           desc: 'Removed from program by coaching staff'},
-  { value: 'personal',          label: '🏠 Personal',            desc: 'Left for personal reasons'            },
-  { value: 'other',             label: '📋 Other',               desc: 'Other reason — add notes below'       },
-];
-
 const SEMESTER_OPTIONS = [
   { value: 'spring', label: 'Spring' },
   { value: 'fall',   label: 'Fall'   },
@@ -37,10 +25,8 @@ export default function TransferPage() {
   const [players,         setPlayers]         = useState<Player[]>([]);
   const [loading,         setLoading]         = useState(true);
   const [selectedIds,     setSelectedIds]     = useState<Set<string>>(new Set());
-  const [transferReason,  setTransferReason]  = useState('graduated');
   const [transferYear,    setTransferYear]    = useState(String(currentYear));
   const [transferSemester,setTransferSemester]= useState('spring');
-  const [notes,           setNotes]           = useState('');
   const [submitting,      setSubmitting]      = useState(false);
   const [alert,           setAlert]           = useState<{ msg: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [result,          setResult]          = useState<{ transferredCount: number; failures: Array<{ reason: string }> } | null>(null);
@@ -92,14 +78,11 @@ export default function TransferPage() {
     try {
       const { data } = await appApi.post('/players/transfer', {
         playerIds:        Array.from(selectedIds),
-        transferReason,
         transferYear:     parseInt(transferYear),
         transferSemester,
-        notes:            notes || undefined,
       });
       setResult(data.data);
       setSelectedIds(new Set());
-      setNotes('');
       fetchPlayers();
       setAlert({
         msg: `${data.data.transferredCount} player(s) moved to Alumni successfully.`,
@@ -112,7 +95,6 @@ export default function TransferPage() {
     }
   };
 
-  const selectedReason = TRANSFER_REASONS.find(r => r.value === transferReason);
   const filteredPlayers = players.filter(p =>
     !search || `${p.firstName} ${p.lastName} ${p.jerseyNumber}`.toLowerCase().includes(search.toLowerCase())
   );
@@ -138,41 +120,6 @@ export default function TransferPage() {
         {/* Left: Transfer config */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-          {/* Reason selector */}
-          <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 20, boxShadow: 'var(--shadow-sm)' }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14, marginTop: 0 }}>
-              Reason for Departure
-            </h2>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {TRANSFER_REASONS.map(r => (
-                <button
-                  key={r.value}
-                  onClick={() => setTransferReason(r.value)}
-                  style={{
-                    display:         'flex',
-                    alignItems:      'center',
-                    gap:             10,
-                    padding:         '10px 12px',
-                    borderRadius:    'var(--radius-sm)',
-                    border:          `1.5px solid ${transferReason === r.value ? 'var(--color-primary)' : theme.gray200}`,
-                    backgroundColor: transferReason === r.value ? theme.primaryLight : theme.cardBg,
-                    cursor:          'pointer',
-                    textAlign:       'left',
-                    transition:      'all 0.15s',
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: transferReason === r.value ? theme.primaryDark : theme.gray800 }}>{r.label}</div>
-                    <div style={{ fontSize: 11, color: theme.gray400, marginTop: 1 }}>{r.desc}</div>
-                  </div>
-                  {transferReason === r.value && (
-                    <span style={{ color: theme.primary, fontWeight: 700, fontSize: 16 }}>✓</span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-
           {/* Year + semester */}
           <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 20, boxShadow: 'var(--shadow-sm)' }}>
             <h2 style={{ fontSize: 14, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 14, marginTop: 0 }}>
@@ -184,20 +131,6 @@ export default function TransferPage() {
             </div>
           </div>
 
-          {/* Notes */}
-          <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 20, boxShadow: 'var(--shadow-sm)' }}>
-            <h2 style={{ fontSize: 14, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10, marginTop: 0 }}>
-              Notes (Optional)
-            </h2>
-            <textarea
-              value={notes}
-              onChange={e => setNotes(e.target.value)}
-              placeholder="Any additional context about this departure..."
-              rows={3}
-              style={{ width: '100%', border: `1.5px solid ${theme.gray200}`, borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontSize: 13, color: theme.gray900, resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
-            />
-          </div>
-
           {/* Submit button */}
           {selectedIds.size > 0 && (
             <div style={{ backgroundColor: theme.primaryLight, border: `1.5px solid var(--color-primary)`, borderRadius: 'var(--radius-lg)', padding: 16 }}>
@@ -205,7 +138,7 @@ export default function TransferPage() {
                 Ready to transfer {selectedIds.size} player{selectedIds.size !== 1 ? 's' : ''}
               </p>
               <p style={{ fontSize: 12, color: theme.primaryDark, margin: '0 0 14px 0', opacity: 0.8 }}>
-                Reason: {selectedReason?.label} · {transferSemester} {transferYear}
+                {transferSemester} {transferYear}
               </p>
               <Button
                 label={submitting ? 'Transferring...' : `Transfer ${selectedIds.size} Player${selectedIds.size !== 1 ? 's' : ''} to Alumni`}

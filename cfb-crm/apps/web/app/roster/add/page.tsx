@@ -120,7 +120,7 @@ export default function AddPlayerPage() {
         ? parseInt(form.heightFeet) * 12 + parseInt(form.heightInches)
         : undefined;
       await appApi.post('/players', {
-        userId,
+        email:                form.email.trim().toLowerCase(),
         firstName:            form.firstName.trim(),
         lastName:             form.lastName.trim(),
         jerseyNumber:         form.jerseyNumber   ? parseInt(form.jerseyNumber)  : undefined,

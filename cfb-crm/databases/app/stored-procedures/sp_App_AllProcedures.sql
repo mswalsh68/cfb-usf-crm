@@ -12,7 +12,7 @@ GO
 --   3 = removed
 --
 -- Create player flow:
---   1. Call [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser
+--   1. Call [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
 --      (NOTE: add this SP to CfbGlobal — idempotent on email;
 --       returns existing user ID if email already registered)
 --   2. Upsert the returned user ID into AppDB dbo.users
@@ -206,7 +206,7 @@ GO
 -- ============================================================
 -- sp_CreatePlayer
 -- Creates a player account. Flow:
---   1. Call [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser to get
+--   1. Call [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser to get
 --      the canonical global user ID (creates account if needed,
 --      returns existing ID if email already registered).
 --   2. Upsert into AppDB dbo.users with that ID (status_id = 1).
@@ -281,7 +281,7 @@ BEGIN
 
   -- Step 1: Get or create user in CfbGlobal
   DECLARE @globalErr NVARCHAR(50);
-  EXEC [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser
+  EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
     @Email     = @Email,
     @FirstName = @FirstName,
     @LastName  = @LastName,
@@ -508,7 +508,7 @@ BEGIN
            TRY_CAST(@TriggeredBy AS UNIQUEIDENTIFIER), 'success');
 
         -- Swap permissions in CfbGlobal
-        EXEC [GLOBAL_DB].CfbGlobal.dbo.sp_TransferPlayerToAlumni
+        EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_TransferPlayerToAlumni
           @UserId    = @currentId,
           @GrantedBy = @TriggeredBy;
 
@@ -1223,7 +1223,7 @@ BEGIN
       -- Get or create in CfbGlobal
       DECLARE @newUserId UNIQUEIDENTIFIER;
       DECLARE @globalErr NVARCHAR(50);
-      EXEC [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser
+      EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
         @Email     = @email,
         @FirstName = @fn,
         @LastName  = @ln,
@@ -1415,7 +1415,7 @@ BEGIN
 
       DECLARE @newUserId UNIQUEIDENTIFIER;
       DECLARE @globalErr NVARCHAR(50);
-      EXEC [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser
+      EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
         @Email = @email, @FirstName = @fn, @LastName = @ln, @TeamId = @GlobalTeamId,
         @UserId = @newUserId OUTPUT, @ErrorCode = @globalErr OUTPUT;
 
@@ -1485,5 +1485,116 @@ BEGIN
 
   SELECT @ErrorJson = ISNULL(
     (SELECT row_num AS rowNum, reason FROM @errors FOR JSON PATH), '[]');
+END;
+GO
+
+-- ============================================================
+-- sp_CreateAlumni
+-- Creates a single alumni record for a user who already exists
+-- in CfbGlobal (frontend pre-creates the account via global-api).
+-- Upserts into dbo.users with status_id = 2.
+-- If the user is already an alumni (ALUMNI_ALREADY_EXISTS),
+-- the caller treats this as idempotent success.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_CreateAlumni
+  @UserId             UNIQUEIDENTIFIER,
+  @FirstName          NVARCHAR(100),
+  @LastName           NVARCHAR(100),
+  @GraduationYear     SMALLINT,
+  @GraduationSemester NVARCHAR(10)     = 'spring',
+  @Position           NVARCHAR(10)     = NULL,
+  @RecruitingClass    SMALLINT         = NULL,
+  @SportId            UNIQUEIDENTIFIER = NULL,
+  @Phone              NVARCHAR(20)     = NULL,
+  @PersonalEmail      NVARCHAR(255)    = NULL,
+  @CurrentEmployer    NVARCHAR(200)    = NULL,
+  @CurrentJobTitle    NVARCHAR(150)    = NULL,
+  @CurrentCity        NVARCHAR(100)    = NULL,
+  @CurrentState       NVARCHAR(50)     = NULL,
+  @Notes              NVARCHAR(MAX)    = NULL,
+  @ErrorCode          NVARCHAR(50)     OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_uid;
+    EXEC sp_set_session_context N'user_role', @_role;
+  END
+  SET @ErrorCode = NULL;
+
+  IF @GraduationYear < 2000 OR @GraduationYear > 2100
+  BEGIN
+    SET @ErrorCode = 'INVALID_GRADUATION_YEAR';
+    RETURN;
+  END
+
+  IF @GraduationSemester NOT IN ('spring','fall','summer')
+  BEGIN
+    SET @ErrorCode = 'INVALID_SEMESTER';
+    RETURN;
+  END
+
+  -- Already an alumni — idempotent
+  IF EXISTS (SELECT 1 FROM dbo.users WHERE id = @UserId AND status_id = 2)
+  BEGIN
+    SET @ErrorCode = 'ALUMNI_ALREADY_EXISTS';
+    RETURN;
+  END
+
+  -- User exists as player or removed — flip to alumni
+  IF EXISTS (SELECT 1 FROM dbo.users WHERE id = @UserId)
+  BEGIN
+    UPDATE dbo.users SET
+      status_id           = 2,
+      first_name          = @FirstName,
+      last_name           = @LastName,
+      graduation_year     = @GraduationYear,
+      graduation_semester = @GraduationSemester,
+      position            = COALESCE(@Position,         position),
+      recruiting_class    = COALESCE(@RecruitingClass,  recruiting_class),
+      sport_id            = COALESCE(@SportId,          sport_id),
+      phone               = COALESCE(@Phone,            phone),
+      personal_email      = COALESCE(@PersonalEmail,    personal_email),
+      current_employer    = COALESCE(@CurrentEmployer,  current_employer),
+      current_job_title   = COALESCE(@CurrentJobTitle,  current_job_title),
+      current_city        = COALESCE(@CurrentCity,      current_city),
+      current_state       = COALESCE(@CurrentState,     current_state),
+      notes               = COALESCE(@Notes,            notes),
+      graduated_at        = SYSUTCDATETIME(),
+      updated_at          = SYSUTCDATETIME()
+    WHERE id = @UserId;
+  END
+  ELSE
+  BEGIN
+    -- New user in AppDB — insert directly as alumni
+    INSERT INTO dbo.users (
+      id, first_name, last_name, status_id,
+      graduation_year, graduation_semester,
+      position, recruiting_class, sport_id,
+      phone, personal_email,
+      current_employer, current_job_title, current_city, current_state,
+      notes, graduated_at
+    )
+    VALUES (
+      @UserId, @FirstName, @LastName, 2,
+      @GraduationYear, @GraduationSemester,
+      @Position, @RecruitingClass, @SportId,
+      @Phone, @PersonalEmail,
+      @CurrentEmployer, @CurrentJobTitle, @CurrentCity, @CurrentState,
+      @Notes, SYSUTCDATETIME()
+    );
+  END
+
+  IF @SportId IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM dbo.users_sports WHERE user_id = @UserId AND sport_id = @SportId)
+  BEGIN
+    INSERT INTO dbo.users_sports (user_id, sport_id, username)
+    VALUES (@UserId, @SportId, @FirstName + ' ' + @LastName);
+  END
 END;
 GO

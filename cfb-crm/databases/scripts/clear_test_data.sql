@@ -54,7 +54,7 @@ GO
 -- 3. CfbGlobal — clears users, tokens, audit log
 --    Keeps platform_owner account(s) intact
 -- ────────────────────────────────────────────────────────────
-USE CfbGlobal;
+USE LegacyLinkGlobal;
 
 DELETE FROM dbo.invite_tokens;
 DELETE FROM dbo.refresh_tokens;
@@ -68,5 +68,5 @@ WHERE user_id IN (
 DELETE FROM dbo.users
 WHERE global_role != 'platform_owner';
 
-PRINT 'CfbGlobal cleared (platform_owner accounts preserved)';
+PRINT 'LegacyLinkGlobal cleared (platform_owner accounts preserved)';
 GO

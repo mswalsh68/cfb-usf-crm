@@ -12,7 +12,7 @@ import { getHealthDb } from './db';
 
 // ─── Validation schemas ───────────────────────────────────────
 const createPlayerSchema = z.object({
-  userId:                z.string().uuid(),
+  email:                 z.string().email(),
   firstName:             z.string().min(1),
   lastName:              z.string().min(1),
   position:              z.string().min(1),
@@ -27,7 +27,6 @@ const createPlayerSchema = z.object({
   gpa:                   z.number().nullable().optional(),
   major:                 z.string().nullable().optional(),
   phone:                 z.string().nullable().optional(),
-  email:                 z.string().nullable().optional(),
   instagram:             z.string().nullable().optional(),
   twitter:               z.string().nullable().optional(),
   snapchat:              z.string().nullable().optional(),
@@ -38,10 +37,8 @@ const createPlayerSchema = z.object({
 
 const transferSchema = z.object({
   playerIds:        z.array(z.string().uuid()).min(1),
-  transferReason:   z.enum(['graduated', 'transferred', 'withdrew', 'other']),
   transferYear:     z.number().int().min(2000).max(2100),
   transferSemester: z.enum(['spring', 'fall', 'summer']),
-  notes:            z.string().nullable().optional(),
 });
 
 const playerStatsSchema = z.object({
@@ -51,16 +48,20 @@ const playerStatsSchema = z.object({
 });
 
 const createAlumniSchema = z.object({
+  userId:             z.string().uuid(),
   firstName:          z.string().min(1),
   lastName:           z.string().min(1),
   graduationYear:     z.number().int(),
-  userId:             z.string().uuid().nullable().optional(),
-  sourcePlayerId:     z.string().uuid().nullable().optional(),
   graduationSemester: z.enum(['spring', 'fall', 'summer']).optional().default('spring'),
   position:           z.string().nullable().optional(),
   recruitingClass:    z.number().int().nullable().optional(),
   phone:              z.string().nullable().optional(),
   personalEmail:      z.string().nullable().optional(),
+  currentEmployer:    z.string().nullable().optional(),
+  currentJobTitle:    z.string().nullable().optional(),
+  currentCity:        z.string().nullable().optional(),
+  currentState:       z.string().nullable().optional(),
+  notes:              z.string().nullable().optional(),
 });
 
 const logInteractionSchema = z.object({
@@ -226,7 +227,7 @@ app.get('/players/:id', auth, rosterAccess, async (req, res) => {
     const db = appDb(req.user!);
     const { sets, output } = await db.execute(
       'dbo.sp_GetPlayerById',
-      { PlayerId: req.params.id, ...reqCtx(req) },
+      { UserId: req.params.id, ...reqCtx(req) },
       { ErrorCode: 'nvarchar50' }
     );
     if (output.ErrorCode) return res.status(404).json({ success: false, error: 'Player not found' });
@@ -243,13 +244,14 @@ app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
     const { output } = await db.execute(
       'dbo.sp_CreatePlayer',
       {
-        UserId:                b.userId,
-        JerseyNumber:          b.jerseyNumber          ?? null,
+        Email:                 b.email,
         FirstName:             b.firstName,
         LastName:              b.lastName,
         Position:              b.position,
         AcademicYear:          b.academicYear,
         RecruitingClass:       b.recruitingClass,
+        GlobalTeamId:          req.user!.currentTeamId,
+        JerseyNumber:          b.jerseyNumber          ?? null,
         HeightInches:          b.heightInches          ?? null,
         WeightLbs:             b.weightLbs             ?? null,
         HomeTown:              b.homeTown              ?? null,
@@ -258,7 +260,6 @@ app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
         Gpa:                   b.gpa                   ?? null,
         Major:                 b.major                 ?? null,
         Phone:                 b.phone                 ?? null,
-        Email:                 b.email                 ?? null,
         Instagram:             b.instagram             ?? null,
         Twitter:               b.twitter               ?? null,
         Snapchat:              b.snapchat              ?? null,
@@ -268,12 +269,11 @@ app.post('/players', auth, rosterAccess, rosterWrite, async (req, res) => {
         CreatedBy:             req.user!.sub,
         ...reqCtx(req),
       },
-      { NewPlayerId: 'uniqueidentifier', ErrorCode: 'nvarchar50' }
+      { NewUserId: 'uniqueidentifier', ErrorCode: 'nvarchar50' }
     );
-    if (output.ErrorCode === 'JERSEY_NUMBER_IN_USE')           return res.status(409).json({ success: false, error: 'Jersey number already in use' });
-    if (output.ErrorCode === 'PLAYER_ALREADY_EXISTS_FOR_USER') return res.status(409).json({ success: false, error: 'Player already exists for this user' });
+    if (output.ErrorCode === 'JERSEY_NUMBER_IN_USE') return res.status(409).json({ success: false, error: 'Jersey number already in use' });
     if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
-    return res.status(201).json({ success: true, data: { id: output.NewPlayerId } });
+    return res.status(201).json({ success: true, data: { id: output.NewUserId } });
   } catch (err) { console.error('[POST /players]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
@@ -291,7 +291,7 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
     if (!isWriter) {
       const { rows, output } = await db.execute(
         'dbo.sp_GetPlayerById',
-        { PlayerId: req.params.id, ...reqCtx(req) },
+        { UserId: req.params.id, ...reqCtx(req) },
         { ErrorCode: 'nvarchar50' }
       );
       const playerRow = rows[0] as { userId?: string } | undefined;
@@ -302,7 +302,7 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
     const { output } = await db.execute(
       'dbo.sp_UpdatePlayer',
       {
-        PlayerId:              req.params.id,
+        UserId:                req.params.id,
         JerseyNumber:          isWriter ? (b.jerseyNumber ?? null) : null,
         Position:              isWriter ? (b.position     ?? null) : null,
         AcademicYear:          isWriter ? (b.academicYear ?? null) : null,
@@ -329,73 +329,34 @@ app.patch('/players/:id', auth, rosterAccess, async (req, res) => {
   } catch (err) { console.error('[PATCH /players/:id]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
-// POST /players/transfer
+// POST /players/transfer — graduates players (flips status_id to 2)
 app.post('/players/transfer', auth, rosterAccess, rosterAdmin, async (req, res) => {
   const body = validate(transferSchema, req.body, res);
   if (!body) return;
-  const { playerIds, transferReason, transferYear, transferSemester, notes = null } = body;
+  const { playerIds, transferYear, transferSemester } = body;
   try {
     const db = appDb(req.user!);
-
-    // Step 1: Mark players graduated / transferred in roster schema
     const { output } = await db.execute(
-      'dbo.sp_TransferToAlumni',
+      'dbo.sp_GraduatePlayer',
       {
-        PlayerIds:        JSON.stringify(playerIds),
-        TransferReason:   transferReason,
-        TransferYear:     transferYear,
-        TransferSemester: transferSemester,
-        Notes:            notes,
-        TriggeredBy:      req.user!.sub,
+        PlayerIds:      JSON.stringify(playerIds),
+        GraduationYear: transferYear,
+        Semester:       transferSemester,
+        TriggeredBy:    req.user!.sub,
         ...reqCtx(req),
       },
       {
         TransactionId: 'uniqueidentifier',
         SuccessCount:  'int',
         FailureJson:   'nvarcharmax',
-        PlayersJson:   'nvarcharmax',
       }
     );
-
-    const transferredPlayers = JSON.parse((output.PlayersJson as string) || '[]');
-    const failures           = JSON.parse((output.FailureJson  as string) || '[]');
-
-    // Step 2: Create alumni records (same DB, no HTTP hop)
-    const alumniFailures: Array<{ playerId: string; reason: string }> = [];
-    for (const p of transferredPlayers) {
-      try {
-        const { output: ao } = await db.execute(
-          'dbo.sp_CreateAlumniFromPlayer',
-          {
-            UserId:             p.userId,
-            SourcePlayerId:     p.playerId,
-            FirstName:          p.firstName,
-            LastName:           p.lastName,
-            GraduationYear:     transferYear,
-            GraduationSemester: transferSemester,
-            Position:           p.position,
-            RecruitingClass:    p.recruitingClass,
-            Phone:              p.phone        ?? null,
-            PersonalEmail:      p.email        ?? null,
-            ...reqCtx(req),
-          },
-          { NewAlumniId: 'uniqueidentifier', ErrorCode: 'nvarchar50' }
-        );
-        // ALUMNI_ALREADY_EXISTS is idempotent — not a failure
-        if (ao.ErrorCode && ao.ErrorCode !== 'ALUMNI_ALREADY_EXISTS') {
-          alumniFailures.push({ playerId: p.playerId, reason: ao.ErrorCode as string });
-        }
-      } catch (err: unknown) {
-        alumniFailures.push({ playerId: p.playerId, reason: err instanceof Error ? err.message : 'Failed to create alumni record' });
-      }
-    }
-
     return res.json({
       success: true,
       data: {
         transactionId:    output.TransactionId,
         transferredCount: output.SuccessCount,
-        failures:         [...failures, ...alumniFailures],
+        failures:         JSON.parse((output.FailureJson as string) || '[]'),
         totalRequested:   playerIds.length,
       },
     });
@@ -405,8 +366,22 @@ app.post('/players/transfer', auth, rosterAccess, rosterAdmin, async (req, res) 
   }
 });
 
+// POST /players/:id/remove — sets status_id = 3 (removed)
+app.post('/players/:id/remove', auth, rosterAccess, rosterAdmin, async (req, res) => {
+  try {
+    const db = appDb(req.user!);
+    const { output } = await db.execute(
+      'dbo.sp_RemovePlayer',
+      { UserId: req.params.id, RemovedBy: req.user!.sub, ...reqCtx(req) },
+      { ErrorCode: 'nvarchar50' }
+    );
+    if (output.ErrorCode) return res.status(404).json({ success: false, error: output.ErrorCode });
+    return res.json({ success: true, message: 'Player removed' });
+  } catch (err) { console.error('[POST /players/:id/remove]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
 // POST /players/bulk
-const bulkPlayerSchema = createPlayerSchema.omit({ userId: true }).extend({ userId: z.string().uuid().optional() });
+const bulkPlayerSchema = createPlayerSchema;
 app.post('/players/bulk', auth, rosterAccess, rosterWrite, async (req, res) => {
   const { players } = req.body;
   if (!Array.isArray(players) || players.length === 0) return res.status(400).json({ success: false, error: 'players array is required' });
@@ -422,7 +397,7 @@ app.post('/players/bulk', auth, rosterAccess, rosterWrite, async (req, res) => {
     const db = appDb(req.user!);
     const { output } = await db.execute(
       'dbo.sp_BulkCreatePlayers',
-      { PlayersJson: JSON.stringify(validPlayers), CreatedBy: req.user!.sub, ...reqCtx(req) },
+      { PlayersJson: JSON.stringify(validPlayers), CreatedBy: req.user!.sub, GlobalTeamId: req.user!.currentTeamId, ...reqCtx(req) },
       { SuccessCount: 'int', SkippedCount: 'int', ErrorJson: 'nvarcharmax' }
     );
     return res.json({
@@ -445,7 +420,7 @@ app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res)
     const { output } = await db.execute(
       'dbo.sp_UpsertPlayerStats',
       {
-        PlayerId:    req.params.id,
+        UserId:      req.params.id,
         SeasonYear:  body.seasonYear,
         GamesPlayed: body.gamesPlayed ?? null,
         StatsJson:   body.statsJson ? JSON.stringify(body.statsJson) : null,
@@ -492,7 +467,7 @@ app.get('/alumni/:id', auth, alumniAccess, async (req, res) => {
     const db = appDb(req.user!);
     const { sets, output } = await db.execute(
       'dbo.sp_GetAlumniById',
-      { AlumniId: req.params.id, ...reqCtx(req) },
+      { UserId: req.params.id, ...reqCtx(req) },
       { ErrorCode: 'nvarchar50' }
     );
     if (output.ErrorCode) return res.status(404).json({ success: false, error: 'Alumni not found' });
@@ -507,10 +482,9 @@ app.post('/alumni', auth, alumniAccess, async (req, res) => {
   try {
     const db = appDb(req.user!);
     const { output } = await db.execute(
-      'dbo.sp_CreateAlumniFromPlayer',
+      'dbo.sp_CreateAlumni',
       {
-        UserId:             b.userId             ?? null,
-        SourcePlayerId:     b.sourcePlayerId     ?? null,
+        UserId:             b.userId,
         FirstName:          b.firstName,
         LastName:           b.lastName,
         GraduationYear:     b.graduationYear,
@@ -519,13 +493,18 @@ app.post('/alumni', auth, alumniAccess, async (req, res) => {
         RecruitingClass:    b.recruitingClass    ?? null,
         Phone:              b.phone              ?? null,
         PersonalEmail:      b.personalEmail      ?? null,
+        CurrentEmployer:    b.currentEmployer    ?? null,
+        CurrentJobTitle:    b.currentJobTitle    ?? null,
+        CurrentCity:        b.currentCity        ?? null,
+        CurrentState:       b.currentState       ?? null,
+        Notes:              b.notes              ?? null,
         ...reqCtx(req),
       },
-      { NewAlumniId: 'uniqueidentifier', ErrorCode: 'nvarchar50' }
+      { ErrorCode: 'nvarchar50' }
     );
     if (output.ErrorCode && output.ErrorCode !== 'ALUMNI_ALREADY_EXISTS')
       return res.status(400).json({ success: false, error: output.ErrorCode });
-    return res.status(201).json({ success: true, data: { id: output.NewAlumniId } });
+    return res.status(201).json({ success: true, data: { id: b.userId } });
   } catch (err) { console.error('[POST /alumni]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
@@ -542,7 +521,7 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
     if (!isWriter) {
       const { rows, output: chk } = await db.execute(
         'dbo.sp_GetAlumniById',
-        { AlumniId: req.params.id, ...reqCtx(req) },
+        { UserId: req.params.id, ...reqCtx(req) },
         { ErrorCode: 'nvarchar50' }
       );
       const alumniRow = rows[0] as { userId?: string } | undefined;
@@ -553,7 +532,7 @@ app.patch('/alumni/:id', auth, alumniAccess, async (req, res) => {
     const { output } = await db.execute(
       'dbo.sp_UpdateAlumni',
       {
-        AlumniId:         req.params.id,
+        UserId:         req.params.id,
         Status:           isWriter ? (b.status           ?? null) : null,
         IsDonor:          isWriter ? (b.isDonor          ?? null) : null,
         LastDonationDate: isWriter && b.lastDonationDate ? new Date(b.lastDonationDate) : null,
@@ -586,7 +565,7 @@ app.post('/alumni/:id/interactions', auth, alumniAccess, alumniWrite, async (req
     const { output } = await db.execute(
       'dbo.sp_LogInteraction',
       {
-        AlumniId:   req.params.id,
+        UserId:     req.params.id,
         LoggedBy:   req.user!.sub,
         Channel:    body.channel,
         Summary:    body.summary,
@@ -617,7 +596,7 @@ app.post('/alumni/bulk', auth, alumniAccess, alumniWrite, async (req, res) => {
     const db = appDb(req.user!);
     const { output } = await db.execute(
       'dbo.sp_BulkCreateAlumni',
-      { AlumniJson: JSON.stringify(validAlumni), CreatedBy: req.user!.sub, ...reqCtx(req) },
+      { AlumniJson: JSON.stringify(validAlumni), CreatedBy: req.user!.sub, GlobalTeamId: req.user!.currentTeamId, ...reqCtx(req) },
       { SuccessCount: 'int', SkippedCount: 'int', ErrorJson: 'nvarcharmax' }
     );
     return res.json({
