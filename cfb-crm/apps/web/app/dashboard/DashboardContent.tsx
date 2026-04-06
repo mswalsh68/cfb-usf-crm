@@ -37,7 +37,7 @@ export default function DashboardContent() {
           >
             <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, marginBottom: 16 }}>🏈</div>
             <h2 style={{ fontSize: 17, fontWeight: 600, color: theme.gray900, margin: 0 }}>Active Roster</h2>
-            <p style={{ fontSize: 13, color: theme.gray500, marginTop: 6 }}>Manage current players, stats, and eligibility</p>
+            <p style={{ fontSize: 13, color: theme.gray500, marginTop: 6 }}>Manage current players</p>
           </button>
         )}
 
@@ -56,14 +56,14 @@ export default function DashboardContent() {
 
         {isGlobalAdmin() && (
           <button
-            onClick={() => router.push('/admin')}
+            onClick={() => router.push('/admin/settings')}
             style={{ backgroundColor: theme.white, border: `1px solid ${theme.cardBorder}`, borderRadius: 16, padding: 24, textAlign: 'left', cursor: 'pointer', boxShadow: '0 1px 3px rgba(0,0,0,0.06)', transition: 'border-color 0.15s' }}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = theme.primary)}
+            onMouseEnter={e => (e.currentTarget.style.borderColor = theme.accent)}
             onMouseLeave={e => (e.currentTarget.style.borderColor = theme.cardBorder)}
           >
-            <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, marginBottom: 16 }}>⚙️</div>
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: theme.gray900, margin: 0 }}>Admin</h2>
-            <p style={{ fontSize: 13, color: theme.gray500, marginTop: 6 }}>Manage users, roles, and permissions</p>
+            <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.accentLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, marginBottom: 16 }}>⚙️</div>
+            <h2 style={{ fontSize: 17, fontWeight: 600, color: theme.gray900, margin: 0 }}>Team Settings</h2>
+            <p style={{ fontSize: 13, color: theme.gray500, marginTop: 6 }}>Branding, positions, labels, and sport config</p>
           </button>
         )}
 

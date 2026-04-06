@@ -57,7 +57,7 @@ export default function PlatformAdminPage() {
   const [form, setForm] = useState({
     clientCode: '', clientName: '', clientAbbr: '',
     sport: 'football', level: 'college',
-    colorPrimary: '#006747', colorAccent: '#CFC493',
+    colorPrimary: '#1B1B2F', colorAccent: '#B8973D',
     adminEmail: '', adminPassword: '',
     adminFirstName: '', adminLastName: '',
     subscriptionTier: 'starter',
@@ -127,7 +127,7 @@ export default function PlatformAdminPage() {
       setForm({
         clientCode: '', clientName: '', clientAbbr: '',
         sport: 'football', level: 'college',
-        colorPrimary: '#006747', colorAccent: '#CFC493',
+        colorPrimary: '#1B1B2F', colorAccent: '#B8973D',
         adminEmail: '', adminPassword: '',
         adminFirstName: '', adminLastName: '',
         subscriptionTier: 'starter',

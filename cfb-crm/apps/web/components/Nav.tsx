@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { clearTokens, getCurrentTeamId, getUserTeams, isPlatformOwner, switchTeam } from '@/lib/auth';
+import { clearTokens, getCurrentTeamId, getUserTeams, isGlobalAdmin, isPlatformOwner, switchTeam } from '@/lib/auth';
 import { useTeamConfig } from '@/lib/teamConfig';
 import { triggerThemeRefresh } from './ThemeProvider';
 import type { TeamSummary } from '@cfb-crm/types';
@@ -19,6 +19,7 @@ export default function Nav({ currentPage }: NavProps) {
   const [teams,         setTeams]         = useState<TeamSummary[]>([]);
   const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
   const [isOwner,       setIsOwner]       = useState(false);
+  const [isAdmin,       setIsAdmin]       = useState(false);
   const [switching,     setSwitching]     = useState(false);
   const [switchError,   setSwitchError]   = useState('');
   const [dropdownOpen,  setDropdownOpen]  = useState(false);
@@ -28,6 +29,7 @@ export default function Nav({ currentPage }: NavProps) {
     setTeams(getUserTeams());
     setCurrentTeamId(getCurrentTeamId());
     setIsOwner(isPlatformOwner());
+    setIsAdmin(isGlobalAdmin());
   }, []);
 
   // Close dropdown when clicking outside
@@ -226,10 +228,31 @@ export default function Nav({ currentPage }: NavProps) {
           )}
         </div>
 
-        {/* Right: error + sign out */}
+        {/* Right: admin link + error + sign out */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {switchError && (
             <span style={{ fontSize: 12, color: '#fca5a5' }}>{switchError}</span>
+          )}
+          {isAdmin && !isOwner && (
+            <button
+              onClick={() => router.push('/admin')}
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.12)',
+                color:           'rgba(255,255,255,0.8)',
+                border:          '1px solid rgba(255,255,255,0.2)',
+                borderRadius:    8,
+                padding:         '5px 14px',
+                fontSize:        12,
+                fontWeight:      600,
+                cursor:          'pointer',
+                letterSpacing:   '0.3px',
+                transition:      'background-color 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.22)')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.12)')}
+            >
+              Admin
+            </button>
           )}
           <button
             onClick={handleLogout}
