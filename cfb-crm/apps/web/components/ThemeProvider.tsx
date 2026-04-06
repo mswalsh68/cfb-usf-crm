@@ -58,12 +58,8 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
       }
     } catch { /* ignore parse errors */ }
 
-    // Fetch real config from global API (no auth required)
-    fetch(`${GLOBAL_API}/config`, {
-      headers: localStorage.getItem('cfb_access_token')
-        ? { Authorization: `Bearer ${localStorage.getItem('cfb_access_token')}` }
-        : {},
-    })
+    // Fetch real config from global API — auth cookie sent automatically
+    fetch(`${GLOBAL_API}/config`, { credentials: 'include' })
       .then(r => r.json())
       .then(({ data }) => {
         if (data) {

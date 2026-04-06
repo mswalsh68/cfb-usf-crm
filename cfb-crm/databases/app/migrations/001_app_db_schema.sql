@@ -27,7 +27,7 @@ IF NOT EXISTS (SELECT 1 FROM sys.tables t JOIN sys.schemas s ON t.schema_id = s.
 BEGIN
   CREATE TABLE roster.players (
     id                      UNIQUEIDENTIFIER  DEFAULT NEWSEQUENTIALID() PRIMARY KEY,
-    user_id                 UNIQUEIDENTIFIER  NOT NULL UNIQUE,
+    user_id                 UNIQUEIDENTIFIER  NULL,     -- NULL for bulk-imported players; set when player accepts team join code
     jersey_number           TINYINT,
     first_name              NVARCHAR(100)     NOT NULL,
     last_name               NVARCHAR(100)     NOT NULL,
@@ -58,7 +58,7 @@ BEGIN
     updated_at              DATETIME2         NOT NULL DEFAULT SYSUTCDATETIME()
   );
 
-  CREATE INDEX idx_players_user_id    ON roster.players(user_id);
+  CREATE INDEX idx_players_user_id    ON roster.players(user_id) WHERE user_id IS NOT NULL;
   CREATE INDEX idx_players_status     ON roster.players(status);
   CREATE INDEX idx_players_position   ON roster.players(position);
   CREATE INDEX idx_players_recruiting ON roster.players(recruiting_class);

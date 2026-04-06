@@ -1,46 +1,44 @@
 import axios from 'axios';
+import { setAccessToken, clearTokens } from './auth';
 
 const GLOBAL_API  = process.env.NEXT_PUBLIC_GLOBAL_API_URL  ?? 'http://localhost:3001';
 const APP_API     = process.env.NEXT_PUBLIC_APP_API_URL     ?? 'http://localhost:3002';
 
-async function tryRefresh(): Promise<string | null> {
-  const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('cfb_refresh_token') : null;
-  if (!refreshToken) return null;
-
+async function tryRefresh(): Promise<boolean> {
   // Preserve the user's active team across token refresh
   let currentTeamId: string | null = null;
   try {
-    const raw = localStorage.getItem('cfb_access_token');
-    if (raw) {
-      const b64 = raw.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-      const padded = b64.padEnd(b64.length + (4 - (b64.length % 4)) % 4, '=');
-      currentTeamId = JSON.parse(atob(padded)).currentTeamId ?? null;
-    }
-  } catch { /* ignore — will default to first team */ }
+    const raw = typeof window !== 'undefined' ? localStorage.getItem('cfb_user') : null;
+    if (raw) currentTeamId = JSON.parse(raw).currentTeamId ?? null;
+  } catch { /* ignore */ }
 
   try {
-    const res = await axios.post(`${GLOBAL_API}/auth/refresh`, { refreshToken, currentTeamId });
-    const { accessToken, refreshToken: newRefresh } = res.data.data;
-    localStorage.setItem('cfb_access_token', accessToken);
-    localStorage.setItem('cfb_refresh_token', newRefresh);
-    return accessToken;
+    // Refresh token is in httpOnly cookie — no need to send it in the body.
+    // Server sets new httpOnly cookies on success and returns the new access token
+    // so we can update the local user profile.
+    const res = await axios.post(
+      `${GLOBAL_API}/auth/refresh`,
+      { currentTeamId },
+      { withCredentials: true },
+    );
+    const { accessToken } = res.data.data;
+    if (accessToken) setAccessToken(accessToken);
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
 
 function createClient(baseURL: string) {
-  const client = axios.create({ baseURL, headers: { 'Content-Type': 'application/json' } });
-
-  // Per-client refresh state — prevents cross-client thundering herd
-  let isRefreshing = false;
-  let refreshQueue: Array<(token: string) => void> = [];
-
-  client.interceptors.request.use((config) => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('cfb_access_token') : null;
-    if (token) config.headers.Authorization = `Bearer ${token}`;
-    return config;
+  const client = axios.create({
+    baseURL,
+    headers:         { 'Content-Type': 'application/json' },
+    withCredentials: true,  // Send httpOnly auth cookies on every request
   });
+
+  // Per-client refresh state — prevents thundering herd on concurrent 401s
+  let isRefreshing = false;
+  let refreshQueue: Array<() => void> = [];
 
   client.interceptors.response.use(
     (res) => res,
@@ -49,25 +47,20 @@ function createClient(baseURL: string) {
       if (error.response?.status === 401 && !original._retry) {
         original._retry = true;
         if (isRefreshing) {
-          return new Promise((resolve) => {
-            refreshQueue.push((token) => {
-              original.headers.Authorization = `Bearer ${token}`;
-              resolve(client(original));
-            });
-          });
+          return new Promise<void>((resolve) => {
+            refreshQueue.push(resolve);
+          }).then(() => client(original));
         }
         isRefreshing = true;
-        const newToken = await tryRefresh();
+        const ok = await tryRefresh();
         isRefreshing = false;
-        if (newToken) {
-          refreshQueue.forEach((cb) => cb(newToken));
+        if (ok) {
+          refreshQueue.forEach((cb) => cb());
           refreshQueue = [];
-          original.headers.Authorization = `Bearer ${newToken}`;
           return client(original);
         }
         refreshQueue = [];
-        localStorage.removeItem('cfb_access_token');
-        localStorage.removeItem('cfb_refresh_token');
+        clearTokens();
         window.location.href = '/';
       }
       return Promise.reject(error);

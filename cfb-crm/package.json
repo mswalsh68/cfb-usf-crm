@@ -9,10 +9,12 @@
     "packages/*"
   ],
   "scripts": {
+    "setup":      "git config core.hooksPath .githooks && echo 'Git hooks activated. You are protected from committing or pushing to main.'",
     "mobile":     "npm run start --workspace=apps/mobile",
     "global-api": "npm run dev --workspace=apps/global-api",
     "app-api":    "npm run dev --workspace=apps/app-api",
-    "dev":        "concurrently \"npm run global-api\" \"npm run app-api\"",
+    "web":        "npm run clean --workspace=apps/web && npm run dev --workspace=apps/web",
+    "dev":        "concurrently --names \"global-api,app-api,web\" --prefix-colors \"blue,green,magenta\" \"npm run global-api\" \"npm run app-api\" \"npm run web\"",
     "typecheck":  "npm run typecheck --workspaces --if-present",
     "lint":       "npm run lint --workspaces --if-present"
   },

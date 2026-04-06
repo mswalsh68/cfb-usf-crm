@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import { authRouter } from './routes/auth';
 import { usersRouter, permissionsRouter } from './routes/users';
@@ -12,7 +13,24 @@ import { platformRouter } from './routes/platform';
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(helmet());
+app.use(helmet({
+  hsts: {
+    maxAge:            31536000, // 1 year
+    includeSubDomains: true,
+    preload:           true,
+  },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc:  ["'self'"],
+      styleSrc:   ["'self'"],
+      imgSrc:     ["'self'", 'data:'],
+      connectSrc: ["'self'"],
+      frameAncestors: ["'none'"],
+    },
+  },
+}));
+app.use(cookieParser());
 app.use(cors({
   origin: process.env.ALLOWED_ORIGINS?.split(',') ?? ['http://localhost:8081'],
   credentials: true,
@@ -26,6 +44,8 @@ const switchTeamLimiter  = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, messa
 
 app.use(globalLimiter);
 app.use(express.json({ limit: '10kb' }));
+app.disable('etag');
+app.use((_req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 
 // Request logging
 app.use((req, res, next) => {

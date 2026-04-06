@@ -51,8 +51,9 @@ export interface AuthTokenPayload {
   teams:          TeamSummary[];    // all teams this user can access
   appPermissions: AppPermission[];
   // Current team DB routing (derived from currentTeamId at login/switch)
-  appDb:    string;
-  dbServer: string;
+  appDb:        string;
+  dbServer:     string;
+  tokenVersion: number;             // incremented on revoke-all-sessions; middleware rejects stale JWTs
   iat: number;
   exp: number;
 }

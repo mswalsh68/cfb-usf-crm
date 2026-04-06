@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '@cfb-crm/auth';
-import type { AuthTokenPayload, TeamSummary } from '@cfb-crm/types';
+import type { AuthTokenPayload, TeamSummary, GlobalRole } from '@cfb-crm/types';
 import { getDb, sql } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { DEFAULT_POSITIONS, DEFAULT_ACADEMIC_YEARS } from '../constants';
@@ -10,14 +10,29 @@ import { DEFAULT_POSITIONS, DEFAULT_ACADEMIC_YEARS } from '../constants';
 export const authRouter = Router();
 const hash = (t: string) => crypto.createHash('sha256').update(t).digest('hex');
 
+
+function audit(event: string, details: Record<string, unknown>) {
+  console.log(JSON.stringify({ type: 'AUDIT', event, timestamp: new Date().toISOString(), ...details }));
+}
+
+const COOKIE_BASE = {
+  httpOnly: true,
+  secure:   process.env.NODE_ENV === 'production',
+  sameSite: 'strict' as const,
+  path:     '/',
+};
+const ACCESS_COOKIE_OPTS  = { ...COOKIE_BASE, maxAge: 15 * 60 * 1000 };
+const REFRESH_COOKIE_OPTS = { ...COOKIE_BASE, maxAge: 7 * 24 * 60 * 60 * 1000 };
+
 interface SpUserJson {
   email:          string;
-  globalRole:     string;
+  globalRole:     GlobalRole;
   currentTeamId?: string;
   teams?:         TeamSummary[];
   appPermissions?: AuthTokenPayload['appPermissions'];
   appDb?:         string;
   dbServer?:      string;
+  tokenVersion?:  number;
 }
 
 /** Build access token payload from sp_Login / sp_RefreshToken JSON output */
@@ -39,8 +54,9 @@ function buildAccessToken(userId: string, user: SpUserJson, overrideTeamId?: str
     currentTeamId,
     teams,
     appPermissions: user.appPermissions ?? [],
-    appDb:    user.appDb    ?? '',
-    dbServer:  user.dbServer  ?? '',
+    appDb:        user.appDb        ?? '',
+    dbServer:     user.dbServer     ?? '',
+    tokenVersion: user.tokenVersion ?? 1,
   };
 
   return signAccessToken(payload);
@@ -66,7 +82,10 @@ authRouter.post('/login', async (req, res) => {
     if (ErrorCode) return res.status(401).json({ success: false, error: 'Invalid credentials' });
 
     const ok = await bcrypt.compare(password, PasswordHash);
-    if (!ok) return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    if (!ok) {
+      audit('LOGIN_FAILED', { email: email.trim().toLowerCase(), ip: req.ip, reason: 'bad_password' });
+      return res.status(401).json({ success: false, error: 'Invalid credentials' });
+    }
 
     const user        = JSON.parse(UserJson);
     const accessToken = buildAccessToken(UserId, user);
@@ -79,7 +98,11 @@ authRouter.post('/login', async (req, res) => {
       .input('DeviceInfo', sql.NVarChar,         req.headers['user-agent'] ?? null)
       .execute('dbo.sp_StoreRefreshToken');
 
-    return res.json({ success: true, data: { accessToken, refreshToken, user } });
+    audit('LOGIN_SUCCESS', { userId: UserId, email: email.trim().toLowerCase(), ip: req.ip });
+    return res
+      .cookie('cfb_access_token',  accessToken,  ACCESS_COOKIE_OPTS)
+      .cookie('cfb_refresh_token', refreshToken, REFRESH_COOKIE_OPTS)
+      .json({ success: true, data: { accessToken, refreshToken, user } });
   } catch (err) {
     console.error('[Login]', err);
     return res.status(500).json({ success: false, error: 'Server error' });
@@ -87,9 +110,11 @@ authRouter.post('/login', async (req, res) => {
 });
 
 // ─── POST /auth/refresh ───────────────────────────────────────────────────────
+// Accepts refresh token from httpOnly cookie (web) or request body (mobile).
 // Accepts optional currentTeamId so the client's active team is preserved.
 authRouter.post('/refresh', async (req, res) => {
-  const { refreshToken, currentTeamId } = req.body;
+  const refreshToken = req.body.refreshToken ?? req.cookies?.cfb_refresh_token;
+  const { currentTeamId } = req.body;
   if (!refreshToken) return res.status(400).json({ success: false, error: 'Refresh token required' });
   try { verifyRefreshToken(refreshToken); } catch { return res.status(401).json({ success: false, error: 'Invalid token' }); }
   try {
@@ -111,7 +136,10 @@ authRouter.post('/refresh', async (req, res) => {
     const user        = JSON.parse(r.output.UserJson);
     const accessToken = buildAccessToken(user.id, user, currentTeamId);
 
-    return res.json({ success: true, data: { accessToken, refreshToken: newRefresh } });
+    return res
+      .cookie('cfb_access_token',  accessToken, ACCESS_COOKIE_OPTS)
+      .cookie('cfb_refresh_token', newRefresh,  REFRESH_COOKIE_OPTS)
+      .json({ success: true, data: { accessToken, refreshToken: newRefresh } });
   } catch (err) {
     console.error('[Refresh]', err);
     return res.status(500).json({ success: false, error: 'Server error' });
@@ -157,6 +185,7 @@ authRouter.post('/switch-team', requireAuth, async (req, res) => {
       appPermissions: updatedUser.appPermissions ?? [],
       appDb:          teamData.appDb,
       dbServer:       teamData.dbServer,
+      tokenVersion:   req.user!.tokenVersion,
     });
 
     const teamConfig = {
@@ -167,7 +196,9 @@ authRouter.post('/switch-team', requireAuth, async (req, res) => {
       academicYearsJson: undefined,
     };
 
-    return res.json({ success: true, data: { accessToken: newAccessToken, teamConfig } });
+    return res
+      .cookie('cfb_access_token', newAccessToken, ACCESS_COOKIE_OPTS)
+      .json({ success: true, data: { accessToken: newAccessToken, teamConfig } });
   } catch (err) {
     console.error('[switch-team]', err);
     return res.status(500).json({ success: false, error: 'Server error' });
@@ -214,6 +245,36 @@ authRouter.post('/accept-invite', async (req, res) => {
   }
 });
 
+// ─── POST /auth/revoke-all-sessions ──────────────────────────────────────────
+// Increments token_version, instantly invalidating all existing JWTs for the
+// target user. Also revokes all refresh tokens.
+// A user may revoke their own sessions; global admins may target any user.
+authRouter.post('/revoke-all-sessions', requireAuth, async (req, res) => {
+  const targetUserId: string = req.body.userId ?? req.user!.sub;
+  const isSelf = targetUserId === req.user!.sub;
+
+  if (!isSelf && req.user!.globalRole !== 'global_admin' && req.user!.globalRole !== 'platform_owner') {
+    return res.status(403).json({ success: false, error: 'Not authorised to revoke another user\'s sessions' });
+  }
+
+  try {
+    const db = await getDb();
+    await db.request()
+      .input('UserId',  sql.UniqueIdentifier, targetUserId)
+      .input('ActorId', sql.UniqueIdentifier, req.user!.sub)
+      .execute('dbo.sp_RevokeAllSessions');
+
+    audit('SESSIONS_REVOKED', { targetUserId, actorId: req.user!.sub, ip: req.ip });
+    return res
+      .clearCookie('cfb_access_token',  { path: '/' })
+      .clearCookie('cfb_refresh_token', { path: '/' })
+      .json({ success: true, message: 'All sessions revoked' });
+  } catch (err) {
+    console.error('[revoke-all-sessions]', err);
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
+
 // ─── POST /auth/logout ────────────────────────────────────────────────────────
 /** Return current user profile from the verified JWT — no DB call needed */
 authRouter.get('/me', requireAuth, (req, res) => {
@@ -232,12 +293,16 @@ authRouter.get('/me', requireAuth, (req, res) => {
 });
 
 authRouter.post('/logout', async (req, res) => {
-  const { refreshToken } = req.body;
+  const refreshToken = req.body.refreshToken ?? req.cookies?.cfb_refresh_token;
   if (refreshToken) {
     try {
       const db = await getDb();
       await db.request().input('TokenHash', sql.NVarChar, hash(refreshToken)).execute('dbo.sp_Logout');
     } catch { /* best effort */ }
   }
-  return res.json({ success: true, message: 'Logged out' });
+  audit('LOGOUT', { ip: req.ip });
+  return res
+    .clearCookie('cfb_access_token',  { path: '/' })
+    .clearCookie('cfb_refresh_token', { path: '/' })
+    .json({ success: true, message: 'Logged out' });
 });

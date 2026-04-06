@@ -11,7 +11,7 @@
 --   3. Re-run the platform_owner seed that failed in step 1
 -- ============================================================
 
-USE CfbGlobal;
+USE DevLegacyLinkGlobal
 GO
 
 -- ─── 1. Fix global_role CHECK constraint ─────────────────────────────────────

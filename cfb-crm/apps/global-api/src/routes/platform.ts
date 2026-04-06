@@ -4,6 +4,10 @@ import { requireAuth, requirePlatformOwner } from '../middleware/auth';
 import { getDb, sql } from '../db';
 import * as mssql from 'mssql';
 
+function audit(event: string, details: Record<string, unknown>) {
+  console.log(JSON.stringify({ type: 'AUDIT', event, timestamp: new Date().toISOString(), ...details }));
+}
+
 export const platformRouter = Router();
 
 // All /platform routes require platform_owner role
@@ -73,6 +77,10 @@ platformRouter.post('/onboard-client', async (req, res) => {
   // Basic validation
   if (!clientCode || !clientName || !clientAbbr || !sport || !level || !adminEmail || !adminPassword) {
     return res.status(400).json({ success: false, error: 'clientCode, clientName, clientAbbr, sport, level, adminEmail, adminPassword are required' });
+  }
+  // clientCode is interpolated into database names — must be strictly alphanumeric
+  if (!/^[A-Za-z0-9_]{1,20}$/.test(clientCode)) {
+    return res.status(400).json({ success: false, error: 'clientCode must be 1–20 alphanumeric characters or underscores' });
   }
   if (adminPassword.length < 10) {
     return res.status(400).json({ success: false, error: 'Admin password must be at least 10 characters' });
@@ -272,6 +280,7 @@ platformRouter.post('/onboard-client', async (req, res) => {
       return res.status(400).json({ success: false, error: `User creation failed: ${userR.output.ErrorCode}` });
     }
 
+    audit('CLIENT_ONBOARDED', { actorId: req.user!.sub, teamId: newTeamId, clientCode, clientAbbr, rosterDb, alumniDb, adminEmail });
     return res.status(201).json({
       success: true,
       data: {

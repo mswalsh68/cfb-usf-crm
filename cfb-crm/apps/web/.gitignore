@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# monorepo — lockfile lives at repo root, never inside workspace
+package-lock.json
+
 # production
 /build
 

@@ -1,12 +1,14 @@
 # Onboarding
-in apps/global-api run
+In `apps/global-api` run:
+```bash
 npm run onboard "--" "--email=admin@admin.com" "--firstName=PHS" "--lastName=Admin"
+```
 
-
+---
 
 # CFB CRM — Monorepo
 
-College Football Player & Alumni CRM — React Native (Expo) mobile app backed by three Azure-hosted Node.js APIs and Azure SQL Server databases.
+College Football Player & Alumni CRM — Next.js web app + React Native (Expo) mobile app, backed by two Node.js APIs and Azure SQL Server databases.
 
 ---
 
@@ -15,27 +17,43 @@ College Football Player & Alumni CRM — React Native (Expo) mobile app backed b
 ```
 cfb-crm/
 ├── apps/
+│   ├── web/             Next.js web app (admin + staff UI)
 │   ├── mobile/          React Native (Expo) — iOS + Android
-│   ├── global-api/      Auth, users, permissions   → port 3001
-│   ├── roster-api/      Current roster CRM         → port 3002
-│   └── alumni-api/      Alumni CRM + outreach       → port 3003
+│   ├── global-api/      Auth, users, permissions, platform admin  → port 3001
+│   └── app-api/         Roster CRM + Alumni CRM (tenant-scoped)  → port 3002
 ├── packages/
+│   ├── auth/            JWT helpers (sign, verify, extract — shared across APIs)
+│   ├── db/              Tenant-scoped database executor (shared across APIs)
+│   ├── types/           Shared TypeScript types
 │   ├── ui/              Shared component library + theme tokens
-│   ├── auth/            JWT helpers (shared across all APIs)
-│   └── types/           Shared TypeScript types
+│   └── assets/          Shared static assets
 └── databases/
-    ├── global/          Schema migrations (users, roles, permissions)
-    ├── roster/          Schema migrations (players, stats, docs)
-    ├── alumni/          Schema migrations (alumni, campaigns, messages)
-    └── stored-procedures/  sp_GraduatePlayer + helpers
+    ├── global/          Global DB schema migrations + stored procedures
+    │   ├── migrations/  001_initial_schema → 008_token_version
+    │   └── stored-procedures/
+    ├── app/             App DB schema migrations + stored procedures
+    │   ├── migrations/  001_app_db_schema → 005_rls_policies
+    │   └── stored-procedures/
+    └── scripts/         Utility scripts (seed data, clear test data)
 ```
+
+---
+
+## Database Model
+
+| Database | What it holds | One per... |
+|---|---|---|
+| **Global DB** | Users, roles, permissions, teams, team config, refresh tokens | Platform (shared by all clients) |
+| **App DB** | Players, stats, alumni, interactions, campaigns | Client (one DB per team) |
+
+Each client provisioned via the platform admin gets their own App DB (`{ClientCode}_App`). The app-api routes all data operations to the correct App DB based on the JWT's `appDb` and `dbServer` claims.
 
 ---
 
 ## Prerequisites
 
 - Node.js 20+
-- Yarn (classic, v1)
+- npm 10+
 - Azure subscription (SQL Server + App Service or Container Apps)
 - Expo CLI: `npm install -g expo-cli`
 
@@ -43,79 +61,120 @@ cfb-crm/
 
 ## Local Setup
 
-### 1. Install dependencies
+### 1. Clone the repo
 
 ```bash
-yarn install
+git clone https://github.com/mswalsh68/cfb-usf-crm.git
+cd cfb-usf-crm/cfb-crm
 ```
 
-### 2. Configure environment variables
+### 2. Install dependencies & activate Git hooks
 
 ```bash
-# Copy and fill in each .env file:
+npm install
+npm run setup
+```
+
+> `npm run setup` points Git at the `.githooks/` folder stored in the repo.
+> This protects `main` — you will be blocked from committing or pushing directly to it.
+
+### 3. Always work on a branch
+
+```bash
+# Pull latest main first
+git checkout main
+git pull
+
+# Create your branch
+git checkout -b feature/your-feature-name
+
+# When done, push and open a PR on GitHub — never push to main directly
+git push origin feature/your-feature-name
+```
+
+### 4. Configure environment variables
+
+```bash
+# global-api
 cp .env.example apps/global-api/.env
-cp .env.example apps/roster-api/.env
-cp .env.example apps/alumni-api/.env
+
+# app-api
+cp .env.example apps/app-api/.env
+
+# web
+cp .env.example apps/web/.env.local
+
+# mobile
 cp .env.example apps/mobile/.env
-
-# Edit each file with your Azure SQL connection strings and JWT secrets.
-# Generate JWT secrets:
-node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 ```
 
-### 3. Set up databases
+Each `.env` file needs:
+- Azure SQL connection details (`DB_SERVER`, `DB_USER`, `DB_PASS`)
+- JWT secrets (generate with: `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`)
+- `ALLOWED_ORIGINS` — comma-separated list of allowed client URLs
 
-Run migrations in order against each Azure SQL database using SSMS or sqlcmd:
+### 5. Set up the Global DB
+
+Run migrations in order against your Global Azure SQL database:
 
 ```bash
-# Global DB
 sqlcmd -S your-server.database.windows.net -d CfbGlobal -i databases/global/migrations/001_initial_schema.sql
-
-# Roster DB
-sqlcmd -S your-roster-server.database.windows.net -d CfbRoster -i databases/roster/migrations/001_initial_schema.sql
-
-# Alumni DB
-sqlcmd -S your-alumni-server.database.windows.net -d CfbAlumni -i databases/alumni/migrations/001_initial_schema.sql
+sqlcmd -S your-server.database.windows.net -d CfbGlobal -i databases/global/migrations/002_team_config.sql
+# ... continue through 008_token_version.sql
 ```
 
-### 4. Deploy stored procedures
+Then deploy stored procedures:
 
 ```bash
-# Run on the Roster DB server (it calls Alumni and Global via linked servers)
-sqlcmd -S your-roster-server -d CfbRoster -i databases/stored-procedures/sp_GraduatePlayer.sql
+sqlcmd -S your-server.database.windows.net -d CfbGlobal -i databases/global/stored-procedures/sp_Global_AllProcedures.sql
+sqlcmd -S your-server.database.windows.net -d CfbGlobal -i databases/global/stored-procedures/sp_TeamConfig.sql
+sqlcmd -S your-server.database.windows.net -d CfbGlobal -i databases/global/stored-procedures/sp_Teams.sql
 ```
 
-Before running the graduation stored proc in production:
-1. Set up a SQL Server Linked Server from Roster → Alumni named `[ALUMNI_DB]`
-2. Set up a SQL Server Linked Server from Roster → Global named `[GLOBAL_DB]`
-3. Enable MSDTC on both servers for distributed transactions
+### 6. Provision a client (App DB)
 
-### 5. Start APIs
+Each client gets their own App DB created automatically via the platform admin onboarding screen, or manually:
 
 ```bash
-# All three APIs in parallel:
-yarn dev
+npm run onboard "--" "--email=admin@client.com" "--firstName=Admin" "--lastName=User"
+```
+
+This creates the `{ClientCode}_App` database, applies the app schema and stored procedures, and creates the first admin user.
+
+### 7. Start APIs
+
+```bash
+# Both APIs in parallel:
+npm run dev
 
 # Or individually:
-yarn global-api   # port 3001
-yarn roster-api   # port 3002
-yarn alumni-api   # port 3003
+npm run global-api   # port 3001
+npm run app-api      # port 3002
 ```
 
-### 6. Start mobile app
+### 8. Start web app
 
 ```bash
-yarn mobile
-# Then press i for iOS simulator or a for Android emulator
-# Scan QR with Expo Go app for physical device
+cd apps/web
+npm run dev
+# Open http://localhost:3000
+```
+
+### 9. Start mobile app
+
+```bash
+npm run mobile
+# Press i for iOS simulator, a for Android emulator
+# Scan QR with Expo Go for a physical device
 ```
 
 ---
 
 ## Roles Reference
 
-| Role | Global Admin screen | Roster CRM | Alumni CRM |
-|------|--------------------| -----------|------------|
+| Role | Platform Admin | Roster CRM | Alumni CRM |
+|---|---|---|---|
+| `platform_owner` | Full access | Full access | Full access |
 | `global_admin` | Full access | Full access | Full access |
 | `app_admin` | — | Full access in assigned app | Full access in assigned app |
 | `coach_staff` | — | Read + write | Read + write |
@@ -124,18 +183,17 @@ yarn mobile
 
 ---
 
-## Graduation Flow
+## Player → Alumni Transfer Flow
 
-1. Coach/admin opens **Graduate Players** tab in Roster CRM
-2. Multi-selects active players, sets graduation year + semester
-3. Confirms the action via modal
-4. `POST /players/graduate` calls `sp_GraduatePlayer` on Roster DB
-5. Stored proc runs as a **distributed transaction**:
-   - Marks players as `graduated` in Roster DB
-   - Inserts alumni records in Alumni DB (via linked server)
-   - Swaps app permissions in Global DB (roster → alumni)
-   - Rolls back everything if any step fails
-6. Players disappear from active roster, appear in Alumni CRM
+1. Coach/admin selects active players and clicks **Transfer to Alumni**
+2. Sets transfer reason, year, and semester
+3. Confirms via modal
+4. `POST /players/transfer` calls `sp_TransferToAlumni` on the App DB
+5. Stored proc marks players as transferred/graduated in the roster tables
+6. app-api then calls `sp_CreateAlumniFromPlayer` to create alumni records in the same App DB
+7. Players disappear from the active roster and appear in the Alumni CRM
+
+> No linked servers or distributed transactions needed — both roster and alumni data live in the same App DB per client.
 
 ---
 
@@ -143,17 +201,23 @@ yarn mobile
 
 ### APIs — Azure App Service or Container Apps
 
-Each API is a separate deployable Node.js app. Recommended:
-- Azure App Service (Basic B1 tier per API for dev, Standard S1 for prod)
-- Use **Managed Identity** for SQL Server auth in production (no passwords in env vars)
-- Add each API's App Service URL to ALLOWED_ORIGINS in the other services
+- `global-api` and `app-api` are separate deployable Node.js apps
+- Use **Managed Identity** for SQL auth in production (no passwords in env vars)
+- Add each service's URL to `ALLOWED_ORIGINS` in the other services
 
 ### Databases — Azure SQL
 
-- 3 separate Azure SQL databases (can share a single logical server for cost savings in dev)
+- 1 **Global DB** shared across all clients
+- 1 **App DB** per client, provisioned at onboarding time
+- All databases can share a single logical Azure SQL server (cost-effective for dev)
 - Enable **Azure Active Directory authentication** + Managed Identity for production
-- Set up **Linked Servers** between Roster and Alumni + Global for the graduation stored proc
-- Recommended tier: General Purpose, 2 vCores per DB
+
+### Web — Vercel or Azure Static Web Apps
+
+```bash
+cd apps/web
+npm run build
+```
 
 ### Mobile — Expo EAS Build
 
@@ -167,34 +231,14 @@ Set production API URLs in EAS build profile environment variables.
 
 ---
 
-## Adding a New Screen
-
-All screens live in `apps/mobile/app/`. Expo Router uses file-based routing:
-
-```
-app/(roster)/stats.tsx        → navigable at /(roster)/stats
-app/(alumni)/campaigns.tsx    → navigable at /(alumni)/campaigns
-```
-
-Import shared components from `@cfb-crm/ui` and types from `@cfb-crm/types`.
-
----
-
 ## First Login
 
-After running migrations, a default global admin account is seeded:
-
-```
-Email:    admin@yourprogram.com
-Password: (set via the update-password script before first deploy)
-```
-
-Run this to hash and update the seed password:
+After running migrations and provisioning a client, log in with the admin credentials provided during onboarding. To manually hash a password:
 
 ```bash
 node -e "
 const bcrypt = require('bcryptjs');
 bcrypt.hash('YourNewPassword123!', 12).then(h => console.log(h));
 "
-# Then UPDATE users SET password_hash = 'output' WHERE email = 'admin@yourprogram.com'
+# Then: UPDATE dbo.users SET password_hash = 'output' WHERE email = 'admin@yourprogram.com'
 ```

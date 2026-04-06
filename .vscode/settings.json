@@ -1,0 +1,21 @@
+{
+  // Always show branch name in the status bar
+  "git.branchSortOrder": "committerdate",
+  "git.showInlineOpenFileAction": true,
+
+  // Confirm before syncing (push/pull) so you don't accidentally push to main
+  "git.confirmSync": true,
+
+  // Show the branch name prominently in the title bar
+  "window.title": "${rootName} [${activeBranchShortName}] — ${activeEditorShort}",
+
+  // Fetch from remote automatically so you always see if main has updates
+  "git.autofetch": true,
+  "git.autofetchPeriod": 180,
+
+  // Warn if you try to push without a tracking branch set
+  "git.requireGitUserConfig": false,
+
+  // Remind you to stage changes before committing
+  "git.enableSmartCommit": false
+}
