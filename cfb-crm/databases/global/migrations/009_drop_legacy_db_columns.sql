@@ -5,7 +5,7 @@
 -- Safe to run after verifying app_db is populated for all teams.
 -- ============================================================
 
-USE CfbGlobal;
+USE DevLegacyLinkGlobal
 GO
 
 -- Verify all teams have app_db set before dropping
