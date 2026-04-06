@@ -9,7 +9,7 @@ import { PageLayout } from '@/components';
 
 export default function DashboardContent() {
     const router = useRouter();
-  const user = getUser();
+    const user = getUser();
 
   useEffect(() => {
     if (!isLoggedIn()) router.push('/');
@@ -36,7 +36,7 @@ export default function DashboardContent() {
             onMouseLeave={e => (e.currentTarget.style.borderColor = theme.cardBorder)}
           >
             <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, marginBottom: 16 }}>🏈</div>
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: theme.gray900, margin: 0 }}>Roster CRM</h2>
+            <h2 style={{ fontSize: 17, fontWeight: 600, color: theme.gray900, margin: 0 }}>Active Roster</h2>
             <p style={{ fontSize: 13, color: theme.gray500, marginTop: 6 }}>Manage current players, stats, and eligibility</p>
           </button>
         )}
@@ -49,7 +49,7 @@ export default function DashboardContent() {
             onMouseLeave={e => (e.currentTarget.style.borderColor = theme.cardBorder)}
           >
             <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.accentLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, marginBottom: 16 }}>🎓</div>
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: theme.gray900, margin: 0 }}>Alumni CRM</h2>
+            <h2 style={{ fontSize: 17, fontWeight: 600, color: theme.gray900, margin: 0 }}>Alumni</h2>
             <p style={{ fontSize: 13, color: theme.gray500, marginTop: 6 }}>Track alumni, manage outreach and engagement</p>
           </button>
         )}
@@ -62,7 +62,7 @@ export default function DashboardContent() {
             onMouseLeave={e => (e.currentTarget.style.borderColor = theme.cardBorder)}
           >
             <div style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.primaryLight, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, marginBottom: 16 }}>⚙️</div>
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: theme.gray900, margin: 0 }}>Global Admin</h2>
+            <h2 style={{ fontSize: 17, fontWeight: 600, color: theme.gray900, margin: 0 }}>Admin</h2>
             <p style={{ fontSize: 13, color: theme.gray500, marginTop: 6 }}>Manage users, roles, and permissions</p>
           </button>
         )}
