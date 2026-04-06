@@ -132,7 +132,6 @@ BEGIN
       u.global_role                         AS globalRole,
       u.is_active                           AS isActive,
       u.created_at                          AS createdAt,
-      u.token_version                       AS tokenVersion,
       CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
       @AppDb                                AS appDb,
       @DbServer                             AS dbServer,
@@ -286,63 +285,31 @@ BEGIN
   DECLARE @AppDb          NVARCHAR(100) = '';
   DECLARE @DbServer       NVARCHAR(200) = '';
 
-  -- Try to pin to the client's requested team (validates access too).
-  -- platform_owner can access any active team; everyone else must have a user_teams row.
+  -- Try to pin to the client's requested team first (validates access too)
   IF @CurrentTeamId IS NOT NULL
   BEGIN
-    IF @GlobalRole = 'platform_owner'
-    BEGIN
-      SELECT
-        @ResolvedTeamId = t.id,
-        @AppDb          = t.app_db,
-        @DbServer       = t.db_server
-      FROM dbo.teams t
-      WHERE t.id        = @CurrentTeamId
-        AND t.is_active = 1;
-    END
-    ELSE
-    BEGIN
-      SELECT
-        @ResolvedTeamId = t.id,
-        @AppDb          = t.app_db,
-        @DbServer       = t.db_server
-      FROM dbo.user_teams ut
-      JOIN dbo.teams t ON t.id = ut.team_id
-      WHERE ut.user_id   = @UserId
-        AND t.id         = @CurrentTeamId
-        AND t.is_active  = 1
-        AND ut.is_active = 1;
-    END
+    SELECT TOP 1
+      @CurrentTeamId = t.id,
+      @AppDb         = t.app_db,
+      @DbServer      = t.db_server
+    FROM dbo.teams t
+    WHERE t.is_active = 1
+    ORDER BY t.name;
   END
 
-  -- Fall back to first-alphabetical team if requested team is not accessible or not provided
+  -- Fall back to first-alphabetical team if requested team not found / not provided
   IF @ResolvedTeamId IS NULL
   BEGIN
-    IF @GlobalRole = 'platform_owner'
-    BEGIN
-      SELECT TOP 1
-        @ResolvedTeamId = t.id,
-        @AppDb          = t.app_db,
-        @DbServer       = t.db_server
-      FROM dbo.teams t
-      WHERE t.is_active = 1
-      ORDER BY t.name;
-    END
-    ELSE
-    BEGIN
-      SELECT TOP 1
-        @ResolvedTeamId = t.id,
-        @AppDb          = t.app_db,
-        @DbServer       = t.db_server
-      FROM dbo.user_teams ut
-      JOIN dbo.teams t ON t.id = ut.team_id
-      WHERE ut.user_id   = @UserId
-        AND ut.is_active = 1
-      ORDER BY t.name;
-    END
+    SELECT TOP 1
+      @CurrentTeamId = t.id,
+      @AppDb         = t.app_db,
+      @DbServer      = t.db_server
+    FROM dbo.user_teams ut
+    JOIN dbo.teams t ON t.id = ut.team_id
+    WHERE ut.user_id  = @UserId
+      AND ut.is_active = 1
+    ORDER BY t.name;
   END
-
-  SET @CurrentTeamId = @ResolvedTeamId;
 
   SELECT @UserJson = (
     SELECT
@@ -352,7 +319,6 @@ BEGIN
       u.last_name                           AS lastName,
       u.global_role                         AS globalRole,
       u.is_active                           AS isActive,
-      u.token_version                       AS tokenVersion,
       CAST(@CurrentTeamId AS NVARCHAR(100)) AS currentTeamId,
       @AppDb                                AS appDb,
       @DbServer                             AS dbServer,
@@ -949,57 +915,6 @@ END;
 GO
 
 -- ============================================================
--- sp_GetTokenVersion
--- Returns the current token_version for a user.
--- Called by requireAuth middleware to detect revoked sessions.
--- ============================================================
-CREATE OR ALTER PROCEDURE dbo.sp_GetTokenVersion
-  @UserId       UNIQUEIDENTIFIER,
-  @TokenVersion INT OUTPUT
-AS
-BEGIN
-  SET NOCOUNT ON;
-  SELECT @TokenVersion = token_version FROM dbo.users WHERE id = @UserId;
-END;
-GO
-
--- ============================================================
--- sp_RevokeAllSessions
--- Increments token_version (invalidating all existing JWTs)
--- and revokes all active refresh tokens for a user.
--- Called by POST /auth/revoke-all-sessions.
--- ============================================================
-CREATE OR ALTER PROCEDURE dbo.sp_RevokeAllSessions
-  @UserId  UNIQUEIDENTIFIER,
-  @ActorId UNIQUEIDENTIFIER
-AS
-BEGIN
-  SET NOCOUNT ON;
-  SET XACT_ABORT ON;
-
-  BEGIN TRANSACTION;
-
-    UPDATE dbo.users
-    SET token_version = token_version + 1,
-        updated_at    = SYSUTCDATETIME()
-    WHERE id = @UserId;
-
-    UPDATE dbo.refresh_tokens
-    SET revoked_at = SYSUTCDATETIME()
-    WHERE user_id  = @UserId
-      AND revoked_at IS NULL;
-
-    INSERT INTO dbo.audit_log (actor_id, action, target_type, target_id, payload)
-    VALUES (
-      @ActorId, 'sessions_revoked', 'user', CAST(@UserId AS NVARCHAR(100)),
-      JSON_OBJECT('revokedBy': CAST(@ActorId AS NVARCHAR(100)))
-    );
-
-  COMMIT TRANSACTION;
-END;
-GO
-
--- ============================================================
 -- sp_CleanExpiredTokens
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_CleanExpiredTokens
@@ -1010,5 +925,99 @@ BEGIN
   DELETE FROM dbo.refresh_tokens
   WHERE expires_at < DATEADD(DAY, -1, SYSUTCDATETIME())
      OR revoked_at < DATEADD(DAY, -30, SYSUTCDATETIME());
+END;
+GO
+
+-- ============================================================
+-- sp_GetOrCreateUser
+-- Idempotent user lookup/creation for the app-DB create-player
+-- and bulk-import flows.
+--
+-- If a user with @Email already exists: returns their ID.
+-- If not: creates the account with global_role = 'player' and
+--   a placeholder password hash (account requires invite to
+--   set a real password before they can log in).
+--
+-- Called from AppDB stored procedures via linked server:
+--   EXEC [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser ...
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_GetOrCreateUser
+  @Email     NVARCHAR(255),
+  @FirstName NVARCHAR(100),
+  @LastName  NVARCHAR(100),
+  @TeamId    UNIQUEIDENTIFIER = NULL,
+  @CreatedBy UNIQUEIDENTIFIER = NULL,   -- who triggered the import; NULL = system
+  -- Output
+  @UserId    UNIQUEIDENTIFIER OUTPUT,
+  @ErrorCode NVARCHAR(50)     OUTPUT    -- NULL = success; 'CREATED' = new account made
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET XACT_ABORT ON;
+  SET @ErrorCode = NULL;
+  SET @UserId    = NULL;
+
+  -- Validate team if provided
+  IF @TeamId IS NOT NULL AND NOT EXISTS (SELECT 1 FROM dbo.teams WHERE id = @TeamId AND is_active = 1)
+  BEGIN
+    SET @ErrorCode = 'TEAM_NOT_FOUND';
+    RETURN;
+  END
+
+  -- Return existing user if email already registered
+  IF EXISTS (SELECT 1 FROM dbo.users WHERE email = @Email)
+  BEGIN
+    SELECT @UserId = id FROM dbo.users WHERE email = @Email;
+    -- Ensure they are linked to this team
+    IF @TeamId IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM dbo.user_teams WHERE user_id = @UserId AND team_id = @TeamId)
+    BEGIN
+      INSERT INTO dbo.user_teams (user_id, team_id, role)
+      VALUES (@UserId, @TeamId, 'readonly');
+    END
+    RETURN;   -- @ErrorCode stays NULL — caller treats this as success
+  END
+
+  -- Create new account
+  -- Password hash is a sentinel value; account cannot log in until the
+  -- user redeems an invite token and sets a real password.
+  BEGIN TRANSACTION;
+
+    SET @UserId = NEWID();
+
+    INSERT INTO dbo.users (id, email, password_hash, first_name, last_name, global_role, team_id)
+    VALUES (
+      @UserId,
+      @Email,
+      'INVITE_PENDING',   -- bcrypt never matches this; login blocked until invite redeemed
+      @FirstName,
+      @LastName,
+      'player',
+      @TeamId
+    );
+
+    IF @TeamId IS NOT NULL
+    BEGIN
+      INSERT INTO dbo.user_teams (user_id, team_id, role)
+      VALUES (@UserId, @TeamId, 'readonly');
+    END
+
+    INSERT INTO dbo.audit_log (actor_id, action, target_type, target_id, payload)
+    VALUES (
+      @CreatedBy,
+      'user_created',
+      'user',
+      CAST(@UserId AS NVARCHAR(100)),
+      JSON_OBJECT(
+        'email':      @Email,
+        'globalRole': 'player',
+        'source':     'bulk_import',
+        'teamId':     ISNULL(CAST(@TeamId AS NVARCHAR(100)), '')
+      )
+    );
+
+  COMMIT TRANSACTION;
+
+  SET @ErrorCode = 'CREATED';   -- informational: caller knows a new account was made
 END;
 GO
