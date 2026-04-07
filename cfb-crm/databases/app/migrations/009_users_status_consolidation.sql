@@ -529,6 +529,14 @@ GO
 --   user sees their own row            → always
 --   sport_id IS NULL (transition)      → any authenticated user
 
+-- Must drop the policy before altering the function it references
+IF EXISTS (SELECT 1 FROM sys.security_policies WHERE name = 'user_access_policy')
+BEGIN
+  DROP SECURITY POLICY dbo.user_access_policy;
+  PRINT 'Dropped user_access_policy (will recreate below)';
+END
+GO
+
 CREATE OR ALTER FUNCTION dbo.fn_user_access(
   @session_user_id  NVARCHAR(100),
   @session_user_role NVARCHAR(50),
@@ -573,6 +581,7 @@ RETURN
     );
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.security_policies WHERE name = 'user_access_policy')
 CREATE SECURITY POLICY dbo.user_access_policy
   ADD FILTER PREDICATE dbo.fn_user_access(
     CAST(SESSION_CONTEXT(N'user_id')   AS NVARCHAR(100)),
