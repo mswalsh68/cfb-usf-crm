@@ -1,6 +1,6 @@
 -- ============================================================
 -- MIGRATION 005 — USER TEAMS (Multi-tenant junction table)
--- Run on: CfbGlobal database
+-- Run on: LegacyLinkGlobal database
 -- Run after: 004_multi_tenant.sql
 -- ============================================================
 -- Changes:
@@ -11,7 +11,7 @@
 --   5. Add 'platform_owner' as valid globalRole
 --   6. Seed mswalsh68@gmail.com as platform_owner + user_teams for USF + HSFC
 -- ============================================================
-USE DevLegacyLinkGlobal
+USE LegacyLinkGlobal
 GO
 
 -- ─── 1. user_teams junction table ────────────────────────────────────────────

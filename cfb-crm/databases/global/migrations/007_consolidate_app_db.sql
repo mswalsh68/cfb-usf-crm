@@ -1,10 +1,10 @@
 -- ============================================================
 -- MIGRATION 007 — Consolidate to Single AppDB per Tenant
--- Run on: CfbGlobal database
+-- Run on: LegacyLinkGlobal database
 -- Replaces roster_db + alumni_db with a single app_db column.
 -- ============================================================
 
-USE DevLegacyLinkGlobal
+USE LegacyLinkGlobal
 GO
 -- ─── 1. Add app_db column ─────────────────────────────────────
 

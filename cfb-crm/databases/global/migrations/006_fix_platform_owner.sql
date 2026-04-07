@@ -1,6 +1,6 @@
 -- ============================================================
 -- MIGRATION 006 — Fix platform_owner role + team_config.team_id
--- Run on: CfbGlobal database
+-- Run on: LegacyLinkGlobal database
 -- Run after: 005_user_teams.sql
 -- ============================================================
 -- Fixes from migration 005:
@@ -11,7 +11,7 @@
 --   3. Re-run the platform_owner seed that failed in step 1
 -- ============================================================
 
-USE DevLegacyLinkGlobal
+USE LegacyLinkGlobal
 GO
 
 -- ─── 1. Fix global_role CHECK constraint ─────────────────────────────────────

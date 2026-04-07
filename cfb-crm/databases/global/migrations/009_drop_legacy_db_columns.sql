@@ -1,11 +1,11 @@
 -- ============================================================
 -- MIGRATION 009 — Drop legacy roster_db and alumni_db columns
--- Run on: CfbGlobal database
+-- Run on: LegacyLinkGlobal database
 -- These were replaced by the single app_db column in migration 007.
 -- Safe to run after verifying app_db is populated for all teams.
 -- ============================================================
 
-USE DevLegacyLinkGlobal
+USE LegacyLinkGlobal
 GO
 
 -- Verify all teams have app_db set before dropping
