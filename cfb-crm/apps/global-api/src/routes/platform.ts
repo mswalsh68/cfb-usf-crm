@@ -147,7 +147,7 @@ platformRouter.post('/onboard-client', async (req, res) => {
     options:  { encrypt: false, trustServerCertificate: true },
     authentication: {
       type: 'default' as const,
-      options: { userName: process.env.DB_USER ?? '', password: process.env.DB_PASSWORD ?? '' },
+      options: { userName: process.env.GLOBAL_DB_USER ?? '', password: process.env.GLOBAL_DB_PASS ?? '' },
     },
   }).connect();
 
