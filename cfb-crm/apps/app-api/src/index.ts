@@ -196,9 +196,18 @@ function alumniAdmin(req: express.Request, res: express.Response, next: express.
 // ROSTER ROUTES
 // ══════════════════════════════════════════════════════════════
 
+// GET /sports — returns all active sports in this AppDB
+app.get('/sports', auth, async (req, res) => {
+  try {
+    const db = appDb(req.user!);
+    const { rows } = await db.execute('dbo.sp_GetSports', {}, {});
+    return res.json({ success: true, data: rows });
+  } catch (err) { console.error('[GET /sports]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
 // GET /players
 app.get('/players', auth, rosterAccess, async (req, res) => {
-  const { search, status, position, academicYear, recruitingClass, page, pageSize } = req.query as Record<string, string>;
+  const { search, status, position, academicYear, recruitingClass, sportId, page, pageSize } = req.query as Record<string, string>;
   const p = parsePage(page); const ps = parsePageSize(pageSize);
   try {
     const db = appDb(req.user!);
@@ -210,6 +219,7 @@ app.get('/players', auth, rosterAccess, async (req, res) => {
         Position:        position         || null,
         AcademicYear:    academicYear     || null,
         RecruitingClass: recruitingClass  ? parseInt(recruitingClass) : null,
+        SportId:         sportId          || null,
         Page:            p,
         PageSize:        ps,
         ...reqCtx(req),
@@ -464,7 +474,7 @@ app.post('/players/:id/stats', auth, rosterAccess, rosterWrite, async (req, res)
 
 // GET /alumni
 app.get('/alumni', auth, alumniAccess, async (req, res) => {
-  const { search, status, isDonor, gradYear, position, page, pageSize } = req.query as Record<string, string>;
+  const { search, status, isDonor, gradYear, position, sportId, page, pageSize } = req.query as Record<string, string>;
   const p = parsePage(page); const ps = parsePageSize(pageSize);
   try {
     const db = appDb(req.user!);
@@ -476,6 +486,7 @@ app.get('/alumni', auth, alumniAccess, async (req, res) => {
         IsDonor:  isDonor  ? isDonor === 'true' : null,
         GradYear: gradYear ? parseInt(gradYear) : null,
         Position: position || null,
+        SportId:  sportId  || null,
         Page:     p,
         PageSize: ps,
         ...reqCtx(req),

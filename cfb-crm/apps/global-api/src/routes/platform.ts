@@ -138,104 +138,127 @@ platformRouter.post('/onboard-client', async (req, res) => {
   }
 
   const serverName = (dbServer ?? process.env.DB_SERVER ?? 'localhost\\SQLEXPRESS').replace('\\\\', '\\');
+  const safeDbName = appDbName.replace(/[^A-Za-z0-9_]/g, '');
+
+  /** Creates a new connection pool to a specific database on the same server */
+  const connectToDb = (database: string) => new mssql.ConnectionPool({
+    server:   serverName,
+    database,
+    options:  { encrypt: false, trustServerCertificate: true },
+    authentication: {
+      type: 'default' as const,
+      options: { userName: process.env.DB_USER ?? '', password: process.env.DB_PASSWORD ?? '' },
+    },
+  }).connect();
 
   try {
     const db = await getDb();
 
     // ── Step 1: Register team in LegacyLinkGlobal ───────────────────────────
-    const teamR = await db.request()
-      .input('Name',             sql.NVarChar,        clientName.trim())
-      .input('Abbr',             sql.NVarChar,        clientAbbr.toUpperCase().trim())
-      .input('Sport',            sql.NVarChar,        sport)
-      .input('Level',            sql.NVarChar,        level)
-      .input('AppDb',            sql.NVarChar,        appDbName.trim())
-      .input('DbServer',         sql.NVarChar,        serverName)
-      .input('SubscriptionTier', sql.NVarChar,        subscriptionTier)
-      .input('CreatedBy',        sql.UniqueIdentifier, req.user!.sub)
-      .output('NewTeamId',       sql.UniqueIdentifier)
-      .output('ErrorCode',       sql.NVarChar(50))
-      .execute('dbo.sp_CreateTeam');
+    let newTeamId: string;
+    try {
+      const teamR = await db.request()
+        .input('Name',             sql.NVarChar,         clientName.trim())
+        .input('Abbr',             sql.NVarChar,         clientAbbr.toUpperCase().trim())
+        .input('Sport',            sql.NVarChar,         sport)
+        .input('Level',            sql.NVarChar,         level)
+        .input('AppDb',            sql.NVarChar,         safeDbName)
+        .input('DbServer',         sql.NVarChar,         serverName)
+        .input('SubscriptionTier', sql.NVarChar,         subscriptionTier)
+        .input('CreatedBy',        sql.UniqueIdentifier, req.user!.sub)
+        .output('NewTeamId',       sql.UniqueIdentifier)
+        .output('ErrorCode',       sql.NVarChar(50))
+        .execute('dbo.sp_CreateTeam');
 
-    if (teamR.output.ErrorCode) {
-      return res.status(400).json({ success: false, error: teamR.output.ErrorCode });
+      if (teamR.output.ErrorCode) {
+        return res.status(400).json({ success: false, error: teamR.output.ErrorCode });
+      }
+      newTeamId = teamR.output.NewTeamId;
+    } catch (err) {
+      console.error('[onboard Step 1: sp_CreateTeam]', err);
+      return res.status(500).json({ success: false, error: `Step 1 (register team) failed: ${err instanceof Error ? err.message : String(err)}` });
     }
-    const newTeamId: string = teamR.output.NewTeamId;
 
     // ── Step 2: Create AppDB ─────────────────────────────────────────────────
-    // Must use dynamic SQL because CREATE DATABASE can't accept a parameter
-    const safeDbName = appDbName.replace(/[^A-Za-z0-9_]/g, '');
-    await db.request().query(`
-      IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'${safeDbName}')
-        CREATE DATABASE [${safeDbName}];
-    `);
-
-    // ── Step 3: Connect to new AppDB and apply schema ────────────────────────
-    const appPool = await new mssql.ConnectionPool({
-      server:   serverName,
-      database: safeDbName,
-      options:  { encrypt: false, trustServerCertificate: true },
-      authentication: {
-        type: 'default' as const,
-        options: {
-          userName: process.env.DB_USER     ?? '',
-          password: process.env.DB_PASSWORD ?? '',
-        },
-      },
-    }).connect();
-
     try {
-      await applyAppDbSchema(appPool);
-      await applyAppDbSps(appPool);
-    } finally {
-      await appPool.close();
-    }
-
-    // ── Step 4: Seed sport in AppDB ──────────────────────────────────────────
-    const sportAbbr = sport.substring(0, 2).toUpperCase();
-    const sportName = sport.charAt(0).toUpperCase() + sport.slice(1);
-    const appPool2  = await new mssql.ConnectionPool({
-      server:   serverName,
-      database: safeDbName,
-      options:  { encrypt: false, trustServerCertificate: true },
-      authentication: {
-        type: 'default' as const,
-        options: {
-          userName: process.env.DB_USER     ?? '',
-          password: process.env.DB_PASSWORD ?? '',
-        },
-      },
-    }).connect();
-    try {
-      await appPool2.request()
-        .input('Abbr', sql.NVarChar, sportAbbr)
-        .input('Name', sql.NVarChar, sportName)
-        .query(`
-          IF NOT EXISTS (SELECT 1 FROM dbo.sports WHERE abbr = @Abbr)
-            INSERT INTO dbo.sports (name, abbr) VALUES (@Name, @Abbr);
-        `);
-    } finally {
-      await appPool2.close();
-    }
-
-    // ── Step 5: Seed team_config ─────────────────────────────────────────────
-    await db.request()
-      .input('TeamId',      sql.UniqueIdentifier, newTeamId)
-      .input('TeamName',    sql.NVarChar,         clientName.trim())
-      .input('TeamAbbr',    sql.NVarChar,         clientAbbr.toUpperCase().trim())
-      .input('Sport',       sql.NVarChar,         sport)
-      .input('Level',       sql.NVarChar,         level)
-      .input('Primary',     sql.NChar(7),         colorPrimary ?? '#1B1B2F')
-      .input('Accent',      sql.NChar(7),         colorAccent  ?? '#B8973D')
-      .query(`
-        IF NOT EXISTS (SELECT 1 FROM dbo.team_config WHERE team_id = @TeamId)
-          INSERT INTO dbo.team_config (
-            team_id, team_name, team_abbr, sport, level,
-            color_primary, color_accent
-          ) VALUES (
-            @TeamId, @TeamName, @TeamAbbr, @Sport, @Level,
-            @Primary, @Accent
-          );
+      await db.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'${safeDbName}')
+          CREATE DATABASE [${safeDbName}];
       `);
+    } catch (err) {
+      console.error('[onboard Step 2: CREATE DATABASE]', err);
+      return res.status(500).json({ success: false, error: `Step 2 (create database "${safeDbName}") failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    // ── Step 3: Apply AppDB schema + stored procedures ───────────────────────
+    try {
+      const appPool = await connectToDb(safeDbName);
+      try {
+        await applyAppDbSchema(appPool);
+        await applyAppDbSps(appPool);
+      } finally {
+        await appPool.close();
+      }
+    } catch (err) {
+      console.error('[onboard Step 3: apply schema]', err);
+      return res.status(500).json({ success: false, error: `Step 3 (apply schema to "${safeDbName}") failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    // ── Step 4: Seed all standard sports in AppDB ────────────────────────────
+    // The AppDB is multi-sport — seed all common sports so coaches can use any.
+    const ALL_SPORTS = [
+      { name: 'Football',   abbr: 'FB' },
+      { name: 'Basketball', abbr: 'BB' },
+      { name: 'Baseball',   abbr: 'BA' },
+      { name: 'Soccer',     abbr: 'SO' },
+      { name: 'Softball',   abbr: 'SB' },
+      { name: 'Volleyball', abbr: 'VB' },
+      { name: 'Other',      abbr: 'OT' },
+    ];
+    try {
+      const appPool2 = await connectToDb(safeDbName);
+      try {
+        for (const s of ALL_SPORTS) {
+          await appPool2.request()
+            .input('Abbr', sql.NVarChar, s.abbr)
+            .input('Name', sql.NVarChar, s.name)
+            .query(`
+              IF NOT EXISTS (SELECT 1 FROM dbo.sports WHERE abbr = @Abbr)
+                INSERT INTO dbo.sports (name, abbr) VALUES (@Name, @Abbr);
+            `);
+        }
+      } finally {
+        await appPool2.close();
+      }
+    } catch (err) {
+      console.error('[onboard Step 4: seed sports]', err);
+      return res.status(500).json({ success: false, error: `Step 4 (seed sports) failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    // ── Step 5: Seed team_config in LegacyLinkGlobal ─────────────────────────
+    try {
+      await db.request()
+        .input('TeamId',   sql.UniqueIdentifier, newTeamId)
+        .input('TeamName', sql.NVarChar,         clientName.trim())
+        .input('TeamAbbr', sql.NVarChar,         clientAbbr.toUpperCase().trim())
+        .input('Sport',    sql.NVarChar,         sport)
+        .input('Level',    sql.NVarChar,         level)
+        .input('Primary',  sql.NVarChar,         colorPrimary ?? '#1B1B2F')
+        .input('Accent',   sql.NVarChar,         colorAccent  ?? '#B8973D')
+        .query(`
+          IF NOT EXISTS (SELECT 1 FROM dbo.team_config WHERE team_id = @TeamId)
+            INSERT INTO dbo.team_config (
+              team_id, team_name, team_abbr, sport, level,
+              color_primary, color_accent
+            ) VALUES (
+              @TeamId, @TeamName, @TeamAbbr, @Sport, @Level,
+              @Primary, @Accent
+            );
+        `);
+    } catch (err) {
+      console.error('[onboard Step 5: seed team_config]', err);
+      return res.status(500).json({ success: false, error: `Step 5 (seed team config) failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
 
     // ── Step 6: Handle admin user ────────────────────────────────────────────
     let resolvedAdminEmail: string;
@@ -594,6 +617,17 @@ async function applyAppDbSchema(pool: mssql.ConnectionPool): Promise<void> {
         ('006_nullable_user_id',          'Nullable user_id — superseded by create_app_db.sql'),
         ('008_consolidate_dbo_schema',    'Consolidate to dbo — superseded by create_app_db.sql'),
         ('009_users_status_consolidation','Unified dbo.users — superseded by create_app_db.sql');
+    END`,
+
+    // sp_GetSports — needed by GET /sports on app-api
+    `CREATE OR ALTER PROCEDURE dbo.sp_GetSports
+    AS
+    BEGIN
+      SET NOCOUNT ON;
+      SELECT id, name, abbr, is_active AS isActive
+      FROM   dbo.sports
+      WHERE  is_active = 1
+      ORDER  BY name;
     END`,
   ];
 

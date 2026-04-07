@@ -1487,3 +1487,19 @@ BEGIN
     (SELECT row_num AS rowNum, reason FROM @errors FOR JSON PATH), '[]');
 END;
 GO
+
+-- ============================================================
+-- sp_GetSports
+-- Returns all active sports in this AppDB.
+-- Used by the web/mobile sport-selector dropdowns.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_GetSports
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SELECT id, name, abbr, is_active AS isActive
+  FROM   dbo.sports
+  WHERE  is_active = 1
+  ORDER  BY name;
+END;
+GO
