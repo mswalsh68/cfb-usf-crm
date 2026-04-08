@@ -62,8 +62,8 @@ BEGIN
         t.name,
         'platform_owner'   AS role,
         tc.logo_url        AS logoUrl,
-        ISNULL(tc.color_primary, '#006747') AS colorPrimary,
-        ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+        ISNULL(tc.color_primary, '#1B1B2F') AS colorPrimary,
+        ISNULL(tc.color_accent,  '#B8973D') AS colorAccent
       FROM dbo.teams t
       LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
       WHERE t.is_active = 1
@@ -80,8 +80,8 @@ BEGIN
         t.name,
         ut.role,
         tc.logo_url AS logoUrl,
-        ISNULL(tc.color_primary, '#006747') AS colorPrimary,
-        ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+        ISNULL(tc.color_primary, '#1B1B2F') AS colorPrimary,
+        ISNULL(tc.color_accent,  '#B8973D') AS colorAccent
       FROM dbo.user_teams ut
       JOIN  dbo.teams t        ON t.id      = ut.team_id
       LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
@@ -249,8 +249,8 @@ BEGIN
         t.name,
         'platform_owner'   AS role,
         tc.logo_url        AS logoUrl,
-        ISNULL(tc.color_primary, '#006747') AS colorPrimary,
-        ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+        ISNULL(tc.color_primary, '#1B1B2F') AS colorPrimary,
+        ISNULL(tc.color_accent,  '#B8973D') AS colorAccent
       FROM dbo.teams t
       LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
       WHERE t.is_active = 1
@@ -267,8 +267,8 @@ BEGIN
         t.name,
         ut.role,
         tc.logo_url AS logoUrl,
-        ISNULL(tc.color_primary, '#006747') AS colorPrimary,
-        ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+        ISNULL(tc.color_primary, '#1B1B2F') AS colorPrimary,
+        ISNULL(tc.color_accent,  '#B8973D') AS colorAccent
       FROM dbo.user_teams ut
       JOIN  dbo.teams t        ON t.id      = ut.team_id
       LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
@@ -456,8 +456,8 @@ BEGIN
       t.is_active        AS isActive,
       'platform_owner'   AS role,
       tc.logo_url        AS logoUrl,
-      ISNULL(tc.color_primary, '#006747') AS colorPrimary,
-      ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+      ISNULL(tc.color_primary, '#1B1B2F') AS colorPrimary,
+      ISNULL(tc.color_accent,  '#B8973D') AS colorAccent
     FROM dbo.teams t
     LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
     WHERE t.is_active = 1
@@ -474,8 +474,8 @@ BEGIN
       t.is_active     AS isActive,
       ut.role,
       tc.logo_url     AS logoUrl,
-      ISNULL(tc.color_primary, '#006747') AS colorPrimary,
-      ISNULL(tc.color_accent,  '#CFC493') AS colorAccent
+      ISNULL(tc.color_primary, '#1B1B2F') AS colorPrimary,
+      ISNULL(tc.color_accent,  '#B8973D') AS colorAccent
     FROM dbo.user_teams ut
     JOIN  dbo.teams t        ON t.id      = ut.team_id
     LEFT JOIN dbo.team_config tc ON tc.team_id = t.id
@@ -911,6 +911,61 @@ BEGIN
   SELECT @IsActive = CAST(is_active AS BIT)
   FROM   dbo.teams
   WHERE  id = @TeamId;
+END;
+GO
+
+-- ============================================================
+-- sp_GetTokenVersion
+-- Returns the current token_version for a user.
+-- Called by requireAuth middleware on every authenticated request
+-- to detect revoke-all-sessions invalidation.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_GetTokenVersion
+  @UserId       UNIQUEIDENTIFIER,
+  @TokenVersion INT OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET @TokenVersion = NULL;
+  SELECT @TokenVersion = token_version
+  FROM   dbo.users
+  WHERE  id = @UserId;
+END;
+GO
+
+-- ============================================================
+-- sp_RevokeAllSessions
+-- Increments token_version (invalidating all existing JWTs)
+-- and revokes all active refresh tokens for a user.
+-- Called by POST /auth/revoke-all-sessions.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_RevokeAllSessions
+  @UserId  UNIQUEIDENTIFIER,
+  @ActorId UNIQUEIDENTIFIER
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET XACT_ABORT ON;
+
+  BEGIN TRANSACTION;
+
+    UPDATE dbo.users
+    SET token_version = token_version + 1,
+        updated_at    = SYSUTCDATETIME()
+    WHERE id = @UserId;
+
+    UPDATE dbo.refresh_tokens
+    SET revoked_at = SYSUTCDATETIME()
+    WHERE user_id  = @UserId
+      AND revoked_at IS NULL;
+
+    INSERT INTO dbo.audit_log (actor_id, action, target_type, target_id, payload)
+    VALUES (
+      @ActorId, 'sessions_revoked', 'user', CAST(@UserId AS NVARCHAR(100)),
+      JSON_OBJECT('revokedBy': CAST(@ActorId AS NVARCHAR(100)))
+    );
+
+  COMMIT TRANSACTION;
 END;
 GO
 
