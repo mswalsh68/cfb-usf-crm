@@ -46,7 +46,7 @@ export default function Select({ label, value, onChange, options, required, disa
         }}
       >
         {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>{opt.label}</option>
+          <option key={opt.value !== '' ? opt.value : `__placeholder__${opt.label}`} value={opt.value}>{opt.label}</option>
         ))}
       </select>
       {error && <span id={errorId} role="alert" style={{ fontSize: 12, color: 'var(--color-danger)' }}>{error}</span>}

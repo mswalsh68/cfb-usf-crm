@@ -55,10 +55,15 @@ GO
 
 -- ============================================================
 -- sp_GetPlayers
--- Returns current players (status_id = 1).
+-- Returns roster players filtered by status.
+-- @Status: 'active' (default/NULL) | 'removed' | 'all'
+--   active/NULL → status_id = 1 (current_player)
+--   removed     → status_id = 3
+--   all         → status_id 1 + 3 (excludes alumni)
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GetPlayers
   @Search          NVARCHAR(255)    = NULL,
+  @Status          NVARCHAR(20)     = NULL,
   @Position        NVARCHAR(10)     = NULL,
   @AcademicYear    NVARCHAR(20)     = NULL,
   @RecruitingClass SMALLINT         = NULL,
@@ -79,17 +84,28 @@ BEGIN
     EXEC sp_set_session_context N'user_role', @_role;
   END
 
+  -- Map status name → status_id (NULL means no single-id filter, use range)
+  DECLARE @StatusId INT = CASE
+    WHEN @Status IS NULL     THEN 1
+    WHEN @Status = 'active'  THEN 1
+    WHEN @Status = 'removed' THEN 3
+    ELSE NULL  -- 'all' or unrecognised: filter handled inline
+  END;
+
   DECLARE @Offset     INT           = (@Page - 1) * @PageSize;
   DECLARE @SearchWild NVARCHAR(257) = '%' + ISNULL(@Search, '') + '%';
   DECLARE @ExactNum   NVARCHAR(10)  = ISNULL(@Search, '');
 
   SELECT @TotalCount = COUNT(*)
   FROM dbo.users u
-  WHERE u.status_id = 1
-    AND (@Position        IS NULL OR u.position        = @Position)
-    AND (@AcademicYear    IS NULL OR u.academic_year   = @AcademicYear)
+  WHERE (
+    (@StatusId IS NOT NULL AND u.status_id = @StatusId)
+    OR (@StatusId IS NULL  AND u.status_id <> 2)  -- 'all': exclude alumni
+  )
+    AND (@Position        IS NULL OR u.position         = @Position)
+    AND (@AcademicYear    IS NULL OR u.academic_year    = @AcademicYear)
     AND (@RecruitingClass IS NULL OR u.recruiting_class = @RecruitingClass)
-    AND (@SportId         IS NULL OR u.sport_id        = @SportId)
+    AND (@SportId         IS NULL OR u.sport_id         = @SportId)
     AND (@Search IS NULL
          OR u.first_name LIKE @SearchWild
          OR u.last_name  LIKE @SearchWild
@@ -119,14 +135,23 @@ BEGIN
     u.emergency_contact_name  AS emergencyContactName,
     u.emergency_contact_phone AS emergencyContactPhone,
     u.notes,
+    CASE u.status_id
+      WHEN 1 THEN 'current_player'
+      WHEN 2 THEN 'alumni'
+      WHEN 3 THEN 'removed'
+      ELSE 'unknown'
+    END                       AS status,
     u.created_at            AS createdAt,
     u.updated_at            AS updatedAt
   FROM dbo.users u
-  WHERE u.status_id = 1
-    AND (@Position        IS NULL OR u.position        = @Position)
-    AND (@AcademicYear    IS NULL OR u.academic_year   = @AcademicYear)
+  WHERE (
+    (@StatusId IS NOT NULL AND u.status_id = @StatusId)
+    OR (@StatusId IS NULL  AND u.status_id <> 2)
+  )
+    AND (@Position        IS NULL OR u.position         = @Position)
+    AND (@AcademicYear    IS NULL OR u.academic_year    = @AcademicYear)
     AND (@RecruitingClass IS NULL OR u.recruiting_class = @RecruitingClass)
-    AND (@SportId         IS NULL OR u.sport_id        = @SportId)
+    AND (@SportId         IS NULL OR u.sport_id         = @SportId)
     AND (@Search IS NULL
          OR u.first_name LIKE @SearchWild
          OR u.last_name  LIKE @SearchWild
@@ -623,9 +648,11 @@ GO
 -- ============================================================
 -- sp_GetAlumni
 -- Returns alumni (status_id = 2).
+-- @Status accepted for API compatibility (reserved for future use).
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GetAlumni
   @Search    NVARCHAR(255)    = NULL,
+  @Status    NVARCHAR(20)     = NULL,
   @IsDonor   BIT              = NULL,
   @GradYear  SMALLINT         = NULL,
   @Position  NVARCHAR(10)     = NULL,
