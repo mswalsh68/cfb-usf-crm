@@ -531,6 +531,7 @@ async function applyAppDbSchema(pool: mssql.ConnectionPool): Promise<void> {
       status           NVARCHAR(20)     NOT NULL DEFAULT 'draft'
                        CONSTRAINT chk_campaign_status CHECK (status IN ('draft','scheduled','active','completed','cancelled')),
       scheduled_at     DATETIME2        NULL,
+      completed_at     DATETIME2        NULL,
       sport_id         UNIQUEIDENTIFIER NULL REFERENCES dbo.sports(id),
       created_by       UNIQUEIDENTIFIER NULL,
       created_at       DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
@@ -587,6 +588,60 @@ async function applyAppDbSchema(pool: mssql.ConnectionPool): Promise<void> {
       CONSTRAINT uq_user_roles UNIQUE (user_id, sport_id)
     )`,
 
+    // RLS — drop policy first so we can CREATE OR ALTER the function it references
+    `IF EXISTS (SELECT 1 FROM sys.security_policies WHERE name = 'user_access_policy' AND schema_id = SCHEMA_ID('dbo'))
+      DROP SECURITY POLICY dbo.user_access_policy`,
+
+    `CREATE OR ALTER FUNCTION dbo.fn_user_access(
+      @session_user_id   NVARCHAR(100),
+      @session_user_role NVARCHAR(50),
+      @row_sport_id      UNIQUEIDENTIFIER,
+      @row_user_id       UNIQUEIDENTIFIER,
+      @row_status_id     INT
+    )
+    RETURNS TABLE
+    WITH SCHEMABINDING
+    AS
+    RETURN
+      SELECT 1 AS access_granted
+      WHERE
+        EXISTS (
+          SELECT 1 FROM dbo.user_roles ur
+          WHERE ur.user_id    = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
+            AND ur.sport_id   = @row_sport_id
+            AND ur.role       = 'coach_admin'
+            AND ur.revoked_at IS NULL
+        )
+        OR
+        (
+          @row_status_id = 1
+          AND EXISTS (
+            SELECT 1 FROM dbo.user_roles ur
+            WHERE ur.user_id    = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
+              AND ur.sport_id   = @row_sport_id
+              AND ur.role       = 'roster_only_admin'
+              AND ur.revoked_at IS NULL
+          )
+        )
+        OR
+        @row_user_id = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
+        OR
+        (
+          @row_sport_id IS NULL
+          AND TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER) IS NOT NULL
+        )`,
+
+    `IF NOT EXISTS (SELECT 1 FROM sys.security_policies WHERE name = 'user_access_policy')
+    CREATE SECURITY POLICY dbo.user_access_policy
+      ADD FILTER PREDICATE dbo.fn_user_access(
+        CAST(SESSION_CONTEXT(N'user_id')   AS NVARCHAR(100)),
+        CAST(SESSION_CONTEXT(N'user_role') AS NVARCHAR(50)),
+        sport_id,
+        id,
+        status_id
+      ) ON dbo.users
+    WITH (STATE = ON)`,
+
     // audit_log
     `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'audit_log' AND schema_id = SCHEMA_ID('dbo'))
     CREATE TABLE dbo.audit_log (
@@ -600,23 +655,28 @@ async function applyAppDbSchema(pool: mssql.ConnectionPool): Promise<void> {
       created_at  DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
     )`,
 
-    // migration_history
+    // migration_history — column name MUST be migration_name to match ll-db-deploy tool
     `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'migration_history' AND schema_id = SCHEMA_ID('dbo'))
     BEGIN
       CREATE TABLE dbo.migration_history (
-        id           INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
-        migration_id NVARCHAR(100) NOT NULL UNIQUE,
-        applied_at   DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
-        description  NVARCHAR(500) NULL
+        id             INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        migration_name NVARCHAR(260) NOT NULL UNIQUE,
+        applied_at     DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+        applied_by     NVARCHAR(100) NOT NULL DEFAULT SYSTEM_USER
       );
-      INSERT INTO dbo.migration_history (migration_id, description) VALUES
-        ('001_app_db_schema',             'Initial schema — superseded by create_app_db.sql'),
-        ('003_rbac_infrastructure',       'RBAC, sports, seasons — superseded by create_app_db.sql'),
-        ('004_add_sport_classification',  'Sport columns — superseded by create_app_db.sql'),
-        ('005_rls_policies',              'RLS — superseded by create_app_db.sql'),
-        ('006_nullable_user_id',          'Nullable user_id — superseded by create_app_db.sql'),
-        ('008_consolidate_dbo_schema',    'Consolidate to dbo — superseded by create_app_db.sql'),
-        ('009_users_status_consolidation','Unified dbo.users — superseded by create_app_db.sql');
+      -- Pre-mark all migrations that are superseded by the create script above.
+      -- ll-db-deploy will skip any migration_name already present here.
+      INSERT INTO dbo.migration_history (migration_name) VALUES
+        ('001_app_db_schema.sql'),
+        ('002_migrate_data.sql'),
+        ('003_rbac_infrastructure.sql'),
+        ('004_add_sport_classification.sql'),
+        ('005_rls_policies.sql'),
+        ('006_nullable_user_id.sql'),
+        ('008_consolidate_dbo_schema.sql'),
+        ('009_users_status_consolidation.sql'),
+        ('010_campaign_completed_at.sql'),
+        ('011_drop_current_country.sql');
     END`,
 
     // sp_GetSports — needed by GET /sports on app-api

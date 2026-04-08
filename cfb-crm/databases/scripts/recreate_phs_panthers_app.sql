@@ -1,33 +1,31 @@
 -- ============================================================
--- CREATE CLIENT APP DATABASE — Run once per new client
--- ============================================================
--- ADMIN: Set the four variables below before running.
--- Run this entire file against: master (it switches context
--- to the new DB after creating it).
+-- RECREATE PHSPanthersApp — Drop and provision from scratch
+-- Team: Plant Panthers  |  Abbr: PHS  |  Sport: football (high_school)
+-- Run against: master (script switches context internally)
 --
--- After this script completes, run against the new AppDB:
---   databases/app/stored-procedures/sp_App_AllProcedures.sql
---
--- This script also registers the team in LegacyLinkGlobal.
+-- Safe to run when there is no live data in PHSPanthersApp.
+-- After this script, run: sp_App_AllProcedures.sql against PHSPanthersApp
+--   OR just run:  npm run deploy:prod:sps  (in ll-db-deploy)
 -- ============================================================
-
--- ─── ADMIN: Configure these before running ──────────────────
-DECLARE @ClientName  NVARCHAR(100) = 'Plant Panthers Football';  -- Full display name
-DECLARE @ClientAbbr  NVARCHAR(10)  = 'PLANT';                   -- Short code (unique)
-DECLARE @AppDbName   NVARCHAR(150) = 'PlantPanthersApp';         -- SQL Server DB name
-DECLARE @Sport       NVARCHAR(50)  = 'football';                 -- football | basketball | baseball | soccer | softball | volleyball | other
-DECLARE @Level       NVARCHAR(20)  = 'high_school';              -- college | high_school | club
-DECLARE @DbServer    NVARCHAR(200) = 'localhost\SQLEXPRESS';     -- SQL Server instance
-DECLARE @Tier        NVARCHAR(20)  = 'starter';                  -- starter | pro | enterprise
--- ────────────────────────────────────────────────────────────
 
 USE master;
 GO
 
 -- ============================================================
+-- DROP existing DB
+-- ============================================================
+IF EXISTS (SELECT 1 FROM sys.databases WHERE name = 'PHSPanthersApp')
+BEGIN
+  ALTER DATABASE PHSPanthersApp SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+  DROP DATABASE PHSPanthersApp;
+  PRINT 'Dropped database: PHSPanthersApp';
+END
+GO
+
+-- ============================================================
 -- STEP 1 — Create the AppDB
 -- ============================================================
-DECLARE @AppDbName NVARCHAR(150) = 'PlantPanthersApp'; -- keep in sync with variable above
+DECLARE @AppDbName NVARCHAR(150) = 'PHSPanthersApp';
 DECLARE @sql       NVARCHAR(MAX);
 
 IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = @AppDbName)
@@ -36,12 +34,9 @@ BEGIN
   EXEC sp_executesql @sql;
   PRINT 'Created database: ' + @AppDbName;
 END
-ELSE
-  PRINT 'Database already exists — schema will be updated in place: ' + @AppDbName;
 GO
 
--- Switch to the new AppDB for all remaining steps
-USE PlantPanthersApp; -- ← Update this USE statement to match @AppDbName above
+USE PHSPanthersApp;
 GO
 
 -- ============================================================
@@ -65,7 +60,7 @@ END
 GO
 
 -- ============================================================
--- STEP 3 — SPORTS (organisational unit within tenant)
+-- STEP 3 — SPORTS
 -- ============================================================
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'sports' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
@@ -82,26 +77,19 @@ END
 GO
 
 -- ============================================================
--- STEP 4 — USERS (unified players + alumni, single table)
--- id = mirrors LegacyLinkGlobal.dbo.users.id (the canonical GUID)
--- status_id: 1=current player  2=alumni  3=removed
+-- STEP 4 — USERS
 -- ============================================================
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'users' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
   CREATE TABLE dbo.users (
-    -- ─── Identity (mirrors LegacyLinkGlobal) ──────────────
     id                      UNIQUEIDENTIFIER  NOT NULL  PRIMARY KEY,
-    email                   NVARCHAR(255)     NULL,   -- NULL OK for provisional bulk-import rows
+    email                   NVARCHAR(255)     NULL,
     first_name              NVARCHAR(100)     NOT NULL,
     last_name               NVARCHAR(100)     NOT NULL,
-
-    -- ─── Status ────────────────────────────────────────────
     status_id               INT               NOT NULL DEFAULT 1
                             REFERENCES dbo.player_status_types(id),
     sport_id                UNIQUEIDENTIFIER  NULL
                             REFERENCES dbo.sports(id),
-
-    -- ─── Roster fields ─────────────────────────────────────
     jersey_number           TINYINT           NULL,
     position                NVARCHAR(10)      NULL,
     academic_year           NVARCHAR(20)      NULL,
@@ -120,8 +108,6 @@ BEGIN
     snapchat                NVARCHAR(100)     NULL,
     emergency_contact_name  NVARCHAR(150)     NULL,
     emergency_contact_phone NVARCHAR(20)      NULL,
-
-    -- ─── Alumni / graduation fields ────────────────────────
     graduation_year         SMALLINT          NULL,
     graduation_semester     NVARCHAR(10)      NULL,
     graduated_at            DATETIME2         NULL,
@@ -137,14 +123,11 @@ BEGIN
     engagement_score        TINYINT           NULL DEFAULT 0,
     communication_consent   BIT               NULL DEFAULT 1,
     years_on_roster         TINYINT           NULL,
-
-    -- ─── Shared ────────────────────────────────────────────
     notes                   NVARCHAR(MAX)     NULL,
     created_at              DATETIME2         NOT NULL DEFAULT SYSUTCDATETIME(),
     updated_at              DATETIME2         NOT NULL DEFAULT SYSUTCDATETIME()
   );
 
-  -- Filtered unique index: jersey numbers unique per active sport player
   CREATE UNIQUE INDEX uix_users_jersey_sport
     ON dbo.users (jersey_number, sport_id)
     WHERE jersey_number IS NOT NULL AND status_id = 1 AND sport_id IS NOT NULL;
@@ -154,7 +137,7 @@ END
 GO
 
 -- ============================================================
--- STEP 5 — USERS_SPORTS (multi-sport junction)
+-- STEP 5 — USERS_SPORTS
 -- ============================================================
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'users_sports' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
@@ -206,7 +189,7 @@ END
 GO
 
 -- ============================================================
--- STEP 8 — GRADUATION LOG (audit trail for status flips)
+-- STEP 8 — GRADUATION LOG
 -- ============================================================
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'graduation_log' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
@@ -226,7 +209,7 @@ END
 GO
 
 -- ============================================================
--- STEP 9 — INTERACTION LOG (alumni CRM notes)
+-- STEP 9 — INTERACTION LOG
 -- ============================================================
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'interaction_log' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
@@ -308,7 +291,7 @@ END
 GO
 
 -- ============================================================
--- STEP 13 — SEASON PLAYERS (junction)
+-- STEP 13 — SEASON PLAYERS
 -- ============================================================
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'season_players' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
@@ -343,7 +326,7 @@ END
 GO
 
 -- ============================================================
--- STEP 15 — AUDIT LOG (FERPA — insert-only)
+-- STEP 15 — AUDIT LOG
 -- ============================================================
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'audit_log' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
@@ -363,12 +346,7 @@ GO
 
 -- ============================================================
 -- STEP 16 — ROW-LEVEL SECURITY
--- fn_user_access receives the row's id column as @UserId.
--- The security policy passes dbo.users.id when evaluating each row.
--- SESSION_CONTEXT keys: 'user_id' and 'user_role'
 -- ============================================================
-
--- Drop existing policy first so we can CREATE OR ALTER the function it references
 IF EXISTS (
   SELECT 1 FROM sys.security_policies
   WHERE name = 'user_access_policy' AND schema_id = SCHEMA_ID('dbo')
@@ -379,8 +357,6 @@ BEGIN
 END
 GO
 
--- fn_user_access: sport-aware row-level security.
--- Receives column values from each dbo.users row via the security policy.
 CREATE OR ALTER FUNCTION dbo.fn_user_access(
   @session_user_id   NVARCHAR(100),
   @session_user_role NVARCHAR(50),
@@ -394,7 +370,6 @@ AS
 RETURN
   SELECT 1 AS access_granted
   WHERE
-    -- Coach admin sees everyone for this sport (players + alumni)
     EXISTS (
       SELECT 1 FROM dbo.user_roles ur
       WHERE ur.user_id    = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
@@ -403,7 +378,6 @@ RETURN
         AND ur.revoked_at IS NULL
     )
     OR
-    -- Roster-only admin sees current players only (status_id=1)
     (
       @row_status_id = 1
       AND EXISTS (
@@ -415,10 +389,8 @@ RETURN
       )
     )
     OR
-    -- Users always see their own row
     @row_user_id = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
     OR
-    -- Transition bypass: rows not yet assigned a sport
     (
       @row_sport_id IS NULL
       AND TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER) IS NOT NULL
@@ -441,10 +413,7 @@ END
 GO
 
 -- ============================================================
--- STEP 17 — MIGRATION HISTORY (tracks which migrations ran)
--- Keeps column name 'migration_name' to match ll-db-deploy tool.
--- New AppDBs are created from this script so all migrations are
--- immediately marked as applied — deploy tool will skip them.
+-- STEP 17 — MIGRATION HISTORY (all migrations pre-marked)
 -- ============================================================
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'migration_history' AND schema_id = SCHEMA_ID('dbo'))
 BEGIN
@@ -455,7 +424,6 @@ BEGIN
     applied_by     NVARCHAR(100) NOT NULL DEFAULT SYSTEM_USER
   );
 
-  -- Mark all migrations as already applied (this script supersedes them)
   INSERT INTO dbo.migration_history (migration_name) VALUES
     ('001_app_db_schema.sql'),
     ('002_migrate_data.sql'),
@@ -473,9 +441,7 @@ END
 GO
 
 -- ============================================================
--- STEP 18 — SEED: All standard sports
--- AppDB is multi-sport — seed all 7 standard sports up-front.
--- Coaches/admins are then assigned sport-specific roles.
+-- STEP 18 — SEED: Standard sports
 -- ============================================================
 IF NOT EXISTS (SELECT 1 FROM dbo.sports WHERE abbr = 'FB')
   INSERT INTO dbo.sports (id, name, abbr) VALUES (NEWID(), 'Football',   'FB');
@@ -491,20 +457,20 @@ IF NOT EXISTS (SELECT 1 FROM dbo.sports WHERE abbr = 'VB')
   INSERT INTO dbo.sports (id, name, abbr) VALUES (NEWID(), 'Volleyball', 'VB');
 IF NOT EXISTS (SELECT 1 FROM dbo.sports WHERE abbr = 'OT')
   INSERT INTO dbo.sports (id, name, abbr) VALUES (NEWID(), 'Other',      'OT');
-PRINT 'Seeded standard sports (FB, BB, BA, SO, SB, VB, OT)';
+PRINT 'Seeded standard sports';
 GO
 
 -- ============================================================
--- STEP 19 — REGISTER TEAM IN LegacyLinkGlobal
+-- STEP 19 — REGISTER / UPDATE team in LegacyLinkGlobal
+-- (team already exists — IF NOT EXISTS skips the INSERT,
+--  team_config seeded if not already present)
 -- ============================================================
--- Run this block after the AppDB is set up.
--- Uses cross-DB reference — LegacyLinkGlobal must be on the same instance.
 USE LegacyLinkGlobal;
 GO
 
-DECLARE @ClientName  NVARCHAR(100) = 'Plant Panthers Football'; -- ← keep in sync with top
-DECLARE @ClientAbbr  NVARCHAR(10)  = 'PLANT';
-DECLARE @AppDbName   NVARCHAR(150) = 'PlantPanthersApp';
+DECLARE @ClientName  NVARCHAR(100) = 'Plant Panthers';
+DECLARE @ClientAbbr  NVARCHAR(10)  = 'PHS';
+DECLARE @AppDbName   NVARCHAR(150) = 'PHSPanthersApp';
 DECLARE @Sport       NVARCHAR(50)  = 'football';
 DECLARE @Level       NVARCHAR(20)  = 'high_school';
 DECLARE @DbServer    NVARCHAR(200) = 'localhost\SQLEXPRESS';
@@ -525,8 +491,6 @@ BEGIN
   PRINT 'Team already registered: ' + @ClientAbbr;
 END
 
--- Seed team_config with LegacyLink default palette
--- Clients can customise this later via /admin/settings
 IF NOT EXISTS (SELECT 1 FROM dbo.team_config WHERE team_id = @TeamId)
 BEGIN
   INSERT INTO dbo.team_config (
@@ -538,42 +502,24 @@ BEGIN
   )
   VALUES (
     @TeamId, @ClientName, @ClientAbbr, @Sport, @Level,
-    -- ─── LegacyLink default palette ───────────────────────
     '#1B1B2F', '#0D0D1A', '#EAEAF2',
     '#B8973D', '#9A7A2B', '#F5EDD5',
-    -- ───────────────────────────────────────────────────────
     'Roster', 'Alumni', 'Recruiting Class',
-    CASE @Sport
-      WHEN 'football'   THEN '["QB","RB","WR","TE","OL","DL","LB","DB","K","P","LS","ATH"]'
-      WHEN 'basketball' THEN '["PG","SG","SF","PF","C"]'
-      WHEN 'baseball'   THEN '["P","C","1B","2B","3B","SS","LF","CF","RF","DH"]'
-      WHEN 'soccer'     THEN '["GK","DEF","MID","FWD"]'
-      WHEN 'softball'   THEN '["P","C","1B","2B","3B","SS","LF","CF","RF","DP"]'
-      WHEN 'volleyball' THEN '["S","OH","MB","RS","L","DS"]'
-      ELSE '[]'
-    END,
-    CASE @Level
-      WHEN 'college'     THEN '["freshman","sophomore","junior","senior","graduate"]'
-      WHEN 'high_school' THEN '["9th","10th","11th","12th"]'
-      WHEN 'club'        THEN '["year1","year2","year3","year4"]'
-      ELSE '["freshman","sophomore","junior","senior"]'
-    END
+    '["QB","RB","WR","TE","OL","DL","LB","DB","K","P","LS","ATH"]',
+    '["9th","10th","11th","12th"]'
   );
-  PRINT 'Seeded team_config (LegacyLink default palette) for: ' + @ClientAbbr;
+  PRINT 'Seeded team_config for: ' + @ClientAbbr;
 END
 GO
 
 -- ============================================================
--- DONE
+-- DONE — Next step: push SPs
+--   npm run deploy:prod:sps   (in ll-db-deploy)
 -- ============================================================
 PRINT '';
 PRINT '==========================================================';
-PRINT 'Client AppDB provisioning complete.';
-PRINT '';
-PRINT 'Next steps:';
-PRINT '  1. Switch context back to the new AppDB:';
-PRINT '     USE PlantPanthersApp;';
-PRINT '  2. Run: databases/app/stored-procedures/sp_App_AllProcedures.sql';
-PRINT '  3. Create the first admin user via /platform-admin or sp_CreateUser.';
+PRINT 'PHSPanthersApp recreated successfully.';
+PRINT 'Run sp_App_AllProcedures.sql against PHSPanthersApp';
+PRINT 'OR:  npm run deploy:prod:sps  (in ll-db-deploy)';
 PRINT '==========================================================';
 GO
