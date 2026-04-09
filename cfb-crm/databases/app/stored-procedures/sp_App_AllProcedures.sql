@@ -54,16 +54,86 @@ END;
 GO
 
 -- ============================================================
+-- vwPlayers
+-- All current players (status_id = 1).
+-- Used by sp_GetPlayers and future communication procs.
+-- RLS on dbo.users applies transparently when queried.
+-- ============================================================
+CREATE OR ALTER VIEW dbo.vwPlayers AS
+SELECT
+  u.id,
+  u.sport_id,
+  u.jersey_number,
+  u.first_name,
+  u.last_name,
+  u.position,
+  u.academic_year,
+  u.recruiting_class,
+  u.height_inches,
+  u.weight_lbs,
+  u.home_town,
+  u.home_state,
+  u.high_school,
+  u.gpa,
+  u.major,
+  u.phone,
+  u.personal_email,
+  u.instagram,
+  u.twitter,
+  u.snapchat,
+  u.emergency_contact_name,
+  u.emergency_contact_phone,
+  u.notes,
+  u.created_at,
+  u.updated_at
+FROM dbo.users u
+WHERE u.status_id = 1;
+GO
+
+-- ============================================================
+-- vwAlumni
+-- All alumni (status_id = 2).
+-- Used by sp_GetAlumni and future communication procs.
+-- RLS on dbo.users applies transparently when queried.
+-- ============================================================
+CREATE OR ALTER VIEW dbo.vwAlumni AS
+SELECT
+  u.id,
+  u.sport_id,
+  u.first_name,
+  u.last_name,
+  u.position,
+  u.recruiting_class,
+  u.graduation_year,
+  u.graduation_semester,
+  u.graduated_at,
+  u.phone,
+  u.personal_email,
+  u.linkedin_url,
+  u.twitter_url,
+  u.current_employer,
+  u.current_job_title,
+  u.current_city,
+  u.current_state,
+  u.is_donor,
+  u.last_donation_date,
+  u.total_donations,
+  u.engagement_score,
+  u.communication_consent,
+  u.notes,
+  u.created_at,
+  u.updated_at
+FROM dbo.users u
+WHERE u.status_id = 2;
+GO
+
+-- ============================================================
 -- sp_GetPlayers
--- Returns roster players filtered by status.
--- @Status: 'active' (default/NULL) | 'removed' | 'all'
---   active/NULL → status_id = 1 (current_player)
---   removed     → status_id = 3
---   all         → status_id 1 + 3 (excludes alumni)
+-- Returns current players from dbo.vwPlayers.
+-- Status filtering is handled by the view (status_id = 1).
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GetPlayers
   @Search          NVARCHAR(255)    = NULL,
-  @Status          NVARCHAR(20)     = NULL,
   @Position        NVARCHAR(10)     = NULL,
   @AcademicYear    NVARCHAR(20)     = NULL,
   @RecruitingClass SMALLINT         = NULL,
@@ -84,79 +154,57 @@ BEGIN
     EXEC sp_set_session_context N'user_role', @_role;
   END
 
-  -- Map status name → status_id (NULL means no single-id filter, use range)
-  DECLARE @StatusId INT = CASE
-    WHEN @Status IS NULL     THEN 1
-    WHEN @Status = 'active'  THEN 1
-    WHEN @Status = 'removed' THEN 3
-    ELSE NULL  -- 'all' or unrecognised: filter handled inline
-  END;
-
   DECLARE @Offset     INT           = (@Page - 1) * @PageSize;
   DECLARE @SearchWild NVARCHAR(257) = '%' + ISNULL(@Search, '') + '%';
   DECLARE @ExactNum   NVARCHAR(10)  = ISNULL(@Search, '');
 
   SELECT @TotalCount = COUNT(*)
-  FROM dbo.users u
-  WHERE (
-    (@StatusId IS NOT NULL AND u.status_id = @StatusId)
-    OR (@StatusId IS NULL  AND u.status_id <> 2)  -- 'all': exclude alumni
-  )
-    AND (@Position        IS NULL OR u.position         = @Position)
-    AND (@AcademicYear    IS NULL OR u.academic_year    = @AcademicYear)
-    AND (@RecruitingClass IS NULL OR u.recruiting_class = @RecruitingClass)
-    AND (@SportId         IS NULL OR u.sport_id         = @SportId)
+  FROM dbo.vwPlayers p
+  WHERE (@Position        IS NULL OR p.position         = @Position)
+    AND (@AcademicYear    IS NULL OR p.academic_year    = @AcademicYear)
+    AND (@RecruitingClass IS NULL OR p.recruiting_class = @RecruitingClass)
+    AND (@SportId         IS NULL OR p.sport_id         = @SportId)
     AND (@Search IS NULL
-         OR u.first_name LIKE @SearchWild
-         OR u.last_name  LIKE @SearchWild
-         OR CAST(u.jersey_number AS NVARCHAR) = @ExactNum);
+         OR p.first_name LIKE @SearchWild
+         OR p.last_name  LIKE @SearchWild
+         OR CAST(p.jersey_number AS NVARCHAR) = @ExactNum);
 
   SELECT
-    u.id,
-    u.sport_id              AS sportId,
-    u.jersey_number         AS jerseyNumber,
-    u.first_name            AS firstName,
-    u.last_name             AS lastName,
-    u.position,
-    u.academic_year         AS academicYear,
-    u.height_inches         AS heightInches,
-    u.weight_lbs            AS weightLbs,
-    u.home_town             AS homeTown,
-    u.home_state            AS homeState,
-    u.high_school           AS highSchool,
-    u.recruiting_class      AS recruitingClass,
-    u.gpa,
-    u.major,
-    u.phone,
-    u.personal_email        AS email,
-    u.instagram,
-    u.twitter,
-    u.snapchat,
-    u.emergency_contact_name  AS emergencyContactName,
-    u.emergency_contact_phone AS emergencyContactPhone,
-    u.notes,
-    CASE u.status_id
-      WHEN 1 THEN 'current_player'
-      WHEN 2 THEN 'alumni'
-      WHEN 3 THEN 'removed'
-      ELSE 'unknown'
-    END                       AS status,
-    u.created_at            AS createdAt,
-    u.updated_at            AS updatedAt
-  FROM dbo.users u
-  WHERE (
-    (@StatusId IS NOT NULL AND u.status_id = @StatusId)
-    OR (@StatusId IS NULL  AND u.status_id <> 2)
-  )
-    AND (@Position        IS NULL OR u.position         = @Position)
-    AND (@AcademicYear    IS NULL OR u.academic_year    = @AcademicYear)
-    AND (@RecruitingClass IS NULL OR u.recruiting_class = @RecruitingClass)
-    AND (@SportId         IS NULL OR u.sport_id         = @SportId)
+    p.id,
+    p.sport_id              AS sportId,
+    p.jersey_number         AS jerseyNumber,
+    p.first_name            AS firstName,
+    p.last_name             AS lastName,
+    p.position,
+    p.academic_year         AS academicYear,
+    p.height_inches         AS heightInches,
+    p.weight_lbs            AS weightLbs,
+    p.home_town             AS homeTown,
+    p.home_state            AS homeState,
+    p.high_school           AS highSchool,
+    p.recruiting_class      AS recruitingClass,
+    p.gpa,
+    p.major,
+    p.phone,
+    p.personal_email        AS email,
+    p.instagram,
+    p.twitter,
+    p.snapchat,
+    p.emergency_contact_name  AS emergencyContactName,
+    p.emergency_contact_phone AS emergencyContactPhone,
+    p.notes,
+    p.created_at            AS createdAt,
+    p.updated_at            AS updatedAt
+  FROM dbo.vwPlayers p
+  WHERE (@Position        IS NULL OR p.position         = @Position)
+    AND (@AcademicYear    IS NULL OR p.academic_year    = @AcademicYear)
+    AND (@RecruitingClass IS NULL OR p.recruiting_class = @RecruitingClass)
+    AND (@SportId         IS NULL OR p.sport_id         = @SportId)
     AND (@Search IS NULL
-         OR u.first_name LIKE @SearchWild
-         OR u.last_name  LIKE @SearchWild
-         OR CAST(u.jersey_number AS NVARCHAR) = @ExactNum)
-  ORDER BY u.last_name, u.first_name
+         OR p.first_name LIKE @SearchWild
+         OR p.last_name  LIKE @SearchWild
+         OR CAST(p.jersey_number AS NVARCHAR) = @ExactNum)
+  ORDER BY p.last_name, p.first_name
   OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
 END;
 GO
@@ -647,12 +695,11 @@ GO
 
 -- ============================================================
 -- sp_GetAlumni
--- Returns alumni (status_id = 2).
--- @Status accepted for API compatibility (reserved for future use).
+-- Returns alumni from dbo.vwAlumni.
+-- Status filtering is handled by the view (status_id = 2).
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_GetAlumni
   @Search    NVARCHAR(255)    = NULL,
-  @Status    NVARCHAR(20)     = NULL,
   @IsDonor   BIT              = NULL,
   @GradYear  SMALLINT         = NULL,
   @Position  NVARCHAR(10)     = NULL,
@@ -677,56 +724,54 @@ BEGIN
   DECLARE @SearchWild NVARCHAR(257) = '%' + ISNULL(@Search, '') + '%';
 
   SELECT @TotalCount = COUNT(*)
-  FROM dbo.users u
-  WHERE u.status_id = 2
-    AND (@IsDonor  IS NULL OR u.is_donor        = @IsDonor)
-    AND (@GradYear IS NULL OR u.graduation_year = @GradYear)
-    AND (@Position IS NULL OR u.position        = @Position)
-    AND (@SportId  IS NULL OR u.sport_id        = @SportId)
+  FROM dbo.vwAlumni a
+  WHERE (@IsDonor  IS NULL OR a.is_donor        = @IsDonor)
+    AND (@GradYear IS NULL OR a.graduation_year = @GradYear)
+    AND (@Position IS NULL OR a.position        = @Position)
+    AND (@SportId  IS NULL OR a.sport_id        = @SportId)
     AND (@Search IS NULL
-         OR u.first_name       LIKE @SearchWild
-         OR u.last_name        LIKE @SearchWild
-         OR u.current_employer LIKE @SearchWild
-         OR u.current_city     LIKE @SearchWild
-         OR u.personal_email   LIKE @SearchWild);
+         OR a.first_name       LIKE @SearchWild
+         OR a.last_name        LIKE @SearchWild
+         OR a.current_employer LIKE @SearchWild
+         OR a.current_city     LIKE @SearchWild
+         OR a.personal_email   LIKE @SearchWild);
 
   SELECT
-    u.id,
-    u.sport_id              AS sportId,
-    u.first_name            AS firstName,
-    u.last_name             AS lastName,
-    u.graduation_year       AS graduationYear,
-    u.graduation_semester   AS graduationSemester,
-    u.position,
-    u.recruiting_class      AS recruitingClass,
-    u.personal_email        AS personalEmail,
-    u.phone,
-    u.linkedin_url          AS linkedInUrl,
-    u.twitter_url           AS twitterUrl,
-    u.current_employer      AS currentEmployer,
-    u.current_job_title     AS currentJobTitle,
-    u.current_city          AS currentCity,
-    u.current_state         AS currentState,
-    u.is_donor              AS isDonor,
-    u.last_donation_date    AS lastDonationDate,
-    u.total_donations       AS totalDonations,
-    u.engagement_score      AS engagementScore,
-    u.notes,
-    u.created_at            AS createdAt,
-    u.updated_at            AS updatedAt
-  FROM dbo.users u
-  WHERE u.status_id = 2
-    AND (@IsDonor  IS NULL OR u.is_donor        = @IsDonor)
-    AND (@GradYear IS NULL OR u.graduation_year = @GradYear)
-    AND (@Position IS NULL OR u.position        = @Position)
-    AND (@SportId  IS NULL OR u.sport_id        = @SportId)
+    a.id,
+    a.sport_id              AS sportId,
+    a.first_name            AS firstName,
+    a.last_name             AS lastName,
+    a.graduation_year       AS graduationYear,
+    a.graduation_semester   AS graduationSemester,
+    a.position,
+    a.recruiting_class      AS recruitingClass,
+    a.personal_email        AS personalEmail,
+    a.phone,
+    a.linkedin_url          AS linkedInUrl,
+    a.twitter_url           AS twitterUrl,
+    a.current_employer      AS currentEmployer,
+    a.current_job_title     AS currentJobTitle,
+    a.current_city          AS currentCity,
+    a.current_state         AS currentState,
+    a.is_donor              AS isDonor,
+    a.last_donation_date    AS lastDonationDate,
+    a.total_donations       AS totalDonations,
+    a.engagement_score      AS engagementScore,
+    a.notes,
+    a.created_at            AS createdAt,
+    a.updated_at            AS updatedAt
+  FROM dbo.vwAlumni a
+  WHERE (@IsDonor  IS NULL OR a.is_donor        = @IsDonor)
+    AND (@GradYear IS NULL OR a.graduation_year = @GradYear)
+    AND (@Position IS NULL OR a.position        = @Position)
+    AND (@SportId  IS NULL OR a.sport_id        = @SportId)
     AND (@Search IS NULL
-         OR u.first_name       LIKE @SearchWild
-         OR u.last_name        LIKE @SearchWild
-         OR u.current_employer LIKE @SearchWild
-         OR u.current_city     LIKE @SearchWild
-         OR u.personal_email   LIKE @SearchWild)
-  ORDER BY u.last_name, u.first_name
+         OR a.first_name       LIKE @SearchWild
+         OR a.last_name        LIKE @SearchWild
+         OR a.current_employer LIKE @SearchWild
+         OR a.current_city     LIKE @SearchWild
+         OR a.personal_email   LIKE @SearchWild)
+  ORDER BY a.last_name, a.first_name
   OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
 END;
 GO

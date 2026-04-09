@@ -215,7 +215,6 @@ app.get('/players', auth, rosterAccess, async (req, res) => {
       'dbo.sp_GetPlayers',
       {
         Search:          search           || null,
-        Status:          status           || null,
         Position:        position         || null,
         AcademicYear:    academicYear     || null,
         RecruitingClass: recruitingClass  ? parseInt(recruitingClass) : null,
@@ -482,7 +481,6 @@ app.get('/alumni', auth, alumniAccess, async (req, res) => {
       'dbo.sp_GetAlumni',
       {
         Search:   search   || null,
-        Status:   status   || null,
         IsDonor:  isDonor  ? isDonor === 'true' : null,
         GradYear: gradYear ? parseInt(gradYear) : null,
         Position: position || null,
