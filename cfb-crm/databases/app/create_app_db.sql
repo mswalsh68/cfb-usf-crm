@@ -8,7 +8,7 @@
 -- After this script completes, run against the new AppDB:
 --   databases/app/stored-procedures/sp_App_AllProcedures.sql
 --
--- This script also registers the team in LegacyLinkGlobal.
+-- This script also registers the team in the GlobalDB (@GlobalDb variable).
 -- ============================================================
 
 -- ─── ADMIN: Configure these before running ──────────────────
@@ -19,6 +19,7 @@ DECLARE @Sport       NVARCHAR(50)  = 'football';                 -- football | b
 DECLARE @Level       NVARCHAR(20)  = 'high_school';              -- college | high_school | club
 DECLARE @DbServer    NVARCHAR(200) = 'localhost\SQLEXPRESS';     -- SQL Server instance
 DECLARE @Tier        NVARCHAR(20)  = 'starter';                  -- starter | pro | enterprise
+DECLARE @GlobalDb    NVARCHAR(150) = 'LegacyLinkGlobal';         -- LegacyLinkGlobal (prod) | DevLegacyLinkGlobal (dev)
 -- ────────────────────────────────────────────────────────────
 
 USE master;
@@ -495,13 +496,11 @@ PRINT 'Seeded standard sports (FB, BB, BA, SO, SB, VB, OT)';
 GO
 
 -- ============================================================
--- STEP 19 — REGISTER TEAM IN LegacyLinkGlobal
+-- STEP 19 — REGISTER TEAM IN GlobalDB
 -- ============================================================
--- Run this block after the AppDB is set up.
--- Uses cross-DB reference — LegacyLinkGlobal must be on the same instance.
-USE LegacyLinkGlobal;
-GO
-
+-- Uses dynamic SQL to target whichever GlobalDB was set above
+-- (@GlobalDb = 'LegacyLinkGlobal' for prod, 'DevLegacyLinkGlobal' for dev).
+-- Both GlobalDBs must be on the same SQL Server instance.
 DECLARE @ClientName  NVARCHAR(100) = 'Plant Panthers Football'; -- ← keep in sync with top
 DECLARE @ClientAbbr  NVARCHAR(10)  = 'PLANT';
 DECLARE @AppDbName   NVARCHAR(150) = 'PlantPanthersApp';
@@ -509,58 +508,80 @@ DECLARE @Sport       NVARCHAR(50)  = 'football';
 DECLARE @Level       NVARCHAR(20)  = 'high_school';
 DECLARE @DbServer    NVARCHAR(200) = 'localhost\SQLEXPRESS';
 DECLARE @Tier        NVARCHAR(20)  = 'starter';
+DECLARE @GlobalDb    NVARCHAR(150) = 'LegacyLinkGlobal'; -- ← keep in sync with top
 
 DECLARE @TeamId UNIQUEIDENTIFIER;
+DECLARE @sql    NVARCHAR(MAX);
 
-IF NOT EXISTS (SELECT 1 FROM dbo.teams WHERE abbr = @ClientAbbr)
+-- Switch to the correct GlobalDB
+SET @sql = N'USE [' + @GlobalDb + N']';
+EXEC sp_executesql @sql;
+
+SET @sql = N'
+IF NOT EXISTS (SELECT 1 FROM [' + @GlobalDb + N'].dbo.teams WHERE abbr = @Abbr)
 BEGIN
-  SET @TeamId = NEWID();
-  INSERT INTO dbo.teams (id, name, abbr, sport, level, app_db, db_server, subscription_tier)
-  VALUES (@TeamId, @ClientName, @ClientAbbr, @Sport, @Level, @AppDbName, @DbServer, @Tier);
-  PRINT 'Registered team in LegacyLinkGlobal: ' + @ClientAbbr;
+  INSERT INTO [' + @GlobalDb + N'].dbo.teams (id, name, abbr, sport, level, app_db, db_server, subscription_tier)
+  VALUES (@TeamId, @Name, @Abbr, @Sport, @Level, @AppDb, @Server, @Tier);
 END
-ELSE
-BEGIN
-  SELECT @TeamId = id FROM dbo.teams WHERE abbr = @ClientAbbr;
-  PRINT 'Team already registered: ' + @ClientAbbr;
-END
+SELECT id FROM [' + @GlobalDb + N'].dbo.teams WHERE abbr = @Abbr;
+';
+
+SET @TeamId = NEWID();
+EXEC sp_executesql @sql,
+  N'@TeamId UNIQUEIDENTIFIER, @Name NVARCHAR(100), @Abbr NVARCHAR(10), @Sport NVARCHAR(50),
+    @Level NVARCHAR(20), @AppDb NVARCHAR(150), @Server NVARCHAR(200), @Tier NVARCHAR(20)',
+  @TeamId, @ClientName, @ClientAbbr, @Sport, @Level, @AppDbName, @DbServer, @Tier;
+
+-- Re-fetch actual ID (in case team already existed)
+SET @sql = N'SELECT @TeamId = id FROM [' + @GlobalDb + N'].dbo.teams WHERE abbr = @Abbr';
+EXEC sp_executesql @sql,
+  N'@TeamId UNIQUEIDENTIFIER OUTPUT, @Abbr NVARCHAR(10)',
+  @TeamId OUTPUT, @ClientAbbr;
+
+PRINT 'Team registered/confirmed in ' + @GlobalDb + ': ' + @ClientAbbr;
 
 -- Seed team_config with LegacyLink default palette
 -- Clients can customise this later via /admin/settings
-IF NOT EXISTS (SELECT 1 FROM dbo.team_config WHERE team_id = @TeamId)
-BEGIN
-  INSERT INTO dbo.team_config (
+SET @sql = N'
+IF NOT EXISTS (SELECT 1 FROM [' + @GlobalDb + N'].dbo.team_config WHERE team_id = @TeamId)
+  INSERT INTO [' + @GlobalDb + N'].dbo.team_config (
     team_id, team_name, team_abbr, sport, level,
-    color_primary,      color_primary_dark,  color_primary_light,
-    color_accent,       color_accent_dark,   color_accent_light,
+    color_primary,     color_primary_dark, color_primary_light,
+    color_accent,      color_accent_dark,  color_accent_light,
     roster_label, alumni_label, class_label,
     positions_json, academic_years_json
-  )
-  VALUES (
-    @TeamId, @ClientName, @ClientAbbr, @Sport, @Level,
-    -- ─── LegacyLink default palette ───────────────────────
-    '#1B1B2F', '#0D0D1A', '#EAEAF2',
-    '#B8973D', '#9A7A2B', '#F5EDD5',
-    -- ───────────────────────────────────────────────────────
-    'Roster', 'Alumni', 'Recruiting Class',
-    CASE @Sport
-      WHEN 'football'   THEN '["QB","RB","WR","TE","OL","DL","LB","DB","K","P","LS","ATH"]'
-      WHEN 'basketball' THEN '["PG","SG","SF","PF","C"]'
-      WHEN 'baseball'   THEN '["P","C","1B","2B","3B","SS","LF","CF","RF","DH"]'
-      WHEN 'soccer'     THEN '["GK","DEF","MID","FWD"]'
-      WHEN 'softball'   THEN '["P","C","1B","2B","3B","SS","LF","CF","RF","DP"]'
-      WHEN 'volleyball' THEN '["S","OH","MB","RS","L","DS"]'
-      ELSE '[]'
-    END,
-    CASE @Level
-      WHEN 'college'     THEN '["freshman","sophomore","junior","senior","graduate"]'
-      WHEN 'high_school' THEN '["9th","10th","11th","12th"]'
-      WHEN 'club'        THEN '["year1","year2","year3","year4"]'
-      ELSE '["freshman","sophomore","junior","senior"]'
-    END
+  ) VALUES (
+    @TeamId, @Name, @Abbr, @Sport, @Level,
+    N''#1B1B2F'', N''#0D0D1A'', N''#EAEAF2'',
+    N''#B8973D'', N''#9A7A2B'', N''#F5EDD5'',
+    N''Roster'', N''Alumni'', N''Recruiting Class'',
+    @Positions, @AcademicYears
   );
-  PRINT 'Seeded team_config (LegacyLink default palette) for: ' + @ClientAbbr;
-END
+';
+
+DECLARE @Positions    NVARCHAR(MAX) = CASE @Sport
+  WHEN 'football'   THEN '["QB","RB","WR","TE","OL","DL","LB","DB","K","P","LS","ATH"]'
+  WHEN 'basketball' THEN '["PG","SG","SF","PF","C"]'
+  WHEN 'baseball'   THEN '["P","C","1B","2B","3B","SS","LF","CF","RF","DH"]'
+  WHEN 'soccer'     THEN '["GK","DEF","MID","FWD"]'
+  WHEN 'softball'   THEN '["P","C","1B","2B","3B","SS","LF","CF","RF","DP"]'
+  WHEN 'volleyball' THEN '["S","OH","MB","RS","L","DS"]'
+  ELSE '[]'
+END;
+DECLARE @AcademicYears NVARCHAR(MAX) = CASE @Level
+  WHEN 'college'     THEN '["freshman","sophomore","junior","senior","graduate"]'
+  WHEN 'high_school' THEN '["9th","10th","11th","12th"]'
+  WHEN 'club'        THEN '["year1","year2","year3","year4"]'
+  ELSE '["freshman","sophomore","junior","senior"]'
+END;
+
+EXEC sp_executesql @sql,
+  N'@TeamId UNIQUEIDENTIFIER, @Name NVARCHAR(100), @Abbr NVARCHAR(10),
+    @Sport NVARCHAR(50), @Level NVARCHAR(20),
+    @Positions NVARCHAR(MAX), @AcademicYears NVARCHAR(MAX)',
+  @TeamId, @ClientName, @ClientAbbr, @Sport, @Level, @Positions, @AcademicYears;
+
+PRINT 'team_config seeded/confirmed for: ' + @ClientAbbr;
 GO
 
 -- ============================================================
