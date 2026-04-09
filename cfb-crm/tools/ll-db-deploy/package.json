@@ -1,0 +1,31 @@
+{
+  "name": "ll-db-deploy",
+  "version": "1.0.0",
+  "description": "LegacyLink — AppDB deployment tool. Applies migrations and stored procedures to any/all registered client AppDBs.",
+  "main": "deploy.js",
+  "scripts": {
+    "deploy":                    "node deploy.js",
+    "deploy:dev":                "node deploy.js --db DevLegacyLinkApp",
+    "deploy:all":                "node deploy.js --all",
+    "deploy:sps":                "node deploy.js --all --sps-only",
+    "status":                    "node deploy.js --status",
+    "deploy:prod":               "node deploy.js --env prod --all",
+    "deploy:prod:sps":           "node deploy.js --env prod --all --sps-only",
+    "status:prod":               "node deploy.js --env prod --status",
+
+    "deploy:global":             "node deploy-global.js",
+    "deploy:global:prod":        "node deploy-global.js --env prod",
+    "deploy:global:sps":         "node deploy-global.js --sps-only",
+    "deploy:global:sps:prod":    "node deploy-global.js --env prod --sps-only",
+    "status:global":             "node deploy-global.js --status",
+    "status:global:prod":        "node deploy-global.js --env prod --status",
+
+    "compare":                   "node schema-compare.js",
+    "compare:global":            "node schema-compare.js --global-only",
+    "compare:app":               "node schema-compare.js --app-only"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "mssql":  "^11.0.1"
+  }
+}
