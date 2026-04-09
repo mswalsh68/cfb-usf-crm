@@ -533,8 +533,8 @@ BEGIN
 
     SET @NewUserId = NEWID();
 
-    INSERT INTO dbo.users (id, email, password_hash, first_name, last_name, global_role, team_id)
-    VALUES (@NewUserId, @Email, @PasswordHash, @FirstName, @LastName, @GlobalRole, @TeamId);
+    INSERT INTO dbo.users (id, email, password_hash, first_name, last_name, global_role)
+    VALUES (@NewUserId, @Email, @PasswordHash, @FirstName, @LastName, @GlobalRole);
 
     IF @TeamId IS NOT NULL
     BEGIN
@@ -1040,15 +1040,14 @@ BEGIN
 
     SET @UserId = NEWID();
 
-    INSERT INTO dbo.users (id, email, password_hash, first_name, last_name, global_role, team_id)
+    INSERT INTO dbo.users (id, email, password_hash, first_name, last_name, global_role)
     VALUES (
       @UserId,
       @Email,
       'INVITE_PENDING',   -- bcrypt never matches this; login blocked until invite redeemed
       @FirstName,
       @LastName,
-      'player',
-      @TeamId
+      'player'
     );
 
     IF @TeamId IS NOT NULL
