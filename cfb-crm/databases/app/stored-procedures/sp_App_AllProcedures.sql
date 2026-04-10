@@ -120,6 +120,7 @@ SELECT
   u.total_donations,
   u.engagement_score,
   u.communication_consent,
+  u.years_on_roster,
   u.notes,
   u.created_at,
   u.updated_at
@@ -230,40 +231,40 @@ BEGIN
   END
   SET @ErrorCode = NULL;
 
-  IF NOT EXISTS (SELECT 1 FROM dbo.users WHERE id = @UserId AND status_id = 1)
+  IF NOT EXISTS (SELECT 1 FROM dbo.vwPlayers WHERE id = @UserId)
   BEGIN
     SET @ErrorCode = 'PLAYER_NOT_FOUND';
     RETURN;
   END
 
   SELECT
-    u.id,
-    u.sport_id              AS sportId,
-    u.jersey_number         AS jerseyNumber,
-    u.first_name            AS firstName,
-    u.last_name             AS lastName,
-    u.position,
-    u.academic_year         AS academicYear,
-    u.height_inches         AS heightInches,
-    u.weight_lbs            AS weightLbs,
-    u.home_town             AS homeTown,
-    u.home_state            AS homeState,
-    u.high_school           AS highSchool,
-    u.recruiting_class      AS recruitingClass,
-    u.gpa,
-    u.major,
-    u.phone,
-    u.personal_email        AS email,
-    u.instagram,
-    u.twitter,
-    u.snapchat,
-    u.emergency_contact_name  AS emergencyContactName,
-    u.emergency_contact_phone AS emergencyContactPhone,
-    u.notes,
-    u.created_at            AS createdAt,
-    u.updated_at            AS updatedAt
-  FROM dbo.users u
-  WHERE u.id = @UserId;
+    p.id,
+    p.sport_id              AS sportId,
+    p.jersey_number         AS jerseyNumber,
+    p.first_name            AS firstName,
+    p.last_name             AS lastName,
+    p.position,
+    p.academic_year         AS academicYear,
+    p.height_inches         AS heightInches,
+    p.weight_lbs            AS weightLbs,
+    p.home_town             AS homeTown,
+    p.home_state            AS homeState,
+    p.high_school           AS highSchool,
+    p.recruiting_class      AS recruitingClass,
+    p.gpa,
+    p.major,
+    p.phone,
+    p.personal_email        AS email,
+    p.instagram,
+    p.twitter,
+    p.snapchat,
+    p.emergency_contact_name  AS emergencyContactName,
+    p.emergency_contact_phone AS emergencyContactPhone,
+    p.notes,
+    p.created_at            AS createdAt,
+    p.updated_at            AS updatedAt
+  FROM dbo.vwPlayers p
+  WHERE p.id = @UserId;
 
   SELECT
     ps.season_year  AS seasonYear,
@@ -796,40 +797,40 @@ BEGIN
   END
   SET @ErrorCode = NULL;
 
-  IF NOT EXISTS (SELECT 1 FROM dbo.users WHERE id = @UserId AND status_id = 2)
+  IF NOT EXISTS (SELECT 1 FROM dbo.vwAlumni WHERE id = @UserId)
   BEGIN
     SET @ErrorCode = 'ALUMNI_NOT_FOUND';
     RETURN;
   END
 
   SELECT
-    u.id,
-    u.sport_id              AS sportId,
-    u.first_name            AS firstName,
-    u.last_name             AS lastName,
-    u.graduation_year       AS graduationYear,
-    u.graduation_semester   AS graduationSemester,
-    u.position,
-    u.recruiting_class      AS recruitingClass,
-    u.personal_email        AS personalEmail,
-    u.phone,
-    u.linkedin_url          AS linkedInUrl,
-    u.twitter_url           AS twitterUrl,
-    u.current_employer      AS currentEmployer,
-    u.current_job_title     AS currentJobTitle,
-    u.current_city          AS currentCity,
-    u.current_state         AS currentState,
-    u.is_donor              AS isDonor,
-    u.last_donation_date    AS lastDonationDate,
-    u.total_donations       AS totalDonations,
-    u.engagement_score      AS engagementScore,
-    u.communication_consent AS communicationConsent,
-    u.years_on_roster       AS yearsOnRoster,
-    u.notes,
-    u.created_at            AS createdAt,
-    u.updated_at            AS updatedAt
-  FROM dbo.users u
-  WHERE u.id = @UserId;
+    a.id,
+    a.sport_id              AS sportId,
+    a.first_name            AS firstName,
+    a.last_name             AS lastName,
+    a.graduation_year       AS graduationYear,
+    a.graduation_semester   AS graduationSemester,
+    a.position,
+    a.recruiting_class      AS recruitingClass,
+    a.personal_email        AS personalEmail,
+    a.phone,
+    a.linkedin_url          AS linkedInUrl,
+    a.twitter_url           AS twitterUrl,
+    a.current_employer      AS currentEmployer,
+    a.current_job_title     AS currentJobTitle,
+    a.current_city          AS currentCity,
+    a.current_state         AS currentState,
+    a.is_donor              AS isDonor,
+    a.last_donation_date    AS lastDonationDate,
+    a.total_donations       AS totalDonations,
+    a.engagement_score      AS engagementScore,
+    a.communication_consent AS communicationConsent,
+    a.years_on_roster       AS yearsOnRoster,
+    a.notes,
+    a.created_at            AS createdAt,
+    a.updated_at            AS updatedAt
+  FROM dbo.vwAlumni a
+  WHERE a.id = @UserId;
 
   SELECT
     il.id,
@@ -1076,16 +1077,14 @@ BEGIN
     MAX(graduation_year)                                          AS latestClass,
     (
       SELECT graduation_year AS gradYear, COUNT(*) AS cnt
-      FROM dbo.users
-      WHERE status_id = 2
-        AND (@SportId IS NULL OR sport_id = @SportId)
+      FROM dbo.vwAlumni
+      WHERE (@SportId IS NULL OR sport_id = @SportId)
       GROUP BY graduation_year
       ORDER BY graduation_year DESC
       FOR JSON PATH
     ) AS classCounts
-  FROM dbo.users
-  WHERE status_id = 2
-    AND (@SportId IS NULL OR sport_id = @SportId);
+  FROM dbo.vwAlumni
+  WHERE (@SportId IS NULL OR sport_id = @SportId);
 END;
 GO
 
