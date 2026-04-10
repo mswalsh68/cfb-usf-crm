@@ -29,23 +29,29 @@ BEGIN
 
     SELECT TOP 1
       id,
-      team_name           AS teamName,
-      team_abbr           AS teamAbbr,
+      team_name                AS teamName,
+      team_abbr                AS teamAbbr,
       sport,
       level,
-      logo_url            AS logoUrl,
-      color_primary       AS colorPrimary,
-      color_primary_dark  AS colorPrimaryDark,
-      color_primary_light AS colorPrimaryLight,
-      color_accent        AS colorAccent,
-      color_accent_dark   AS colorAccentDark,
-      color_accent_light  AS colorAccentLight,
-      positions_json      AS positionsJson,
-      academic_years_json AS academicYearsJson,
-      alumni_label        AS alumniLabel,
-      roster_label        AS rosterLabel,
-      class_label         AS classLabel,
-      updated_at          AS updatedAt
+      logo_url                 AS logoUrl,
+      color_primary            AS colorPrimary,
+      color_primary_dark       AS colorPrimaryDark,
+      color_primary_light      AS colorPrimaryLight,
+      color_accent             AS colorAccent,
+      color_accent_dark        AS colorAccentDark,
+      color_accent_light       AS colorAccentLight,
+      positions_json           AS positionsJson,
+      academic_years_json      AS academicYearsJson,
+      alumni_label             AS alumniLabel,
+      roster_label             AS rosterLabel,
+      class_label              AS classLabel,
+      email_from_address       AS emailFromAddress,
+      email_from_name          AS emailFromName,
+      email_reply_to           AS emailReplyTo,
+      email_physical_address   AS emailPhysicalAddress,
+      email_daily_send_limit   AS emailDailySendLimit,
+      email_monthly_send_limit AS emailMonthlySendLimit,
+      updated_at               AS updatedAt
     FROM dbo.team_config
     WHERE team_id = @TeamId;
   END
@@ -59,23 +65,29 @@ BEGIN
 
     SELECT TOP 1
       id,
-      team_name           AS teamName,
-      team_abbr           AS teamAbbr,
+      team_name                AS teamName,
+      team_abbr                AS teamAbbr,
       sport,
       level,
-      logo_url            AS logoUrl,
-      color_primary       AS colorPrimary,
-      color_primary_dark  AS colorPrimaryDark,
-      color_primary_light AS colorPrimaryLight,
-      color_accent        AS colorAccent,
-      color_accent_dark   AS colorAccentDark,
-      color_accent_light  AS colorAccentLight,
-      positions_json      AS positionsJson,
-      academic_years_json AS academicYearsJson,
-      alumni_label        AS alumniLabel,
-      roster_label        AS rosterLabel,
-      class_label         AS classLabel,
-      updated_at          AS updatedAt
+      logo_url                 AS logoUrl,
+      color_primary            AS colorPrimary,
+      color_primary_dark       AS colorPrimaryDark,
+      color_primary_light      AS colorPrimaryLight,
+      color_accent             AS colorAccent,
+      color_accent_dark        AS colorAccentDark,
+      color_accent_light       AS colorAccentLight,
+      positions_json           AS positionsJson,
+      academic_years_json      AS academicYearsJson,
+      alumni_label             AS alumniLabel,
+      roster_label             AS rosterLabel,
+      class_label              AS classLabel,
+      email_from_address       AS emailFromAddress,
+      email_from_name          AS emailFromName,
+      email_reply_to           AS emailReplyTo,
+      email_physical_address   AS emailPhysicalAddress,
+      email_daily_send_limit   AS emailDailySendLimit,
+      email_monthly_send_limit AS emailMonthlySendLimit,
+      updated_at               AS updatedAt
     FROM dbo.team_config
     ORDER BY created_at;
   END
@@ -102,10 +114,16 @@ CREATE OR ALTER PROCEDURE dbo.sp_UpdateTeamConfig
   @ColorAccentLight  NVARCHAR(7)   = NULL,
   @PositionsJson     NVARCHAR(MAX) = NULL,
   @AcademicYearsJson NVARCHAR(MAX) = NULL,
-  @AlumniLabel       NVARCHAR(50)  = NULL,
-  @RosterLabel       NVARCHAR(50)  = NULL,
-  @ClassLabel        NVARCHAR(50)  = NULL,
-  @ErrorCode         NVARCHAR(50)  OUTPUT
+  @AlumniLabel          NVARCHAR(50)  = NULL,
+  @RosterLabel          NVARCHAR(50)  = NULL,
+  @ClassLabel           NVARCHAR(50)  = NULL,
+  @EmailFromAddress     NVARCHAR(255) = NULL,
+  @EmailFromName        NVARCHAR(200) = NULL,
+  @EmailReplyTo         NVARCHAR(255) = NULL,
+  @EmailPhysicalAddress NVARCHAR(500) = NULL,
+  @EmailDailySendLimit  INT           = NULL,
+  @EmailMonthlySendLimit INT          = NULL,
+  @ErrorCode            NVARCHAR(50)  OUTPUT
 AS
 BEGIN
   SET NOCOUNT ON;
@@ -147,10 +165,16 @@ BEGIN
     color_accent_light  = COALESCE(@ColorAccentLight,  color_accent_light),
     positions_json      = COALESCE(@PositionsJson,     positions_json),
     academic_years_json = COALESCE(@AcademicYearsJson, academic_years_json),
-    alumni_label        = COALESCE(@AlumniLabel,       alumni_label),
-    roster_label        = COALESCE(@RosterLabel,       roster_label),
-    class_label         = COALESCE(@ClassLabel,        class_label),
-    updated_at          = SYSUTCDATETIME()
+    alumni_label             = COALESCE(@AlumniLabel,           alumni_label),
+    roster_label             = COALESCE(@RosterLabel,           roster_label),
+    class_label              = COALESCE(@ClassLabel,            class_label),
+    email_from_address       = COALESCE(@EmailFromAddress,      email_from_address),
+    email_from_name          = COALESCE(@EmailFromName,         email_from_name),
+    email_reply_to           = COALESCE(@EmailReplyTo,          email_reply_to),
+    email_physical_address   = COALESCE(@EmailPhysicalAddress,  email_physical_address),
+    email_daily_send_limit   = COALESCE(@EmailDailySendLimit,   email_daily_send_limit),
+    email_monthly_send_limit = COALESCE(@EmailMonthlySendLimit, email_monthly_send_limit),
+    updated_at               = SYSUTCDATETIME()
   WHERE (@TeamId IS NULL AND id = (SELECT TOP 1 id FROM dbo.team_config ORDER BY created_at))
      OR (team_id = @TeamId);
 END;

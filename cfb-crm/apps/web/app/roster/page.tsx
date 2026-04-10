@@ -21,6 +21,8 @@ const statusBadge = (status: string) => {
   return map[status] ?? 'gray';
 };
 
+interface Sport { id: string; name: string; abbr: string; }
+
 export default function RosterPage() {
   const router = useRouter();
   const { positions, academicYears } = useTeamConfig();
@@ -31,12 +33,21 @@ export default function RosterPage() {
   const [position, setPosition] = useState('All');
   const status = 'active';
   const [year,     setYear]     = useState('');
+  const [sportId,  setSportId]  = useState('');
+  const [sports,   setSports]   = useState<Sport[]>([]);
   const [total,    setTotal]    = useState(0);
   const [page,     setPage]     = useState(1);
 
+  // Fetch available sports once on mount
+  useEffect(() => {
+    appApi.get('/sports')
+      .then(({ data }) => setSports(data.data ?? []))
+      .catch(() => { /* sports filter hidden if endpoint unavailable */ });
+  }, []);
+
   useEffect(() => {
     fetchPlayers();
-  }, [search, position, year, page]);
+  }, [search, position, year, sportId, page]);
 
   const fetchPlayers = async () => {
     setLoading(true);
@@ -46,6 +57,7 @@ export default function RosterPage() {
       if (position !== 'All') params.position    = position;
       if (status)             params.status      = status;
       if (year)               params.academicYear = year;
+      if (sportId)            params.sportId     = sportId;
       const { data } = await appApi.get('/players', { params });
       setPlayers(data.data ?? []);
       setTotal(data.total ?? 0);
@@ -77,12 +89,19 @@ export default function RosterPage() {
       {error && <Alert message={error} variant="error" onClose={() => setError('')} />}
 
       {/* Filters */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: sports.length > 1 ? '2fr 1fr 1fr 1fr' : '2fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
         <Input
           value={search}
           onChange={(v) => { setSearch(v); setPage(1); }}
           placeholder="Search name or jersey #..."
         />
+        {sports.length > 1 && (
+          <Select
+            value={sportId}
+            onChange={(v) => { setSportId(v); setPage(1); }}
+            options={[{ value: '', label: 'All Sports' }, ...sports.map(s => ({ value: s.id, label: s.name }))]}
+          />
+        )}
         <Select
           value={year}
           onChange={(v) => { setYear(v); setPage(1); }}

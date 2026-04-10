@@ -39,21 +39,61 @@ END
 GO
 
 -- ─── Step 2: dbo.player_status_types ─────────────────────────
+-- Ensure table exists with the canonical schema (status_name + description).
+-- Handles three cases:
+--   a) Table doesn't exist yet → create it fresh
+--   b) Table exists with old 'name' column (from migration 003) → rename column
+--   c) Table already has 'status_name' → idempotent, no-op
 
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE object_id = OBJECT_ID('dbo.player_status_types'))
 BEGIN
   CREATE TABLE dbo.player_status_types (
-    id   INT          NOT NULL PRIMARY KEY,
-    name NVARCHAR(50) NOT NULL UNIQUE
+    id          INT           NOT NULL PRIMARY KEY,
+    status_name NVARCHAR(30)  NOT NULL,
+    description NVARCHAR(200) NULL
   );
-  INSERT INTO dbo.player_status_types (id, name) VALUES
-    (1, 'current_player'),
-    (2, 'alumni'),
-    (3, 'removed');
+  INSERT INTO dbo.player_status_types (id, status_name, description) VALUES
+    (1, 'current_player', 'Active roster player'),
+    (2, 'alumni',         'Graduated — moved to Alumni CRM'),
+    (3, 'removed',        'Removed from roster — no longer active');
   PRINT 'Created and seeded dbo.player_status_types';
 END
 ELSE
-  PRINT 'dbo.player_status_types already exists — skipping';
+BEGIN
+  -- Rename 'name' → 'status_name' if the old column exists
+  IF EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.player_status_types') AND name = 'name'
+  )
+  BEGIN
+    EXEC sp_rename 'dbo.player_status_types.name', 'status_name', 'COLUMN';
+    PRINT 'Renamed player_status_types.name → status_name';
+  END
+
+  -- Add description column if missing
+  IF NOT EXISTS (
+    SELECT 1 FROM sys.columns
+    WHERE object_id = OBJECT_ID('dbo.player_status_types') AND name = 'description'
+  )
+  BEGIN
+    ALTER TABLE dbo.player_status_types ADD description NVARCHAR(200) NULL;
+    -- Backfill descriptions
+    UPDATE dbo.player_status_types SET description = 'Active roster player'              WHERE id = 1 AND description IS NULL;
+    UPDATE dbo.player_status_types SET description = 'Graduated — moved to Alumni CRM'  WHERE id = 2 AND description IS NULL;
+    UPDATE dbo.player_status_types SET description = 'Removed from roster — no longer active' WHERE id = 3 AND description IS NULL;
+    PRINT 'Added description column to player_status_types';
+  END
+
+  -- Ensure all three rows exist (idempotent)
+  IF NOT EXISTS (SELECT 1 FROM dbo.player_status_types WHERE id = 1)
+    INSERT INTO dbo.player_status_types (id, status_name, description) VALUES (1, 'current_player', 'Active roster player');
+  IF NOT EXISTS (SELECT 1 FROM dbo.player_status_types WHERE id = 2)
+    INSERT INTO dbo.player_status_types (id, status_name, description) VALUES (2, 'alumni', 'Graduated — moved to Alumni CRM');
+  IF NOT EXISTS (SELECT 1 FROM dbo.player_status_types WHERE id = 3)
+    INSERT INTO dbo.player_status_types (id, status_name, description) VALUES (3, 'removed', 'Removed from roster — no longer active');
+
+  PRINT 'dbo.player_status_types verified/updated';
+END
 GO
 
 -- ─── Step 3: Add all player/alumni columns to dbo.users ──────
@@ -489,6 +529,14 @@ GO
 --   user sees their own row            → always
 --   sport_id IS NULL (transition)      → any authenticated user
 
+-- Must drop the policy before altering the function it references
+IF EXISTS (SELECT 1 FROM sys.security_policies WHERE name = 'user_access_policy')
+BEGIN
+  DROP SECURITY POLICY dbo.user_access_policy;
+  PRINT 'Dropped user_access_policy (will recreate below)';
+END
+GO
+
 CREATE OR ALTER FUNCTION dbo.fn_user_access(
   @session_user_id  NVARCHAR(100),
   @session_user_role NVARCHAR(50),
@@ -533,6 +581,7 @@ RETURN
     );
 GO
 
+IF NOT EXISTS (SELECT 1 FROM sys.security_policies WHERE name = 'user_access_policy')
 CREATE SECURITY POLICY dbo.user_access_policy
   ADD FILTER PREDICATE dbo.fn_user_access(
     CAST(SESSION_CONTEXT(N'user_id')   AS NVARCHAR(100)),

@@ -138,104 +138,154 @@ platformRouter.post('/onboard-client', async (req, res) => {
   }
 
   const serverName = (dbServer ?? process.env.DB_SERVER ?? 'localhost\\SQLEXPRESS').replace('\\\\', '\\');
+  const safeDbName = appDbName.replace(/[^A-Za-z0-9_]/g, '');
+
+  /** Creates a new connection pool to a specific database on the same server */
+  const connectToDb = (database: string) => new mssql.ConnectionPool({
+    server:   serverName,
+    database,
+    options:  { encrypt: false, trustServerCertificate: true },
+    authentication: {
+      type: 'default' as const,
+      options: { userName: process.env.GLOBAL_DB_USER ?? '', password: process.env.GLOBAL_DB_PASS ?? '' },
+    },
+  }).connect();
 
   try {
     const db = await getDb();
 
     // ── Step 1: Register team in LegacyLinkGlobal ───────────────────────────
-    const teamR = await db.request()
-      .input('Name',             sql.NVarChar,        clientName.trim())
-      .input('Abbr',             sql.NVarChar,        clientAbbr.toUpperCase().trim())
-      .input('Sport',            sql.NVarChar,        sport)
-      .input('Level',            sql.NVarChar,        level)
-      .input('AppDb',            sql.NVarChar,        appDbName.trim())
-      .input('DbServer',         sql.NVarChar,        serverName)
-      .input('SubscriptionTier', sql.NVarChar,        subscriptionTier)
-      .input('CreatedBy',        sql.UniqueIdentifier, req.user!.sub)
-      .output('NewTeamId',       sql.UniqueIdentifier)
-      .output('ErrorCode',       sql.NVarChar(50))
-      .execute('dbo.sp_CreateTeam');
+    let newTeamId: string;
+    try {
+      const teamR = await db.request()
+        .input('Name',             sql.NVarChar,         clientName.trim())
+        .input('Abbr',             sql.NVarChar,         clientAbbr.toUpperCase().trim())
+        .input('Sport',            sql.NVarChar,         sport)
+        .input('Level',            sql.NVarChar,         level)
+        .input('AppDb',            sql.NVarChar,         safeDbName)
+        .input('DbServer',         sql.NVarChar,         serverName)
+        .input('SubscriptionTier', sql.NVarChar,         subscriptionTier)
+        .input('CreatedBy',        sql.UniqueIdentifier, req.user!.sub)
+        .output('NewTeamId',       sql.UniqueIdentifier)
+        .output('ErrorCode',       sql.NVarChar(50))
+        .execute('dbo.sp_CreateTeam');
 
-    if (teamR.output.ErrorCode) {
-      return res.status(400).json({ success: false, error: teamR.output.ErrorCode });
+      if (teamR.output.ErrorCode) {
+        return res.status(400).json({ success: false, error: teamR.output.ErrorCode });
+      }
+      newTeamId = teamR.output.NewTeamId;
+    } catch (err) {
+      console.error('[onboard Step 1: sp_CreateTeam]', err);
+      return res.status(500).json({ success: false, error: `Step 1 (register team) failed: ${err instanceof Error ? err.message : String(err)}` });
     }
-    const newTeamId: string = teamR.output.NewTeamId;
 
     // ── Step 2: Create AppDB ─────────────────────────────────────────────────
-    // Must use dynamic SQL because CREATE DATABASE can't accept a parameter
-    const safeDbName = appDbName.replace(/[^A-Za-z0-9_]/g, '');
-    await db.request().query(`
-      IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'${safeDbName}')
-        CREATE DATABASE [${safeDbName}];
-    `);
-
-    // ── Step 3: Connect to new AppDB and apply schema ────────────────────────
-    const appPool = await new mssql.ConnectionPool({
-      server:   serverName,
-      database: safeDbName,
-      options:  { encrypt: false, trustServerCertificate: true },
-      authentication: {
-        type: 'default' as const,
-        options: {
-          userName: process.env.DB_USER     ?? '',
-          password: process.env.DB_PASSWORD ?? '',
-        },
-      },
-    }).connect();
-
     try {
-      await applyAppDbSchema(appPool);
-      await applyAppDbSps(appPool);
-    } finally {
-      await appPool.close();
-    }
-
-    // ── Step 4: Seed sport in AppDB ──────────────────────────────────────────
-    const sportAbbr = sport.substring(0, 2).toUpperCase();
-    const sportName = sport.charAt(0).toUpperCase() + sport.slice(1);
-    const appPool2  = await new mssql.ConnectionPool({
-      server:   serverName,
-      database: safeDbName,
-      options:  { encrypt: false, trustServerCertificate: true },
-      authentication: {
-        type: 'default' as const,
-        options: {
-          userName: process.env.DB_USER     ?? '',
-          password: process.env.DB_PASSWORD ?? '',
-        },
-      },
-    }).connect();
-    try {
-      await appPool2.request()
-        .input('Abbr', sql.NVarChar, sportAbbr)
-        .input('Name', sql.NVarChar, sportName)
-        .query(`
-          IF NOT EXISTS (SELECT 1 FROM dbo.sports WHERE abbr = @Abbr)
-            INSERT INTO dbo.sports (name, abbr) VALUES (@Name, @Abbr);
-        `);
-    } finally {
-      await appPool2.close();
-    }
-
-    // ── Step 5: Seed team_config ─────────────────────────────────────────────
-    await db.request()
-      .input('TeamId',      sql.UniqueIdentifier, newTeamId)
-      .input('TeamName',    sql.NVarChar,         clientName.trim())
-      .input('TeamAbbr',    sql.NVarChar,         clientAbbr.toUpperCase().trim())
-      .input('Sport',       sql.NVarChar,         sport)
-      .input('Level',       sql.NVarChar,         level)
-      .input('Primary',     sql.NChar(7),         colorPrimary ?? '#1B1B2F')
-      .input('Accent',      sql.NChar(7),         colorAccent  ?? '#B8973D')
-      .query(`
-        IF NOT EXISTS (SELECT 1 FROM dbo.team_config WHERE team_id = @TeamId)
-          INSERT INTO dbo.team_config (
-            team_id, team_name, team_abbr, sport, level,
-            color_primary, color_accent
-          ) VALUES (
-            @TeamId, @TeamName, @TeamAbbr, @Sport, @Level,
-            @Primary, @Accent
-          );
+      await db.request().query(`
+        IF NOT EXISTS (SELECT 1 FROM sys.databases WHERE name = N'${safeDbName}')
+          CREATE DATABASE [${safeDbName}];
       `);
+    } catch (err) {
+      console.error('[onboard Step 2: CREATE DATABASE]', err);
+      return res.status(500).json({ success: false, error: `Step 2 (create database "${safeDbName}") failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    // ── Step 3: Apply AppDB schema + stored procedures ───────────────────────
+    try {
+      const appPool = await connectToDb(safeDbName);
+      try {
+        await applyAppDbSchema(appPool);
+        await applyAppDbSps(appPool);
+      } finally {
+        await appPool.close();
+      }
+    } catch (err) {
+      console.error('[onboard Step 3: apply schema]', err);
+      return res.status(500).json({ success: false, error: `Step 3 (apply schema to "${safeDbName}") failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    // ── Step 4: Seed all standard sports in AppDB ────────────────────────────
+    // The AppDB is multi-sport — seed all common sports so coaches can use any.
+    const ALL_SPORTS = [
+      { name: 'Football',   abbr: 'FB' },
+      { name: 'Basketball', abbr: 'BB' },
+      { name: 'Baseball',   abbr: 'BA' },
+      { name: 'Soccer',     abbr: 'SO' },
+      { name: 'Softball',   abbr: 'SB' },
+      { name: 'Volleyball', abbr: 'VB' },
+      { name: 'Other',      abbr: 'OT' },
+    ];
+    try {
+      const appPool2 = await connectToDb(safeDbName);
+      try {
+        for (const s of ALL_SPORTS) {
+          await appPool2.request()
+            .input('Abbr', sql.NVarChar, s.abbr)
+            .input('Name', sql.NVarChar, s.name)
+            .query(`
+              IF NOT EXISTS (SELECT 1 FROM dbo.sports WHERE abbr = @Abbr)
+                INSERT INTO dbo.sports (name, abbr) VALUES (@Name, @Abbr);
+            `);
+        }
+      } finally {
+        await appPool2.close();
+      }
+    } catch (err) {
+      console.error('[onboard Step 4: seed sports]', err);
+      return res.status(500).json({ success: false, error: `Step 4 (seed sports) failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    // ── Step 5: Seed team_config in LegacyLinkGlobal ─────────────────────────
+    try {
+      await db.request()
+        .input('TeamId',   sql.UniqueIdentifier, newTeamId)
+        .input('TeamName', sql.NVarChar,         clientName.trim())
+        .input('TeamAbbr', sql.NVarChar,         clientAbbr.toUpperCase().trim())
+        .input('Sport',    sql.NVarChar,         sport)
+        .input('Level',    sql.NVarChar,         level)
+        .input('Primary',  sql.NVarChar,         colorPrimary ?? '#1B1B2F')
+        .input('Accent',   sql.NVarChar,         colorAccent  ?? '#B8973D')
+        .query(`
+          IF NOT EXISTS (SELECT 1 FROM dbo.team_config WHERE team_id = @TeamId)
+            INSERT INTO dbo.team_config (
+              team_id, team_name, team_abbr, sport, level,
+              color_primary, color_accent
+            ) VALUES (
+              @TeamId, @TeamName, @TeamAbbr, @Sport, @Level,
+              @Primary, @Accent
+            );
+        `);
+    } catch (err) {
+      console.error('[onboard Step 5: seed team_config]', err);
+      return res.status(500).json({ success: false, error: `Step 5 (seed team config) failed: ${err instanceof Error ? err.message : String(err)}` });
+    }
+
+    // ── Step 5b: Seed welcome post in AppDB ─────────────────────────────────
+    // Welcome post uses white-label tokens substituted here before insert.
+    // is_welcome_post = 1 so the check is idempotent on re-run.
+    try {
+      const welcomeTitle = `Welcome to ${clientName.trim()}!`;
+      const welcomeBody  = `<p>Welcome to the <strong style="color:${colorPrimary}">${clientName.trim()}</strong> team portal. `
+        + `This is your central hub for team news, roster information, and alumni connections.</p>`
+        + `<p>Your coaching staff will use this feed to share updates, announcements, and highlights with you. `
+        + `Check back regularly to stay in the loop.</p>`;
+      const appPool3 = await connectToDb(safeDbName);
+      try {
+        await appPool3.request()
+          .input('Title',    sql.NVarChar, welcomeTitle)
+          .input('BodyHtml', sql.NVarChar, welcomeBody)
+          .query(`
+            IF NOT EXISTS (SELECT 1 FROM dbo.feed_posts WHERE is_welcome_post = 1)
+              INSERT INTO dbo.feed_posts (created_by, title, body_html, audience, is_pinned, is_welcome_post)
+              VALUES ('00000000-0000-0000-0000-000000000000', @Title, @BodyHtml, 'all', 1, 1);
+          `);
+      } finally {
+        await appPool3.close();
+      }
+    } catch (err) {
+      console.error('[onboard Step 5b: seed welcome post]', err);
+      // Non-fatal — log and continue
+    }
 
     // ── Step 6: Handle admin user ────────────────────────────────────────────
     let resolvedAdminEmail: string;
@@ -508,6 +558,7 @@ async function applyAppDbSchema(pool: mssql.ConnectionPool): Promise<void> {
       status           NVARCHAR(20)     NOT NULL DEFAULT 'draft'
                        CONSTRAINT chk_campaign_status CHECK (status IN ('draft','scheduled','active','completed','cancelled')),
       scheduled_at     DATETIME2        NULL,
+      completed_at     DATETIME2        NULL,
       sport_id         UNIQUEIDENTIFIER NULL REFERENCES dbo.sports(id),
       created_by       UNIQUEIDENTIFIER NULL,
       created_at       DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
@@ -564,6 +615,60 @@ async function applyAppDbSchema(pool: mssql.ConnectionPool): Promise<void> {
       CONSTRAINT uq_user_roles UNIQUE (user_id, sport_id)
     )`,
 
+    // RLS — drop policy first so we can CREATE OR ALTER the function it references
+    `IF EXISTS (SELECT 1 FROM sys.security_policies WHERE name = 'user_access_policy' AND schema_id = SCHEMA_ID('dbo'))
+      DROP SECURITY POLICY dbo.user_access_policy`,
+
+    `CREATE OR ALTER FUNCTION dbo.fn_user_access(
+      @session_user_id   NVARCHAR(100),
+      @session_user_role NVARCHAR(50),
+      @row_sport_id      UNIQUEIDENTIFIER,
+      @row_user_id       UNIQUEIDENTIFIER,
+      @row_status_id     INT
+    )
+    RETURNS TABLE
+    WITH SCHEMABINDING
+    AS
+    RETURN
+      SELECT 1 AS access_granted
+      WHERE
+        EXISTS (
+          SELECT 1 FROM dbo.user_roles ur
+          WHERE ur.user_id    = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
+            AND ur.sport_id   = @row_sport_id
+            AND ur.role       = 'coach_admin'
+            AND ur.revoked_at IS NULL
+        )
+        OR
+        (
+          @row_status_id = 1
+          AND EXISTS (
+            SELECT 1 FROM dbo.user_roles ur
+            WHERE ur.user_id    = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
+              AND ur.sport_id   = @row_sport_id
+              AND ur.role       = 'roster_only_admin'
+              AND ur.revoked_at IS NULL
+          )
+        )
+        OR
+        @row_user_id = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
+        OR
+        (
+          @row_sport_id IS NULL
+          AND TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER) IS NOT NULL
+        )`,
+
+    `IF NOT EXISTS (SELECT 1 FROM sys.security_policies WHERE name = 'user_access_policy')
+    CREATE SECURITY POLICY dbo.user_access_policy
+      ADD FILTER PREDICATE dbo.fn_user_access(
+        CAST(SESSION_CONTEXT(N'user_id')   AS NVARCHAR(100)),
+        CAST(SESSION_CONTEXT(N'user_role') AS NVARCHAR(50)),
+        sport_id,
+        id,
+        status_id
+      ) ON dbo.users
+    WITH (STATE = ON)`,
+
     // audit_log
     `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'audit_log' AND schema_id = SCHEMA_ID('dbo'))
     CREATE TABLE dbo.audit_log (
@@ -577,23 +682,113 @@ async function applyAppDbSchema(pool: mssql.ConnectionPool): Promise<void> {
       created_at  DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
     )`,
 
-    // migration_history
+    // email_unsubscribes — CAN-SPAM opt-out store (migration 012)
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'email_unsubscribes' AND schema_id = SCHEMA_ID('dbo'))
+    BEGIN
+      CREATE TABLE dbo.email_unsubscribes (
+        id              UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+        user_id         UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.users(id) ON DELETE CASCADE,
+        token           UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+        channel         NVARCHAR(20)     NOT NULL DEFAULT 'email',
+        unsubscribed_at DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT uq_unsub_user_channel UNIQUE (user_id, channel)
+      );
+      CREATE UNIQUE INDEX uix_email_unsubscribes_token ON dbo.email_unsubscribes(token);
+    END`,
+
+    // Extend outreach_campaigns with email fields (migration 012)
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'subject_line')
+      ALTER TABLE dbo.outreach_campaigns ADD subject_line NVARCHAR(500) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'body_html')
+      ALTER TABLE dbo.outreach_campaigns ADD body_html NVARCHAR(MAX) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'from_name')
+      ALTER TABLE dbo.outreach_campaigns ADD from_name NVARCHAR(200) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'reply_to_email')
+      ALTER TABLE dbo.outreach_campaigns ADD reply_to_email NVARCHAR(255) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'campaign_type')
+      ALTER TABLE dbo.outreach_campaigns ADD campaign_type NVARCHAR(20) NOT NULL DEFAULT 'outreach'`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'physical_address')
+      ALTER TABLE dbo.outreach_campaigns ADD physical_address NVARCHAR(500) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'started_at')
+      ALTER TABLE dbo.outreach_campaigns ADD started_at DATETIME2 NULL`,
+
+    // Extend outreach_messages with email dispatch fields (migration 012)
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_messages' AND COLUMN_NAME = 'email_address')
+      ALTER TABLE dbo.outreach_messages ADD email_address NVARCHAR(255) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_messages' AND COLUMN_NAME = 'unsubscribe_token')
+      ALTER TABLE dbo.outreach_messages ADD unsubscribe_token UNIQUEIDENTIFIER NULL`,
+
+    // feed_posts — newsfeed (migration 012)
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'feed_posts' AND schema_id = SCHEMA_ID('dbo'))
+    BEGIN
+      CREATE TABLE dbo.feed_posts (
+        id              UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+        created_by      UNIQUEIDENTIFIER NOT NULL,
+        title           NVARCHAR(300)    NULL,
+        body_html       NVARCHAR(MAX)    NOT NULL,
+        audience        NVARCHAR(30)     NOT NULL DEFAULT 'all',
+        audience_json   NVARCHAR(MAX)    NULL,
+        sport_id        UNIQUEIDENTIFIER NULL REFERENCES dbo.sports(id),
+        is_pinned       BIT              NOT NULL DEFAULT 0,
+        is_welcome_post BIT              NOT NULL DEFAULT 0,
+        campaign_id     UNIQUEIDENTIFIER NULL REFERENCES dbo.outreach_campaigns(id),
+        published_at    DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+        created_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+        updated_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+      CREATE INDEX idx_feed_posts_audience ON dbo.feed_posts(audience);
+      CREATE INDEX idx_feed_posts_sport    ON dbo.feed_posts(sport_id);
+      CREATE INDEX idx_feed_posts_pinned   ON dbo.feed_posts(is_pinned, published_at DESC);
+    END`,
+
+    // feed_post_reads — read receipts (migration 012)
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'feed_post_reads' AND schema_id = SCHEMA_ID('dbo'))
+    BEGIN
+      CREATE TABLE dbo.feed_post_reads (
+        id      UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+        post_id UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.feed_posts(id) ON DELETE CASCADE,
+        user_id UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.users(id),
+        read_at DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT uq_post_read UNIQUE (post_id, user_id)
+      );
+      CREATE INDEX idx_feed_reads_post ON dbo.feed_post_reads(post_id);
+      CREATE INDEX idx_feed_reads_user ON dbo.feed_post_reads(user_id);
+    END`,
+
+    // migration_history — column name MUST be migration_name to match ll-db-deploy tool
     `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'migration_history' AND schema_id = SCHEMA_ID('dbo'))
     BEGIN
       CREATE TABLE dbo.migration_history (
-        id           INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
-        migration_id NVARCHAR(100) NOT NULL UNIQUE,
-        applied_at   DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
-        description  NVARCHAR(500) NULL
+        id             INT           NOT NULL IDENTITY(1,1) PRIMARY KEY,
+        migration_name NVARCHAR(260) NOT NULL UNIQUE,
+        applied_at     DATETIME2     NOT NULL DEFAULT SYSUTCDATETIME(),
+        applied_by     NVARCHAR(100) NOT NULL DEFAULT SYSTEM_USER
       );
-      INSERT INTO dbo.migration_history (migration_id, description) VALUES
-        ('001_app_db_schema',             'Initial schema — superseded by create_app_db.sql'),
-        ('003_rbac_infrastructure',       'RBAC, sports, seasons — superseded by create_app_db.sql'),
-        ('004_add_sport_classification',  'Sport columns — superseded by create_app_db.sql'),
-        ('005_rls_policies',              'RLS — superseded by create_app_db.sql'),
-        ('006_nullable_user_id',          'Nullable user_id — superseded by create_app_db.sql'),
-        ('008_consolidate_dbo_schema',    'Consolidate to dbo — superseded by create_app_db.sql'),
-        ('009_users_status_consolidation','Unified dbo.users — superseded by create_app_db.sql');
+      -- Pre-mark all migrations that are superseded by the create script above.
+      -- ll-db-deploy will skip any migration_name already present here.
+      INSERT INTO dbo.migration_history (migration_name) VALUES
+        ('001_app_db_schema.sql'),
+        ('002_migrate_data.sql'),
+        ('003_rbac_infrastructure.sql'),
+        ('004_add_sport_classification.sql'),
+        ('005_rls_policies.sql'),
+        ('006_nullable_user_id.sql'),
+        ('008_consolidate_dbo_schema.sql'),
+        ('009_users_status_consolidation.sql'),
+        ('010_campaign_completed_at.sql'),
+        ('011_drop_current_country.sql'),
+        ('012_email_infrastructure.sql');
+    END`,
+
+    // sp_GetSports — needed by GET /sports on app-api
+    `CREATE OR ALTER PROCEDURE dbo.sp_GetSports
+    AS
+    BEGIN
+      SET NOCOUNT ON;
+      SELECT id, name, abbr, is_active AS isActive
+      FROM   dbo.sports
+      WHERE  is_active = 1
+      ORDER  BY name;
     END`,
   ];
 

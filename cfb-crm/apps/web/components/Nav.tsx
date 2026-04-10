@@ -228,6 +228,35 @@ export default function Nav({ currentPage }: NavProps) {
           )}
         </div>
 
+        {/* Center: primary nav links */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {[
+            { label: 'Feed',    href: '/feed'      },
+            { label: 'Roster',  href: '/roster'    },
+            { label: 'Alumni',  href: '/alumni'    },
+          ].map(link => (
+            <button
+              key={link.href}
+              onClick={() => router.push(link.href)}
+              style={{
+                background:   'rgba(255,255,255,0.1)',
+                border:       'none',
+                borderRadius: 6,
+                color:        'rgba(255,255,255,0.85)',
+                fontSize:     13,
+                fontWeight:   500,
+                padding:      '5px 14px',
+                cursor:       'pointer',
+                transition:   'background 0.15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.2)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.1)')}
+            >
+              {link.label}
+            </button>
+          ))}
+        </div>
+
         {/* Right: admin link + error + sign out */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {switchError && (

@@ -24,6 +24,8 @@ const statusBadge = (status: string): 'green' | 'warning' | 'danger' | 'gray' =>
   return map[status] ?? 'gray';
 };
 
+interface Sport { id: string; name: string; abbr: string; }
+
 export default function AlumniPage() {
   const router = useRouter();
   const { positions, alumniLabel } = useTeamConfig();
@@ -38,15 +40,24 @@ export default function AlumniPage() {
   const [status,    setStatus]    = useState('');
   const [position,  setPosition]  = useState('');
   const [isDonor,   setIsDonor]   = useState(false);
+  const [sportId,   setSportId]   = useState('');
+  const [sports,    setSports]    = useState<Sport[]>([]);
   const [total,     setTotal]     = useState(0);
   const [page,      setPage]      = useState(1);
   const [isAdmin,   setIsAdmin]   = useState(false);
 
   useEffect(() => { setIsAdmin(isGlobalAdmin()); }, []);
 
+  // Fetch available sports once on mount
+  useEffect(() => {
+    appApi.get('/sports')
+      .then(({ data }) => setSports(data.data ?? []))
+      .catch(() => { /* sports filter hidden if endpoint unavailable */ });
+  }, []);
+
   useEffect(() => {
     fetchAlumni();
-  }, [search, status, position, isDonor, page]);
+  }, [search, status, position, isDonor, sportId, page]);
 
   const fetchAlumni = async () => {
     setLoading(true);
@@ -56,6 +67,7 @@ export default function AlumniPage() {
       if (status)   params.status   = status;
       if (position) params.position = position;
       if (isDonor)  params.isDonor  = 'true';
+      if (sportId)  params.sportId  = sportId;
       const { data } = await appApi.get('/alumni', { params });
       setAlumni(data.data ?? []);
       setTotal(data.total ?? 0);
@@ -86,12 +98,19 @@ export default function AlumniPage() {
       {error && <Alert message={error} variant="error" onClose={() => setError('')} />}
 
       {/* Filters */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: sports.length > 1 ? '2fr 1fr 1fr 1fr' : '2fr 1fr 1fr', gap: 12, marginBottom: 16 }}>
         <Input
           value={search}
           onChange={(v) => { setSearch(v); setPage(1); }}
           placeholder="Search name, employer, city..."
         />
+        {sports.length > 1 && (
+          <Select
+            value={sportId}
+            onChange={(v) => { setSportId(v); setPage(1); }}
+            options={[{ value: '', label: 'All Sports' }, ...sports.map(s => ({ value: s.id, label: s.name }))]}
+          />
+        )}
         <Select value={status}   onChange={(v) => { setStatus(v);   setPage(1); }} options={STATUS_OPTIONS}   />
         <Select value={position} onChange={(v) => { setPosition(v); setPage(1); }} options={POSITION_OPTIONS} />
       </div>

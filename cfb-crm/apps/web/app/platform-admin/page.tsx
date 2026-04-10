@@ -42,6 +42,53 @@ interface LookedUpUser {
   globalRole: string; isActive: boolean;
 }
 
+// ─── Primitive helper components (must be declared BEFORE PlatformAdminPage
+//     to avoid React's "Expected static flag was missing" fiber reconciliation error) ──
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      fontSize: 11, fontWeight: 700, color: theme.gray500,
+      textTransform: 'uppercase', letterSpacing: '0.6px',
+      marginBottom: 10, marginTop: 4,
+      paddingBottom: 6, borderBottom: `1px solid ${theme.gray100}`,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <label style={{ fontSize: 13, fontWeight: 500, color: theme.gray700, display: 'block', marginBottom: 5 }}>
+      {children}
+    </label>
+  );
+}
+
+function Hint({ children }: { children: React.ReactNode }) {
+  return <span style={{ fontSize: 11, fontWeight: 400, color: theme.gray400 }}>{children}</span>;
+}
+
+function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <FieldLabel>{label}</FieldLabel>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <input
+          type="color"
+          value={value}
+          onChange={e => onChange(e.target.value)}
+          style={{ width: 40, height: 36, padding: 2, borderRadius: 6, border: `1px solid ${theme.gray300}`, cursor: 'pointer', flexShrink: 0 }}
+        />
+        <Input value={value} onChange={onChange} placeholder="#1B1B2F" />
+      </div>
+    </div>
+  );
+}
+
+// ─── Form defaults ────────────────────────────────────────────────────────────
+
 const EMPTY_FORM = {
   clientName:        '',
   clientAbbr:        '',
@@ -536,46 +583,3 @@ export default function PlatformAdminPage() {
   );
 }
 
-// ─── Small helpers ────────────────────────────────────────────────────────────
-
-function SectionLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{
-      fontSize: 11, fontWeight: 700, color: theme.gray500,
-      textTransform: 'uppercase', letterSpacing: '0.6px',
-      marginBottom: 10, marginTop: 4,
-      paddingBottom: 6, borderBottom: `1px solid ${theme.gray100}`,
-    }}>
-      {children}
-    </div>
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <label style={{ fontSize: 13, fontWeight: 500, color: theme.gray700, display: 'block', marginBottom: 5 }}>
-      {children}
-    </label>
-  );
-}
-
-function Hint({ children }: { children: React.ReactNode }) {
-  return <span style={{ fontSize: 11, fontWeight: 400, color: theme.gray400 }}>{children}</span>;
-}
-
-function ColorField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <div>
-      <FieldLabel>{label}</FieldLabel>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <input
-          type="color"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          style={{ width: 40, height: 36, padding: 2, borderRadius: 6, border: `1px solid ${theme.gray300}`, cursor: 'pointer', flexShrink: 0 }}
-        />
-        <Input value={value} onChange={onChange} placeholder="#1B1B2F" />
-      </div>
-    </div>
-  );
-}
