@@ -1236,6 +1236,7 @@ BEGIN
   DECLARE @errors TABLE (row_num INT, reason NVARCHAR(500));
   DECLARE @rows TABLE (
     row_num                  INT,
+    provided_user_id         UNIQUEIDENTIFIER,
     email                    NVARCHAR(255),
     first_name               NVARCHAR(100),
     last_name                NVARCHAR(100),
@@ -1257,13 +1258,14 @@ BEGIN
   );
 
   INSERT INTO @rows (
-    row_num, email, first_name, last_name,
+    row_num, provided_user_id, email, first_name, last_name,
     jersey_number, position, academic_year, recruiting_class,
     height_inches, weight_lbs, home_town, home_state, high_school,
     gpa, major, phone, emergency_contact_name, emergency_contact_phone, notes
   )
   SELECT
     ROW_NUMBER() OVER (ORDER BY (SELECT NULL)),
+    TRY_CAST(JSON_VALUE(value, '$.userId')         AS UNIQUEIDENTIFIER),
     JSON_VALUE(value, '$.email'),
     JSON_VALUE(value, '$.firstName'),
     JSON_VALUE(value, '$.lastName'),
@@ -1284,28 +1286,29 @@ BEGIN
     JSON_VALUE(value, '$.notes')
   FROM OPENJSON(@PlayersJson);
 
-  DECLARE @rowNum   INT;
-  DECLARE @email    NVARCHAR(255);
-  DECLARE @fn       NVARCHAR(100);
-  DECLARE @ln       NVARCHAR(100);
-  DECLARE @jersey   TINYINT;
-  DECLARE @pos      NVARCHAR(10);
-  DECLARE @acYear   NVARCHAR(20);
-  DECLARE @recClass SMALLINT;
-  DECLARE @heightIn TINYINT;
-  DECLARE @wt       SMALLINT;
-  DECLARE @town     NVARCHAR(100);
-  DECLARE @state    NVARCHAR(50);
-  DECLARE @hs       NVARCHAR(150);
-  DECLARE @gpa      DECIMAL(3,2);
-  DECLARE @major    NVARCHAR(100);
-  DECLARE @phone    NVARCHAR(20);
-  DECLARE @ecName   NVARCHAR(150);
-  DECLARE @ecPhone  NVARCHAR(20);
-  DECLARE @notes    NVARCHAR(MAX);
+  DECLARE @rowNum          INT;
+  DECLARE @providedUserId  UNIQUEIDENTIFIER;
+  DECLARE @email           NVARCHAR(255);
+  DECLARE @fn              NVARCHAR(100);
+  DECLARE @ln              NVARCHAR(100);
+  DECLARE @jersey          TINYINT;
+  DECLARE @pos             NVARCHAR(10);
+  DECLARE @acYear          NVARCHAR(20);
+  DECLARE @recClass        SMALLINT;
+  DECLARE @heightIn        TINYINT;
+  DECLARE @wt              SMALLINT;
+  DECLARE @town            NVARCHAR(100);
+  DECLARE @state           NVARCHAR(50);
+  DECLARE @hs              NVARCHAR(150);
+  DECLARE @gpa             DECIMAL(3,2);
+  DECLARE @major           NVARCHAR(100);
+  DECLARE @phone           NVARCHAR(20);
+  DECLARE @ecName          NVARCHAR(150);
+  DECLARE @ecPhone         NVARCHAR(20);
+  DECLARE @notes           NVARCHAR(MAX);
 
   DECLARE cur CURSOR FOR
-    SELECT row_num, email, first_name, last_name,
+    SELECT row_num, provided_user_id, email, first_name, last_name,
            jersey_number, position, academic_year, recruiting_class,
            height_inches, weight_lbs, home_town, home_state, high_school,
            gpa, major, phone, emergency_contact_name, emergency_contact_phone, notes
@@ -1313,7 +1316,7 @@ BEGIN
 
   OPEN cur;
   FETCH NEXT FROM cur INTO
-    @rowNum, @email, @fn, @ln, @jersey, @pos, @acYear, @recClass,
+    @rowNum, @providedUserId, @email, @fn, @ln, @jersey, @pos, @acYear, @recClass,
     @heightIn, @wt, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
 
   WHILE @@FETCH_STATUS = 0
@@ -1347,21 +1350,32 @@ BEGIN
         SET @SkippedCount += 1; GOTO NextRow;
       END
 
-      -- Get or create in CfbGlobal
+      -- Get or create global user.
+      -- If email is NULL: skip GlobalDB and use the provided userId or generate one.
       DECLARE @newUserId UNIQUEIDENTIFIER;
       DECLARE @globalErr NVARCHAR(50);
-      EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
-        @Email     = @email,
-        @FirstName = @fn,
-        @LastName  = @ln,
-        @TeamId    = @GlobalTeamId,
-        @UserId    = @newUserId OUTPUT,
-        @ErrorCode = @globalErr OUTPUT;
 
-      IF @newUserId IS NULL
+      IF @email IS NOT NULL AND LEN(LTRIM(RTRIM(@email))) > 0
       BEGIN
-        INSERT INTO @errors VALUES (@rowNum, 'Global user creation failed: ' + ISNULL(@globalErr, 'unknown'));
-        SET @SkippedCount += 1; GOTO NextRow;
+        EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
+          @Email     = @email,
+          @FirstName = @fn,
+          @LastName  = @ln,
+          @TeamId    = @GlobalTeamId,
+          @UserId    = @newUserId OUTPUT,
+          @ErrorCode = @globalErr OUTPUT;
+
+        IF @newUserId IS NULL
+        BEGIN
+          INSERT INTO @errors VALUES (@rowNum, 'Global user creation failed: ' + ISNULL(@globalErr, 'unknown'));
+          SET @SkippedCount += 1; GOTO NextRow;
+        END
+      END
+      ELSE
+      BEGIN
+        -- No email supplied — use provided userId or generate a new one.
+        -- User can log in once email is added later via update.
+        SET @newUserId = ISNULL(@providedUserId, NEWID());
       END
 
       -- Upsert into AppDB
@@ -1422,7 +1436,7 @@ BEGIN
 
     NextRow:
     FETCH NEXT FROM cur INTO
-      @rowNum, @email, @fn, @ln, @jersey, @pos, @acYear, @recClass,
+      @rowNum, @providedUserId, @email, @fn, @ln, @jersey, @pos, @acYear, @recClass,
       @heightIn, @wt, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
   END
 
@@ -1466,6 +1480,7 @@ BEGIN
   DECLARE @errors TABLE (row_num INT, reason NVARCHAR(500));
   DECLARE @rows TABLE (
     row_num             INT,
+    provided_user_id    UNIQUEIDENTIFIER,
     email               NVARCHAR(255),
     first_name          NVARCHAR(100),
     last_name           NVARCHAR(100),
@@ -1482,7 +1497,7 @@ BEGIN
   );
 
   INSERT INTO @rows (
-    row_num, email, first_name, last_name,
+    row_num, provided_user_id, email, first_name, last_name,
     graduation_year, graduation_semester,
     phone, linkedin_url,
     current_employer, current_job_title, current_city, current_state,
@@ -1490,6 +1505,7 @@ BEGIN
   )
   SELECT
     ROW_NUMBER() OVER (ORDER BY (SELECT NULL)),
+    TRY_CAST(JSON_VALUE(value, '$.userId')           AS UNIQUEIDENTIFIER),
     JSON_VALUE(value, '$.email'),
     JSON_VALUE(value, '$.firstName'),
     JSON_VALUE(value, '$.lastName'),
@@ -1505,23 +1521,24 @@ BEGIN
     JSON_VALUE(value, '$.notes')
   FROM OPENJSON(@AlumniJson);
 
-  DECLARE @rowNum   INT;
-  DECLARE @email    NVARCHAR(255);
-  DECLARE @fn       NVARCHAR(100);
-  DECLARE @ln       NVARCHAR(100);
-  DECLARE @gradYear SMALLINT;
-  DECLARE @semester NVARCHAR(10);
-  DECLARE @phone    NVARCHAR(20);
-  DECLARE @linkedin NVARCHAR(500);
-  DECLARE @employer NVARCHAR(200);
-  DECLARE @jobTitle NVARCHAR(150);
-  DECLARE @city     NVARCHAR(100);
-  DECLARE @state    NVARCHAR(50);
-  DECLARE @isDonor  BIT;
-  DECLARE @notes    NVARCHAR(MAX);
+  DECLARE @rowNum          INT;
+  DECLARE @providedUserId  UNIQUEIDENTIFIER;
+  DECLARE @email           NVARCHAR(255);
+  DECLARE @fn              NVARCHAR(100);
+  DECLARE @ln              NVARCHAR(100);
+  DECLARE @gradYear        SMALLINT;
+  DECLARE @semester        NVARCHAR(10);
+  DECLARE @phone           NVARCHAR(20);
+  DECLARE @linkedin        NVARCHAR(500);
+  DECLARE @employer        NVARCHAR(200);
+  DECLARE @jobTitle        NVARCHAR(150);
+  DECLARE @city            NVARCHAR(100);
+  DECLARE @state           NVARCHAR(50);
+  DECLARE @isDonor         BIT;
+  DECLARE @notes           NVARCHAR(MAX);
 
   DECLARE cur CURSOR FOR
-    SELECT row_num, email, first_name, last_name,
+    SELECT row_num, provided_user_id, email, first_name, last_name,
            graduation_year, graduation_semester,
            phone, linkedin_url,
            current_employer, current_job_title, current_city, current_state,
@@ -1530,7 +1547,7 @@ BEGIN
 
   OPEN cur;
   FETCH NEXT FROM cur INTO
-    @rowNum, @email, @fn, @ln, @gradYear, @semester,
+    @rowNum, @providedUserId, @email, @fn, @ln, @gradYear, @semester,
     @phone, @linkedin, @employer, @jobTitle, @city, @state, @isDonor, @notes;
 
   WHILE @@FETCH_STATUS = 0
@@ -1542,11 +1559,19 @@ BEGIN
 
       DECLARE @newUserId UNIQUEIDENTIFIER;
       DECLARE @globalErr NVARCHAR(50);
-      EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
-        @Email = @email, @FirstName = @fn, @LastName = @ln, @TeamId = @GlobalTeamId,
-        @UserId = @newUserId OUTPUT, @ErrorCode = @globalErr OUTPUT;
 
-      IF @newUserId IS NULL BEGIN INSERT INTO @errors VALUES (@rowNum, 'Global user creation failed: ' + ISNULL(@globalErr, 'unknown')); SET @SkippedCount += 1; GOTO NextAlumRow; END
+      IF @email IS NOT NULL AND LEN(LTRIM(RTRIM(@email))) > 0
+      BEGIN
+        EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
+          @Email = @email, @FirstName = @fn, @LastName = @ln, @TeamId = @GlobalTeamId,
+          @UserId = @newUserId OUTPUT, @ErrorCode = @globalErr OUTPUT;
+
+        IF @newUserId IS NULL BEGIN INSERT INTO @errors VALUES (@rowNum, 'Global user creation failed: ' + ISNULL(@globalErr, 'unknown')); SET @SkippedCount += 1; GOTO NextAlumRow; END
+      END
+      ELSE
+      BEGIN
+        SET @newUserId = ISNULL(@providedUserId, NEWID());
+      END
 
       IF EXISTS (SELECT 1 FROM dbo.users WHERE id = @newUserId)
       BEGIN
@@ -1603,7 +1628,7 @@ BEGIN
 
     NextAlumRow:
     FETCH NEXT FROM cur INTO
-      @rowNum, @email, @fn, @ln, @gradYear, @semester,
+      @rowNum, @providedUserId, @email, @fn, @ln, @gradYear, @semester,
       @phone, @linkedin, @employer, @jobTitle, @city, @state, @isDonor, @notes;
   END
 

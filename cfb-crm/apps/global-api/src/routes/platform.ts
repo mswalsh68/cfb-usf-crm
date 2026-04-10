@@ -615,59 +615,14 @@ async function applyAppDbSchema(pool: mssql.ConnectionPool): Promise<void> {
       CONSTRAINT uq_user_roles UNIQUE (user_id, sport_id)
     )`,
 
-    // RLS — drop policy first so we can CREATE OR ALTER the function it references
+    // RLS removed — access control is enforced at the API layer via JWT.
     `IF EXISTS (SELECT 1 FROM sys.security_policies WHERE name = 'user_access_policy' AND schema_id = SCHEMA_ID('dbo'))
-      DROP SECURITY POLICY dbo.user_access_policy`,
+    BEGIN
+      ALTER SECURITY POLICY dbo.user_access_policy WITH (STATE = OFF);
+      DROP SECURITY POLICY dbo.user_access_policy;
+    END`,
 
-    `CREATE OR ALTER FUNCTION dbo.fn_user_access(
-      @session_user_id   NVARCHAR(100),
-      @session_user_role NVARCHAR(50),
-      @row_sport_id      UNIQUEIDENTIFIER,
-      @row_user_id       UNIQUEIDENTIFIER,
-      @row_status_id     INT
-    )
-    RETURNS TABLE
-    WITH SCHEMABINDING
-    AS
-    RETURN
-      SELECT 1 AS access_granted
-      WHERE
-        EXISTS (
-          SELECT 1 FROM dbo.user_roles ur
-          WHERE ur.user_id    = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
-            AND ur.sport_id   = @row_sport_id
-            AND ur.role       = 'coach_admin'
-            AND ur.revoked_at IS NULL
-        )
-        OR
-        (
-          @row_status_id = 1
-          AND EXISTS (
-            SELECT 1 FROM dbo.user_roles ur
-            WHERE ur.user_id    = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
-              AND ur.sport_id   = @row_sport_id
-              AND ur.role       = 'roster_only_admin'
-              AND ur.revoked_at IS NULL
-          )
-        )
-        OR
-        @row_user_id = TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER)
-        OR
-        (
-          @row_sport_id IS NULL
-          AND TRY_CAST(@session_user_id AS UNIQUEIDENTIFIER) IS NOT NULL
-        )`,
-
-    `IF NOT EXISTS (SELECT 1 FROM sys.security_policies WHERE name = 'user_access_policy')
-    CREATE SECURITY POLICY dbo.user_access_policy
-      ADD FILTER PREDICATE dbo.fn_user_access(
-        CAST(SESSION_CONTEXT(N'user_id')   AS NVARCHAR(100)),
-        CAST(SESSION_CONTEXT(N'user_role') AS NVARCHAR(50)),
-        sport_id,
-        id,
-        status_id
-      ) ON dbo.users
-    WITH (STATE = ON)`,
+    `DROP FUNCTION IF EXISTS dbo.fn_user_access`,
 
     // audit_log
     `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'audit_log' AND schema_id = SCHEMA_ID('dbo'))

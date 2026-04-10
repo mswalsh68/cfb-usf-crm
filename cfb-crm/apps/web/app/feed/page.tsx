@@ -2,11 +2,13 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import DOMPurify from 'isomorphic-dompurify';
 import { appApi } from '@/lib/api';
-import { canWrite, getAppRole, hasAppAccess } from '@/lib/auth';
+import { hasAppAccess } from '@/lib/auth';
 import { theme } from '@/lib/theme';
 import { useTeamConfig } from '@/lib/teamConfig';
 import { Alert, Badge, Button, PageLayout } from '@/components';
+import { resolvePostTokens } from '@/lib/feedTokens';
 
 interface FeedPost {
   id:            string;
@@ -38,14 +40,21 @@ const AUDIENCE_BADGE: Record<string, 'green' | 'gold' | 'gray'> = {
   custom:       'gray',
 };
 
+const SANITIZE_CONFIG = {
+  ALLOWED_TAGS: ['b','i','em','strong','a','p','ul','ol','li','br','h1','h2','h3','span','div'],
+  ALLOWED_ATTR: ['href','style','target'],
+};
+
 function FeedCard({
   post,
   onRead,
   onNavigate,
+  teamConfig,
 }: {
   post:       FeedPost;
   onRead:     (id: string) => void;
   onNavigate: (id: string) => void;
+  teamConfig: import('@/lib/teamConfig').TeamConfig;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const marked  = useRef(false);
@@ -72,6 +81,15 @@ function FeedCard({
     month: 'short', day: 'numeric', year: 'numeric',
   });
 
+  const resolvedHtml = post.isWelcomePost
+    ? resolvePostTokens(post.bodyHtml, teamConfig)
+    : post.bodyHtml;
+  const safeHtml = DOMPurify.sanitize(resolvedHtml, SANITIZE_CONFIG);
+
+  const resolvedTitle = post.title
+    ? (post.isWelcomePost ? resolvePostTokens(post.title, teamConfig) : post.title)
+    : null;
+
   return (
     <div
       ref={cardRef}
@@ -80,13 +98,8 @@ function FeedCard({
         border:          `1px solid ${post.isRead ? theme.cardBorder : theme.primary}`,
         borderRadius:    'var(--radius-lg)',
         padding:         '20px 24px',
-        cursor:          'pointer',
-        transition:      'box-shadow 0.15s',
         position:        'relative',
       }}
-      onClick={() => onNavigate(post.id)}
-      onMouseEnter={e => { (e.currentTarget as HTMLElement).style.boxShadow = '0 2px 12px rgba(0,0,0,0.08)'; }}
-      onMouseLeave={e => { (e.currentTarget as HTMLElement).style.boxShadow = 'none'; }}
     >
       {/* Unread indicator */}
       {!post.isRead && (
@@ -102,7 +115,7 @@ function FeedCard({
       )}
 
       {/* Header row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         {post.isPinned && (
           <span style={{ fontSize: 12, color: theme.accent, fontWeight: 700 }}>📌 Pinned</span>
         )}
@@ -113,32 +126,43 @@ function FeedCard({
         <span style={{ fontSize: 12, color: theme.gray400, marginLeft: 'auto' }}>{published}</span>
       </div>
 
-      {/* Title */}
-      {post.title && (
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: theme.gray900, margin: '0 0 8px 0' }}>
-          {post.title}
+      {/* Title — hidden for welcome post since the banner H1 already shows it */}
+      {resolvedTitle && !post.isWelcomePost && (
+        <h2 style={{ fontSize: 16, fontWeight: 700, color: theme.gray900, margin: '0 0 12px 0' }}>
+          {resolvedTitle}
         </h2>
       )}
 
-      {/* Body preview — strip HTML tags for the card preview */}
-      <p style={{
-        fontSize:   14,
-        color:      theme.gray600,
-        margin:     0,
-        display:    '-webkit-box',
-        WebkitLineClamp: 3,
-        WebkitBoxOrient: 'vertical',
-        overflow:   'hidden',
-      }}>
-        {post.bodyHtml.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()}
-      </p>
+      {/* Full rendered body */}
+      <div
+        style={{ fontSize: 15, lineHeight: 1.7, color: theme.gray800 }}
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
+      />
+
+      {/* View stats link — admin only shortcut */}
+      <div style={{ marginTop: 14, textAlign: 'right' }}>
+        <button
+          onClick={() => onNavigate(post.id)}
+          style={{
+            background:  'none',
+            border:      'none',
+            color:       theme.gray400,
+            fontSize:    12,
+            cursor:      'pointer',
+            padding:     0,
+          }}
+        >
+          View stats →
+        </button>
+      </div>
     </div>
   );
 }
 
 export default function FeedPage() {
   const router          = useRouter();
-  const { teamName }    = useTeamConfig();
+  const teamConfig      = useTeamConfig();
+  const { teamName }    = teamConfig;
   const [posts,    setPosts]    = useState<FeedPost[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
@@ -149,8 +173,7 @@ export default function FeedPage() {
 
   useEffect(() => {
     // Check write access client-side
-    const role = getAppRole(null as never, 'roster') ?? getAppRole(null as never, 'alumni');
-    setCanPost(canWrite(getAppRole(null as never, 'roster')) || canWrite(getAppRole(null as never, 'alumni')));
+    setCanPost(hasAppAccess('roster') || hasAppAccess('alumni'));
 
     // Simpler: just check if user has access at all; actual write guard is on the server
     const checkAccess = async () => {
@@ -227,6 +250,7 @@ export default function FeedPage() {
               post={post}
               onRead={handleRead}
               onNavigate={id => router.push(`/feed/${id}`)}
+              teamConfig={teamConfig}
             />
           ))
         )}
