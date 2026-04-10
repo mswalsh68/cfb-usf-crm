@@ -74,7 +74,6 @@ SELECT
   u.home_town,
   u.home_state,
   u.high_school,
-  u.gpa,
   u.major,
   u.phone,
   u.personal_email,
@@ -83,6 +82,12 @@ SELECT
   u.snapchat,
   u.emergency_contact_name,
   u.emergency_contact_phone,
+  u.parent1_name,
+  u.parent1_phone,
+  u.parent1_email,
+  u.parent2_name,
+  u.parent2_phone,
+  u.parent2_email,
   u.notes,
   u.created_at,
   u.updated_at
@@ -184,7 +189,6 @@ BEGIN
     p.home_state            AS homeState,
     p.high_school           AS highSchool,
     p.recruiting_class      AS recruitingClass,
-    p.gpa,
     p.major,
     p.phone,
     p.personal_email        AS email,
@@ -251,7 +255,6 @@ BEGIN
     p.home_state            AS homeState,
     p.high_school           AS highSchool,
     p.recruiting_class      AS recruitingClass,
-    p.gpa,
     p.major,
     p.phone,
     p.personal_email        AS email,
@@ -260,6 +263,12 @@ BEGIN
     p.snapchat,
     p.emergency_contact_name  AS emergencyContactName,
     p.emergency_contact_phone AS emergencyContactPhone,
+    p.parent1_name            AS parent1Name,
+    p.parent1_phone           AS parent1Phone,
+    p.parent1_email           AS parent1Email,
+    p.parent2_name            AS parent2Name,
+    p.parent2_phone           AS parent2Phone,
+    p.parent2_email           AS parent2Email,
     p.notes,
     p.created_at            AS createdAt,
     p.updated_at            AS updatedAt
@@ -305,7 +314,6 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreatePlayer
   @HomeTown              NVARCHAR(100)    = NULL,
   @HomeState             NVARCHAR(50)     = NULL,
   @HighSchool            NVARCHAR(150)    = NULL,
-  @Gpa                   DECIMAL(3,2)     = NULL,
   @Major                 NVARCHAR(100)    = NULL,
   @Phone                 NVARCHAR(20)     = NULL,
   @Instagram             NVARCHAR(100)    = NULL,
@@ -313,6 +321,12 @@ CREATE OR ALTER PROCEDURE dbo.sp_CreatePlayer
   @Snapchat              NVARCHAR(100)    = NULL,
   @EmergencyContactName  NVARCHAR(150)    = NULL,
   @EmergencyContactPhone NVARCHAR(20)     = NULL,
+  @Parent1Name           NVARCHAR(150)    = NULL,
+  @Parent1Phone          NVARCHAR(20)     = NULL,
+  @Parent1Email          NVARCHAR(255)    = NULL,
+  @Parent2Name           NVARCHAR(150)    = NULL,
+  @Parent2Phone          NVARCHAR(20)     = NULL,
+  @Parent2Email          NVARCHAR(255)    = NULL,
   @Notes                 NVARCHAR(MAX)    = NULL,
   @CreatedBy             UNIQUEIDENTIFIER,
   @NewUserId             UNIQUEIDENTIFIER OUTPUT,
@@ -330,12 +344,6 @@ BEGIN
     EXEC sp_set_session_context N'user_role', @_role;
   END
   SET @ErrorCode = NULL;
-
-  IF @AcademicYear NOT IN ('freshman','sophomore','junior','senior','graduate')
-  BEGIN
-    SET @ErrorCode = 'INVALID_ACADEMIC_YEAR';
-    RETURN;
-  END
 
   IF @RecruitingClass < 2000 OR @RecruitingClass > 2100
   BEGIN
@@ -388,7 +396,6 @@ BEGIN
       home_town               = COALESCE(@HomeTown,               home_town),
       home_state              = COALESCE(@HomeState,              home_state),
       high_school             = COALESCE(@HighSchool,             high_school),
-      gpa                     = COALESCE(@Gpa,                    gpa),
       major                   = COALESCE(@Major,                  major),
       phone                   = COALESCE(@Phone,                  phone),
       personal_email          = COALESCE(@Email,                  personal_email),
@@ -397,6 +404,12 @@ BEGIN
       snapchat                = COALESCE(@Snapchat,               snapchat),
       emergency_contact_name  = COALESCE(@EmergencyContactName,  emergency_contact_name),
       emergency_contact_phone = COALESCE(@EmergencyContactPhone, emergency_contact_phone),
+      parent1_name            = COALESCE(@Parent1Name,            parent1_name),
+      parent1_phone           = COALESCE(@Parent1Phone,           parent1_phone),
+      parent1_email           = COALESCE(@Parent1Email,           parent1_email),
+      parent2_name            = COALESCE(@Parent2Name,            parent2_name),
+      parent2_phone           = COALESCE(@Parent2Phone,           parent2_phone),
+      parent2_email           = COALESCE(@Parent2Email,           parent2_email),
       notes                   = COALESCE(@Notes,                  notes),
       updated_at              = SYSUTCDATETIME()
     WHERE id = @NewUserId;
@@ -407,15 +420,21 @@ BEGIN
       id, email, first_name, last_name, status_id, sport_id,
       jersey_number, position, academic_year, recruiting_class,
       height_inches, weight_lbs, home_town, home_state, high_school,
-      gpa, major, phone, personal_email, instagram, twitter, snapchat,
-      emergency_contact_name, emergency_contact_phone, notes
+      major, phone, personal_email, instagram, twitter, snapchat,
+      emergency_contact_name, emergency_contact_phone,
+      parent1_name, parent1_phone, parent1_email,
+      parent2_name, parent2_phone, parent2_email,
+      notes
     )
     VALUES (
       @NewUserId, @Email, @FirstName, @LastName, 1, @SportId,
       @JerseyNumber, @Position, @AcademicYear, @RecruitingClass,
       @HeightInches, @WeightLbs, @HomeTown, @HomeState, @HighSchool,
-      @Gpa, @Major, @Phone, @Email, @Instagram, @Twitter, @Snapchat,
-      @EmergencyContactName, @EmergencyContactPhone, @Notes
+      @Major, @Phone, @Email, @Instagram, @Twitter, @Snapchat,
+      @EmergencyContactName, @EmergencyContactPhone,
+      @Parent1Name, @Parent1Phone, @Parent1Email,
+      @Parent2Name, @Parent2Phone, @Parent2Email,
+      @Notes
     );
   END
 
@@ -440,7 +459,6 @@ CREATE OR ALTER PROCEDURE dbo.sp_UpdatePlayer
   @AcademicYear          NVARCHAR(20)     = NULL,
   @HeightInches          TINYINT          = NULL,
   @WeightLbs             SMALLINT         = NULL,
-  @Gpa                   DECIMAL(3,2)     = NULL,
   @Major                 NVARCHAR(100)    = NULL,
   @Phone                 NVARCHAR(20)     = NULL,
   @Email                 NVARCHAR(255)    = NULL,
@@ -449,6 +467,12 @@ CREATE OR ALTER PROCEDURE dbo.sp_UpdatePlayer
   @Snapchat              NVARCHAR(100)    = NULL,
   @EmergencyContactName  NVARCHAR(150)    = NULL,
   @EmergencyContactPhone NVARCHAR(20)     = NULL,
+  @Parent1Name           NVARCHAR(150)    = NULL,
+  @Parent1Phone          NVARCHAR(20)     = NULL,
+  @Parent1Email          NVARCHAR(255)    = NULL,
+  @Parent2Name           NVARCHAR(150)    = NULL,
+  @Parent2Phone          NVARCHAR(20)     = NULL,
+  @Parent2Email          NVARCHAR(255)    = NULL,
   @Notes                 NVARCHAR(MAX)    = NULL,
   @UpdatedBy             UNIQUEIDENTIFIER,
   @ErrorCode             NVARCHAR(50)     OUTPUT,
@@ -487,7 +511,6 @@ BEGIN
     academic_year           = COALESCE(@AcademicYear,          academic_year),
     height_inches           = COALESCE(@HeightInches,          height_inches),
     weight_lbs              = COALESCE(@WeightLbs,             weight_lbs),
-    gpa                     = COALESCE(@Gpa,                   gpa),
     major                   = COALESCE(@Major,                 major),
     phone                   = COALESCE(@Phone,                 phone),
     personal_email          = COALESCE(@Email,                 personal_email),
@@ -496,6 +519,12 @@ BEGIN
     snapchat                = COALESCE(@Snapchat,              snapchat),
     emergency_contact_name  = COALESCE(@EmergencyContactName,  emergency_contact_name),
     emergency_contact_phone = COALESCE(@EmergencyContactPhone, emergency_contact_phone),
+    parent1_name            = COALESCE(@Parent1Name,           parent1_name),
+    parent1_phone           = COALESCE(@Parent1Phone,          parent1_phone),
+    parent1_email           = COALESCE(@Parent1Email,          parent1_email),
+    parent2_name            = COALESCE(@Parent2Name,           parent2_name),
+    parent2_phone           = COALESCE(@Parent2Phone,          parent2_phone),
+    parent2_email           = COALESCE(@Parent2Email,          parent2_email),
     notes                   = COALESCE(@Notes,                 notes),
     updated_at              = SYSUTCDATETIME()
   WHERE id = @UserId;
@@ -1249,11 +1278,16 @@ BEGIN
     home_town                NVARCHAR(100),
     home_state               NVARCHAR(50),
     high_school              NVARCHAR(150),
-    gpa                      DECIMAL(3,2),
     major                    NVARCHAR(100),
     phone                    NVARCHAR(20),
     emergency_contact_name   NVARCHAR(150),
     emergency_contact_phone  NVARCHAR(20),
+    parent1_name             NVARCHAR(150),
+    parent1_phone            NVARCHAR(20),
+    parent1_email            NVARCHAR(255),
+    parent2_name             NVARCHAR(150),
+    parent2_phone            NVARCHAR(20),
+    parent2_email            NVARCHAR(255),
     notes                    NVARCHAR(MAX)
   );
 
@@ -1261,7 +1295,10 @@ BEGIN
     row_num, provided_user_id, email, first_name, last_name,
     jersey_number, position, academic_year, recruiting_class,
     height_inches, weight_lbs, home_town, home_state, high_school,
-    gpa, major, phone, emergency_contact_name, emergency_contact_phone, notes
+    major, phone, emergency_contact_name, emergency_contact_phone,
+    parent1_name, parent1_phone, parent1_email,
+    parent2_name, parent2_phone, parent2_email,
+    notes
   )
   SELECT
     ROW_NUMBER() OVER (ORDER BY (SELECT NULL)),
@@ -1278,11 +1315,16 @@ BEGIN
     JSON_VALUE(value, '$.homeTown'),
     JSON_VALUE(value, '$.homeState'),
     JSON_VALUE(value, '$.highSchool'),
-    TRY_CAST(JSON_VALUE(value, '$.gpa')             AS DECIMAL(3,2)),
     JSON_VALUE(value, '$.major'),
     JSON_VALUE(value, '$.phone'),
     JSON_VALUE(value, '$.emergencyContactName'),
     JSON_VALUE(value, '$.emergencyContactPhone'),
+    JSON_VALUE(value, '$.parent1Name'),
+    JSON_VALUE(value, '$.parent1Phone'),
+    JSON_VALUE(value, '$.parent1Email'),
+    JSON_VALUE(value, '$.parent2Name'),
+    JSON_VALUE(value, '$.parent2Phone'),
+    JSON_VALUE(value, '$.parent2Email'),
     JSON_VALUE(value, '$.notes')
   FROM OPENJSON(@PlayersJson);
 
@@ -1300,24 +1342,36 @@ BEGIN
   DECLARE @town            NVARCHAR(100);
   DECLARE @state           NVARCHAR(50);
   DECLARE @hs              NVARCHAR(150);
-  DECLARE @gpa             DECIMAL(3,2);
   DECLARE @major           NVARCHAR(100);
   DECLARE @phone           NVARCHAR(20);
   DECLARE @ecName          NVARCHAR(150);
   DECLARE @ecPhone         NVARCHAR(20);
+  DECLARE @parent1Name     NVARCHAR(150);
+  DECLARE @parent1Phone    NVARCHAR(20);
+  DECLARE @parent1Email    NVARCHAR(255);
+  DECLARE @parent2Name     NVARCHAR(150);
+  DECLARE @parent2Phone    NVARCHAR(20);
+  DECLARE @parent2Email    NVARCHAR(255);
   DECLARE @notes           NVARCHAR(MAX);
 
   DECLARE cur CURSOR FOR
     SELECT row_num, provided_user_id, email, first_name, last_name,
            jersey_number, position, academic_year, recruiting_class,
            height_inches, weight_lbs, home_town, home_state, high_school,
-           gpa, major, phone, emergency_contact_name, emergency_contact_phone, notes
+           major, phone, emergency_contact_name, emergency_contact_phone,
+           parent1_name, parent1_phone, parent1_email,
+           parent2_name, parent2_phone, parent2_email,
+           notes
     FROM @rows;
 
   OPEN cur;
   FETCH NEXT FROM cur INTO
     @rowNum, @providedUserId, @email, @fn, @ln, @jersey, @pos, @acYear, @recClass,
-    @heightIn, @wt, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
+    @heightIn, @wt, @town, @state, @hs,
+    @major, @phone, @ecName, @ecPhone,
+    @parent1Name, @parent1Phone, @parent1Email,
+    @parent2Name, @parent2Phone, @parent2Email,
+    @notes;
 
   WHILE @@FETCH_STATUS = 0
   BEGIN
@@ -1392,13 +1446,18 @@ BEGIN
           weight_lbs              = COALESCE(@wt,       weight_lbs),
           home_town               = COALESCE(@town,     home_town),
           home_state              = COALESCE(@state,    home_state),
-          high_school             = COALESCE(@hs,       high_school),
-          gpa                     = COALESCE(@gpa,      gpa),
-          major                   = COALESCE(@major,    major),
-          phone                   = COALESCE(@phone,    phone),
-          emergency_contact_name  = COALESCE(@ecName,  emergency_contact_name),
-          emergency_contact_phone = COALESCE(@ecPhone, emergency_contact_phone),
-          notes                   = COALESCE(@notes,   notes),
+          high_school             = COALESCE(@hs,            high_school),
+          major                   = COALESCE(@major,         major),
+          phone                   = COALESCE(@phone,         phone),
+          emergency_contact_name  = COALESCE(@ecName,        emergency_contact_name),
+          emergency_contact_phone = COALESCE(@ecPhone,       emergency_contact_phone),
+          parent1_name            = COALESCE(@parent1Name,   parent1_name),
+          parent1_phone           = COALESCE(@parent1Phone,  parent1_phone),
+          parent1_email           = COALESCE(@parent1Email,  parent1_email),
+          parent2_name            = COALESCE(@parent2Name,   parent2_name),
+          parent2_phone           = COALESCE(@parent2Phone,  parent2_phone),
+          parent2_email           = COALESCE(@parent2Email,  parent2_email),
+          notes                   = COALESCE(@notes,         notes),
           updated_at              = SYSUTCDATETIME()
         WHERE id = @newUserId;
       END
@@ -1408,7 +1467,10 @@ BEGIN
           id, email, first_name, last_name, status_id, sport_id,
           jersey_number, position, academic_year, recruiting_class,
           height_inches, weight_lbs, home_town, home_state, high_school,
-          gpa, major, phone, emergency_contact_name, emergency_contact_phone, notes
+          major, phone, emergency_contact_name, emergency_contact_phone,
+          parent1_name, parent1_phone, parent1_email,
+          parent2_name, parent2_phone, parent2_email,
+          notes
         )
         VALUES (
           @newUserId,
@@ -1416,7 +1478,10 @@ BEGIN
           @fn, @ln, 1, @SportId,
           @jersey, @pos, @acYear, @recClass,
           @heightIn, @wt, @town, @state, @hs,
-          @gpa, @major, @phone, @ecName, @ecPhone, @notes
+          @major, @phone, @ecName, @ecPhone,
+          @parent1Name, @parent1Phone, @parent1Email,
+          @parent2Name, @parent2Phone, @parent2Email,
+          @notes
         );
       END
 
@@ -1437,7 +1502,11 @@ BEGIN
     NextRow:
     FETCH NEXT FROM cur INTO
       @rowNum, @providedUserId, @email, @fn, @ln, @jersey, @pos, @acYear, @recClass,
-      @heightIn, @wt, @town, @state, @hs, @gpa, @major, @phone, @ecName, @ecPhone, @notes;
+      @heightIn, @wt, @town, @state, @hs,
+      @major, @phone, @ecName, @ecPhone,
+      @parent1Name, @parent1Phone, @parent1Email,
+      @parent2Name, @parent2Phone, @parent2Email,
+      @notes;
   END
 
   CLOSE cur;

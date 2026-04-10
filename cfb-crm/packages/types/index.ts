@@ -72,7 +72,7 @@ export interface LoginResponse {
 // ─── Player (Roster CRM) ─────────────────────────────────────────────────────
 
 export type PlayerStatus = 'active' | 'injured' | 'suspended' | 'graduated' | 'transferred' | 'walkOn';
-export type AcademicYear = 'freshman' | 'sophomore' | 'junior' | 'senior' | 'graduate';
+export type AcademicYear = string;
 export type PositionGroup = 'QB' | 'RB' | 'WR' | 'TE' | 'OL' | 'DL' | 'LB' | 'DB' | 'K' | 'P' | 'LS' | 'ATH';
 
 export interface Player {
@@ -90,11 +90,16 @@ export interface Player {
   homeState: string;
   highSchool: string;
   recruitingClass: number;
-  gpa?: number;
   major?: string;
   phone?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
+  parent1Name?: string;
+  parent1Phone?: string;
+  parent1Email?: string;
+  parent2Name?: string;
+  parent2Phone?: string;
+  parent2Email?: string;
   notes?: string;
   createdAt: string;
   updatedAt: string;

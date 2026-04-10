@@ -49,9 +49,6 @@ export function PlayerCard({ player, onPress, style }: PlayerCardProps) {
             player.status === 'graduated'  ? 'alumni'   : 'default'
           }
         />
-        {player.gpa != null && (
-          <Text style={styles.gpa}>GPA {player.gpa.toFixed(2)}</Text>
-        )}
       </View>
     </TouchableOpacity>
   );
@@ -171,11 +168,6 @@ const styles = StyleSheet.create({
     alignItems:  'flex-end',
     gap:          Spacing.xs,
     marginLeft:   Spacing.sm,
-  },
-  gpa: {
-    fontSize:   Typography.xs,
-    color:      Colors.textTertiary,
-    fontWeight: Typography.medium,
   },
   donorDot: {
     width:           8,

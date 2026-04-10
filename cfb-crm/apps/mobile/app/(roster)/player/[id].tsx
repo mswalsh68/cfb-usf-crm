@@ -12,6 +12,7 @@ import {
   Card, Badge, Button, Input, Divider, StatPill,
   Colors, Typography, Spacing, Radii, Shadows,
   PlayerStatusColor,
+  useTeamConfig,
 } from '@cfb-crm/ui';
 import type { Player } from '@cfb-crm/types';
 
@@ -23,6 +24,7 @@ export default function PlayerDetailScreen() {
 
   const [editing, setEditing] = useState(false);
   const [editFields, setEditFields] = useState<Partial<Player>>({});
+  const { level } = useTeamConfig();
 
   const { data, isLoading } = useQuery({
     queryKey: ['player', id],
@@ -100,17 +102,18 @@ export default function PlayerDetailScreen() {
               <StatPill label="Height" value={`${Math.floor(data.heightInches / 12)}'${data.heightInches % 12}"`} />
             )}
             {data.weightLbs && <StatPill label="Weight" value={`${data.weightLbs} lbs`} />}
-            {data.gpa != null && <StatPill label="GPA" value={data.gpa.toFixed(2)} />}
           </View>
         </Card>
 
         {/* Academic info */}
         <Text style={styles.sectionTitle}>Academic</Text>
         <Card>
-          <InfoRow label="Major"      value={data.major} editable={editing} onEdit={(v) => setEditFields((p) => ({ ...p, major: v }))} />
-          <Divider />
-          <InfoRow label="GPA"        value={data.gpa?.toFixed(2)} editable={editing} keyboardType="decimal-pad" onEdit={(v) => setEditFields((p) => ({ ...p, gpa: parseFloat(v) }))} />
-          <Divider />
+          {level === 'college' && (
+            <>
+              <InfoRow label="Major" value={data.major} editable={editing} onEdit={(v) => setEditFields((p) => ({ ...p, major: v }))} />
+              <Divider />
+            </>
+          )}
           <InfoRow label="Year"       value={data.academicYear} />
           <Divider />
           <InfoRow label="High School" value={data.highSchool} />
@@ -126,6 +129,25 @@ export default function PlayerDetailScreen() {
           <InfoRow label="Emergency Contact" value={data.emergencyContactName} />
           <Divider />
           <InfoRow label="Emergency Phone"   value={data.emergencyContactPhone} editable={editing} keyboardType="phone-pad" onEdit={(v) => setEditFields((p) => ({ ...p, emergencyContactPhone: v }))} />
+        </Card>
+
+        {/* Parent / Guardian Contact */}
+        <Text style={styles.sectionTitle}>Parent / Guardian 1</Text>
+        <Card>
+          <InfoRow label="Name"  value={data.parent1Name}  />
+          <Divider />
+          <InfoRow label="Phone" value={data.parent1Phone} />
+          <Divider />
+          <InfoRow label="Email" value={data.parent1Email} />
+        </Card>
+
+        <Text style={styles.sectionTitle}>Parent / Guardian 2</Text>
+        <Card>
+          <InfoRow label="Name"  value={data.parent2Name}  />
+          <Divider />
+          <InfoRow label="Phone" value={data.parent2Phone} />
+          <Divider />
+          <InfoRow label="Email" value={data.parent2Email} />
         </Card>
 
         {/* Notes */}

@@ -66,7 +66,7 @@ function InviteBanner({ inviteUrl, onDone }: { inviteUrl: string; onDone: () => 
 
 export default function AddPlayerPage() {
   const router = useRouter();
-  const { positions, academicYears, rosterLabel, classLabel } = useTeamConfig();
+  const { positions, academicYears, rosterLabel, classLabel, level } = useTeamConfig();
 
   useEffect(() => {
     if (!isGlobalAdmin()) router.push('/unauthorized');
@@ -85,8 +85,10 @@ export default function AddPlayerPage() {
     recruitingClass: String(currentYear),
     heightFeet: '', heightInches: '', weightLbs: '',
     homeTown: '', homeState: '', highSchool: '',
-    major: '', gpa: '', phone: '',
+    major: '', phone: '',
     emergencyContactName: '', emergencyContactPhone: '',
+    parent1Name: '', parent1Phone: '', parent1Email: '',
+    parent2Name: '', parent2Phone: '', parent2Email: '',
     notes: '',
   };
   const [form, setForm] = useState(emptyForm);
@@ -133,10 +135,15 @@ export default function AddPlayerPage() {
         homeState:            form.homeState       || undefined,
         highSchool:           form.highSchool      || undefined,
         major:                form.major           || undefined,
-        gpa:                  form.gpa             ? parseFloat(form.gpa)        : undefined,
         phone:                form.phone           || undefined,
         emergencyContactName: form.emergencyContactName   || undefined,
         emergencyContactPhone:form.emergencyContactPhone  || undefined,
+        parent1Name:          form.parent1Name     || undefined,
+        parent1Phone:         form.parent1Phone    || undefined,
+        parent1Email:         form.parent1Email    || undefined,
+        parent2Name:          form.parent2Name     || undefined,
+        parent2Phone:         form.parent2Phone    || undefined,
+        parent2Email:         form.parent2Email    || undefined,
         notes:                form.notes           || undefined,
       });
 
@@ -217,13 +224,14 @@ export default function AddPlayerPage() {
             </div>
           </div>
 
-          <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
-            <SectionHeader title="Academic" />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <Input label="Major" value={form.major} onChange={set('major')} placeholder="Business" />
-              <Input label="GPA"   value={form.gpa}   onChange={set('gpa')}   placeholder="3.50" type="number" />
+          {level === 'college' && (
+            <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+              <SectionHeader title="Academic" />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Input label="Major" value={form.major} onChange={set('major')} placeholder="Business" />
+              </div>
             </div>
-          </div>
+          )}
 
           <div style={{ backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
             <SectionHeader title="Contact" />
@@ -231,6 +239,28 @@ export default function AddPlayerPage() {
               <Input label="Phone"             value={form.phone}                onChange={set('phone')}                type="tel" />
               <Input label="Emergency Contact" value={form.emergencyContactName} onChange={set('emergencyContactName')} />
               <Input label="Emergency Phone"   value={form.emergencyContactPhone}onChange={set('emergencyContactPhone')}type="tel" />
+            </div>
+          </div>
+
+          <div style={{ gridColumn: '1 / -1', backgroundColor: theme.cardBg, border: `1px solid ${theme.cardBorder}`, borderRadius: 'var(--radius-lg)', padding: 24, boxShadow: 'var(--shadow-sm)' }}>
+            <SectionHeader title="Parent / Guardian Contact" />
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10, marginTop: 0 }}>Parent / Guardian 1</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <Input label="Name"  value={form.parent1Name}  onChange={set('parent1Name')}  />
+                  <Input label="Phone" value={form.parent1Phone} onChange={set('parent1Phone')} type="tel" />
+                  <Input label="Email" value={form.parent1Email} onChange={set('parent1Email')} type="email" />
+                </div>
+              </div>
+              <div>
+                <p style={{ fontSize: 12, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 10, marginTop: 0 }}>Parent / Guardian 2</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <Input label="Name"  value={form.parent2Name}  onChange={set('parent2Name')}  />
+                  <Input label="Phone" value={form.parent2Phone} onChange={set('parent2Phone')} type="tel" />
+                  <Input label="Email" value={form.parent2Email} onChange={set('parent2Email')} type="email" />
+                </div>
+              </div>
             </div>
           </div>
 

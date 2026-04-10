@@ -12,6 +12,7 @@ import {
   Colors, Typography, Spacing, Radii,
 } from '@cfb-crm/ui';
 import type { PositionGroup, AcademicYear } from '@cfb-crm/types';
+import { useTeamConfig } from '@cfb-crm/ui';
 
 const POSITIONS: PositionGroup[] = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'];
 const YEARS: AcademicYear[]      = ['freshman','sophomore','junior','senior','graduate'];
@@ -20,6 +21,7 @@ export default function AddPlayerScreen() {
   const router       = useRouter();
   const { canWrite, user } = useAuth();
   const queryClient  = useQueryClient();
+  const { level }    = useTeamConfig();
 
   const [form, setForm] = useState({
     firstName:            '',
@@ -35,10 +37,15 @@ export default function AddPlayerScreen() {
     homeState:            '',
     highSchool:           '',
     major:                '',
-    gpa:                  '',
     phone:                '',
     emergencyContactName: '',
     emergencyContactPhone:'',
+    parent1Name:          '',
+    parent1Phone:         '',
+    parent1Email:         '',
+    parent2Name:          '',
+    parent2Phone:         '',
+    parent2Email:         '',
     notes:                '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -78,10 +85,15 @@ export default function AddPlayerScreen() {
         homeState:            form.homeState  || undefined,
         highSchool:           form.highSchool || undefined,
         major:                form.major      || undefined,
-        gpa:                  form.gpa        ? parseFloat(form.gpa)  : undefined,
         phone:                form.phone      || undefined,
         emergencyContactName: form.emergencyContactName  || undefined,
         emergencyContactPhone:form.emergencyContactPhone || undefined,
+        parent1Name:          form.parent1Name  || undefined,
+        parent1Phone:         form.parent1Phone || undefined,
+        parent1Email:         form.parent1Email || undefined,
+        parent2Name:          form.parent2Name  || undefined,
+        parent2Phone:         form.parent2Phone || undefined,
+        parent2Email:         form.parent2Email || undefined,
         notes:                form.notes      || undefined,
       });
     },
@@ -173,11 +185,14 @@ export default function AddPlayerScreen() {
         </Card>
 
         {/* Academic */}
-        <Text style={styles.section}>Academic</Text>
-        <Card>
-          <Input label="Major" value={form.major} onChangeText={set('major')} autoCapitalize="words" />
-          <Input label="GPA"   value={form.gpa}   onChangeText={set('gpa')}   keyboardType="decimal-pad" containerStyle={{ marginTop: Spacing.md }} />
-        </Card>
+        {level === 'college' && (
+          <>
+            <Text style={styles.section}>Academic</Text>
+            <Card>
+              <Input label="Major" value={form.major} onChangeText={set('major')} autoCapitalize="words" />
+            </Card>
+          </>
+        )}
 
         {/* Contact */}
         <Text style={styles.section}>Contact</Text>
@@ -185,6 +200,21 @@ export default function AddPlayerScreen() {
           <Input label="Phone"             value={form.phone}              onChangeText={set('phone')}              keyboardType="phone-pad" />
           <Input label="Emergency Contact" value={form.emergencyContactName} onChangeText={set('emergencyContactName')} autoCapitalize="words" containerStyle={{ marginTop: Spacing.md }} />
           <Input label="Emergency Phone"   value={form.emergencyContactPhone} onChangeText={set('emergencyContactPhone')} keyboardType="phone-pad" containerStyle={{ marginTop: Spacing.md }} />
+        </Card>
+
+        {/* Parent / Guardian Contact */}
+        <Text style={styles.section}>Parent / Guardian 1</Text>
+        <Card>
+          <Input label="Name"  value={form.parent1Name}  onChangeText={set('parent1Name')}  autoCapitalize="words" />
+          <Input label="Phone" value={form.parent1Phone} onChangeText={set('parent1Phone')} keyboardType="phone-pad"   containerStyle={{ marginTop: Spacing.md }} />
+          <Input label="Email" value={form.parent1Email} onChangeText={set('parent1Email')} keyboardType="email-address" autoCapitalize="none" containerStyle={{ marginTop: Spacing.md }} />
+        </Card>
+
+        <Text style={styles.section}>Parent / Guardian 2</Text>
+        <Card>
+          <Input label="Name"  value={form.parent2Name}  onChangeText={set('parent2Name')}  autoCapitalize="words" />
+          <Input label="Phone" value={form.parent2Phone} onChangeText={set('parent2Phone')} keyboardType="phone-pad"   containerStyle={{ marginTop: Spacing.md }} />
+          <Input label="Email" value={form.parent2Email} onChangeText={set('parent2Email')} keyboardType="email-address" autoCapitalize="none" containerStyle={{ marginTop: Spacing.md }} />
         </Card>
 
         {/* Notes */}

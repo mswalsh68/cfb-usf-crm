@@ -25,7 +25,7 @@ interface Sport { id: string; name: string; abbr: string; }
 
 export default function RosterPage() {
   const router = useRouter();
-  const { positions, academicYears } = useTeamConfig();
+  const { positions, academicYears, level } = useTeamConfig();
   const [players,  setPlayers]  = useState<Player[]>([]);
   const [loading,  setLoading]  = useState(true);
   const [error,    setError]    = useState('');
@@ -119,7 +119,7 @@ export default function RosterPage() {
         <table style={{ width: '100%', borderCollapse: 'collapse' }} aria-label="Player roster">
           <thead>
             <tr style={{ backgroundColor: theme.gray50, borderBottom: `1px solid ${theme.gray200}` }}>
-              {['#', 'Name', 'Position', 'Year', 'Status', 'GPA', ''].map((h) => (
+              {['#', 'Name', 'Position', 'Year', 'Status', ''].map((h) => (
                 <th key={h} scope="col" style={{ textAlign: 'left', padding: '12px 20px', fontSize: 11, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                   {h || <span className="sr-only">Actions</span>}
                 </th>
@@ -128,9 +128,9 @@ export default function RosterPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 48, color: theme.gray400 }}>Loading...</td></tr>
+              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 48, color: theme.gray400 }}>Loading...</td></tr>
             ) : players.length === 0 ? (
-              <tr><td colSpan={7} style={{ textAlign: 'center', padding: 48, color: theme.gray400 }}>No players found</td></tr>
+              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 48, color: theme.gray400 }}>No players found</td></tr>
             ) : players.map((player, i) => (
               <tr
                 key={player.id}
@@ -160,7 +160,7 @@ export default function RosterPage() {
                   <span style={{ fontWeight: 600, fontSize: 14, color: theme.gray900 }}>
                     {player.lastName}, {player.firstName}
                   </span>
-                  {player.major && (
+                  {level === 'college' && player.major && (
                     <div style={{ fontSize: 12, color: theme.gray400, marginTop: 2 }}>{player.major}</div>
                   )}
                 </td>
@@ -178,11 +178,6 @@ export default function RosterPage() {
                 {/* Status */}
                 <td style={{ padding: '12px 20px' }}>
                   <Badge label={player.status} variant={statusBadge(player.status)} />
-                </td>
-
-                {/* GPA */}
-                <td style={{ padding: '12px 20px', fontSize: 13, color: theme.gray600 }}>
-                  {player.gpa != null ? player.gpa.toFixed(2) : '—'}
                 </td>
 
                 {/* Arrow */}
