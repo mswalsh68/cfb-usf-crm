@@ -12,7 +12,7 @@ GO
 --   3 = removed
 --
 -- Create player flow:
---   1. Call [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser
+--   1. Call [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
 --      (NOTE: add this SP to CfbGlobal — idempotent on email;
 --       returns existing user ID if email already registered)
 --   2. Upsert the returned user ID into AppDB dbo.users
@@ -280,7 +280,7 @@ GO
 -- ============================================================
 -- sp_CreatePlayer
 -- Creates a player account. Flow:
---   1. Call [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser to get
+--   1. Call [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser to get
 --      the canonical global user ID (creates account if needed,
 --      returns existing ID if email already registered).
 --   2. Upsert into AppDB dbo.users with that ID (status_id = 1).
@@ -355,7 +355,7 @@ BEGIN
 
   -- Step 1: Get or create user in CfbGlobal
   DECLARE @globalErr NVARCHAR(50);
-  EXEC [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser
+  EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
     @Email     = @Email,
     @FirstName = @FirstName,
     @LastName  = @LastName,
@@ -582,7 +582,7 @@ BEGIN
            TRY_CAST(@TriggeredBy AS UNIQUEIDENTIFIER), 'success');
 
         -- Swap permissions in CfbGlobal
-        EXEC [GLOBAL_DB].CfbGlobal.dbo.sp_TransferPlayerToAlumni
+        EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_TransferPlayerToAlumni
           @UserId    = @currentId,
           @GrantedBy = @TriggeredBy;
 
@@ -1350,7 +1350,7 @@ BEGIN
       -- Get or create in CfbGlobal
       DECLARE @newUserId UNIQUEIDENTIFIER;
       DECLARE @globalErr NVARCHAR(50);
-      EXEC [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser
+      EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
         @Email     = @email,
         @FirstName = @fn,
         @LastName  = @ln,
@@ -1542,7 +1542,7 @@ BEGIN
 
       DECLARE @newUserId UNIQUEIDENTIFIER;
       DECLARE @globalErr NVARCHAR(50);
-      EXEC [GLOBAL_DB].CfbGlobal.dbo.sp_GetOrCreateUser
+      EXEC [GLOBAL_DB].LegacyLinkGlobal.dbo.sp_GetOrCreateUser
         @Email = @email, @FirstName = @fn, @LastName = @ln, @TeamId = @GlobalTeamId,
         @UserId = @newUserId OUTPUT, @ErrorCode = @globalErr OUTPUT;
 
