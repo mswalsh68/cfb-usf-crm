@@ -824,22 +824,58 @@ app.post('/campaigns', auth, alumniAccess, alumniAdmin, async (req, res) => {
   } catch (err) { console.error('[POST /campaigns]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
+// ─── Per-tenant email config ──────────────────────────────────
+// Reads email branding + send limits from GlobalDB team_config.
+// Falls back to conservative defaults if the row has nulls.
+interface TenantEmailConfig {
+  fromAddress:     string;
+  fromName:        string;
+  replyTo:         string | undefined;
+  physicalAddress: string;
+  dailyLimit:      number;
+  monthlyLimit:    number;
+}
+
+async function getTenantEmailConfig(user: import('@cfb-crm/types').AuthTokenPayload): Promise<TenantEmailConfig> {
+  const globalDb = createExecutor({
+    server:    user.dbServer,
+    database:  process.env.GLOBAL_DB_NAME ?? 'LegacyLinkGlobal',
+    user:      process.env.DB_USER,
+    password:  process.env.DB_PASS,
+    encrypt:   process.env.DB_ENCRYPT === 'true',
+    trustCert: process.env.DB_TRUST_CERT === 'true',
+  });
+
+  const { rows } = await globalDb.execute(
+    'dbo.sp_GetTeamConfig',
+    { TeamId: user.teamId }
+  );
+
+  const cfg = rows[0] as Record<string, unknown> | undefined;
+  return {
+    fromAddress:     (cfg?.emailFromAddress  as string)  || 'onboarding@resend.dev',
+    fromName:        (cfg?.emailFromName     as string)  || (cfg?.teamName as string) || 'Team Portal',
+    replyTo:         (cfg?.emailReplyTo      as string)  || undefined,
+    physicalAddress: (cfg?.emailPhysicalAddress as string) || 'USA',
+    dailyLimit:      (cfg?.emailDailySendLimit  as number) || 500,
+    monthlyLimit:    (cfg?.emailMonthlySendLimit as number) || 5000,
+  };
+}
+
 // ─── Campaign dispatch helper ─────────────────────────────────
 // Shared by POST /campaigns/:id/dispatch and POST /feed (alsoEmail)
 async function dispatchCampaign(user: import('@cfb-crm/types').AuthTokenPayload, campaignId: string): Promise<void> {
   const db = appDb(user);
 
-  // Read send limits from GlobalDB via env-configured connection
-  // For now, use conservative defaults; extend with GlobalDB lookup when needed
-  const dailyRemaining   = parseInt(process.env.EMAIL_DAILY_LIMIT   ?? '500');
-  const monthlyRemaining = parseInt(process.env.EMAIL_MONTHLY_LIMIT ?? '5000');
+  // Read per-tenant email config from GlobalDB
+  const emailCfg = await getTenantEmailConfig(user);
 
   const { rows: queuedRows, output: dispatchOutput } = await db.execute(
     'dbo.sp_DispatchEmailCampaign',
     {
       CampaignId:       campaignId,
-      DailyRemaining:   dailyRemaining,
-      MonthlyRemaining: monthlyRemaining,
+      DailyRemaining:   emailCfg.dailyLimit,
+      MonthlyRemaining: emailCfg.monthlyLimit,
       RequestingUserId:   user.sub,
       RequestingUserRole: user.globalRole || '',
     },
@@ -859,30 +895,28 @@ async function dispatchCampaign(user: import('@cfb-crm/types').AuthTokenPayload,
 
   const { sendBulkEmail } = await import('./lib/emailProvider');
 
-  const fromName    = process.env.EMAIL_FROM_NAME    ?? 'Team Portal';
-  const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? 'noreply@example.com';
-  const replyTo     = process.env.EMAIL_REPLY_TO     ?? undefined;
-  const physAddr    = process.env.EMAIL_PHYSICAL_ADDRESS ?? '123 Main St, City, ST 00000';
-
-  // Get subject and body from campaign record for this batch
+  // Get subject, body, and per-campaign sender overrides
   const { rows: campaignRows } = await db.execute(
     'dbo.sp_GetCampaignDetail',
     { CampaignId: campaignId, RequestingUserId: user.sub, RequestingUserRole: user.globalRole || '' },
     { ErrorCode: 'nvarchar50' }
   );
-  const campaign = campaignRows[0] as { subjectLine?: string; bodyHtml?: string; replyToEmail?: string } | undefined;
+  const campaign = campaignRows[0] as {
+    subjectLine?: string; bodyHtml?: string;
+    replyToEmail?: string; fromName?: string;
+  } | undefined;
 
   const emailPayloads = messages.map(m => ({
     messageId:        m.messageId,
     to:               m.emailAddress,
     firstName:        m.firstName,
-    fromName,
-    fromAddress,
-    replyTo:          campaign?.replyToEmail ?? replyTo,
+    fromName:         campaign?.fromName     ?? emailCfg.fromName,
+    fromAddress:      emailCfg.fromAddress,
+    replyTo:          campaign?.replyToEmail ?? emailCfg.replyTo,
     subject:          campaign?.subjectLine  ?? '(no subject)',
     htmlBody:         campaign?.bodyHtml     ?? '',
     unsubscribeToken: m.unsubscribeToken,
-    physicalAddress:  physAddr,
+    physicalAddress:  emailCfg.physicalAddress,
     appDb:            user.appDb,
   }));
 
