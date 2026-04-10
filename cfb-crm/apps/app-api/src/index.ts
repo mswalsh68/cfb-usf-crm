@@ -861,6 +861,7 @@ async function dispatchCampaign(user: import('@cfb-crm/types').AuthTokenPayload,
 
   const fromName    = process.env.EMAIL_FROM_NAME    ?? 'Team Portal';
   const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? 'noreply@example.com';
+  const replyTo     = process.env.EMAIL_REPLY_TO     ?? undefined;
   const physAddr    = process.env.EMAIL_PHYSICAL_ADDRESS ?? '123 Main St, City, ST 00000';
 
   // Get subject and body from campaign record for this batch
@@ -869,7 +870,7 @@ async function dispatchCampaign(user: import('@cfb-crm/types').AuthTokenPayload,
     { CampaignId: campaignId, RequestingUserId: user.sub, RequestingUserRole: user.globalRole || '' },
     { ErrorCode: 'nvarchar50' }
   );
-  const campaign = campaignRows[0] as { subjectLine?: string; bodyHtml?: string } | undefined;
+  const campaign = campaignRows[0] as { subjectLine?: string; bodyHtml?: string; replyToEmail?: string } | undefined;
 
   const emailPayloads = messages.map(m => ({
     messageId:        m.messageId,
@@ -877,10 +878,12 @@ async function dispatchCampaign(user: import('@cfb-crm/types').AuthTokenPayload,
     firstName:        m.firstName,
     fromName,
     fromAddress,
-    subject:          campaign?.subjectLine ?? '(no subject)',
-    htmlBody:         campaign?.bodyHtml    ?? '',
+    replyTo:          campaign?.replyToEmail ?? replyTo,
+    subject:          campaign?.subjectLine  ?? '(no subject)',
+    htmlBody:         campaign?.bodyHtml     ?? '',
     unsubscribeToken: m.unsubscribeToken,
     physicalAddress:  physAddr,
+    appDb:            user.appDb,
   }));
 
   const results = await sendBulkEmail(emailPayloads);

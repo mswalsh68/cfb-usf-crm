@@ -15,6 +15,7 @@ export interface EmailMessage {
   htmlBody:         string;   // raw body — footer injected here
   unsubscribeToken: string;
   physicalAddress:  string;
+  appDb:            string;   // tenant AppDB name — needed by public /unsubscribe endpoint
 }
 
 export interface EmailResult {
@@ -25,8 +26,8 @@ export interface EmailResult {
 
 const WEB_BASE_URL = process.env.WEB_BASE_URL ?? 'http://localhost:3000';
 
-function injectCanSpamFooter(html: string, unsubscribeToken: string, physicalAddress: string): string {
-  const unsubUrl = `${WEB_BASE_URL}/unsubscribe?token=${unsubscribeToken}`;
+function injectCanSpamFooter(html: string, unsubscribeToken: string, physicalAddress: string, appDb: string): string {
+  const unsubUrl = `${WEB_BASE_URL}/unsubscribe?token=${unsubscribeToken}&db=${encodeURIComponent(appDb)}`;
   const footer = `
 <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;line-height:1.6">
   <p style="margin:0 0 4px 0">
@@ -41,7 +42,7 @@ function injectCanSpamFooter(html: string, unsubscribeToken: string, physicalAdd
 
 async function sendViaMock(messages: EmailMessage[]): Promise<EmailResult[]> {
   return messages.map(m => {
-    const body = injectCanSpamFooter(m.htmlBody, m.unsubscribeToken, m.physicalAddress);
+    const body = injectCanSpamFooter(m.htmlBody, m.unsubscribeToken, m.physicalAddress, m.appDb);
     console.log(`[email:mock] To: ${m.to} | Subject: ${m.subject} | Body length: ${body.length}`);
     return { messageId: m.messageId, success: true };
   });
@@ -61,7 +62,7 @@ async function sendViaSendGrid(messages: EmailMessage[]): Promise<EmailResult[]>
         from:    { name: m.fromName, email: m.fromAddress },
         replyTo: m.replyTo,
         subject: m.subject,
-        html:    injectCanSpamFooter(m.htmlBody, m.unsubscribeToken, m.physicalAddress),
+        html:    injectCanSpamFooter(m.htmlBody, m.unsubscribeToken, m.physicalAddress, m.appDb),
       });
       results.push({ messageId: m.messageId, success: true });
     } catch (err) {
@@ -83,7 +84,7 @@ async function sendViaResend(messages: EmailMessage[]): Promise<EmailResult[]> {
         from:    `${m.fromName} <${m.fromAddress}>`,
         replyTo: m.replyTo,
         subject: m.subject,
-        html:    injectCanSpamFooter(m.htmlBody, m.unsubscribeToken, m.physicalAddress),
+        html:    injectCanSpamFooter(m.htmlBody, m.unsubscribeToken, m.physicalAddress, m.appDb),
       });
       results.push({ messageId: m.messageId, success: true });
     } catch (err) {
