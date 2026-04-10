@@ -6,6 +6,8 @@ import DOMPurify from 'isomorphic-dompurify';
 import { appApi } from '@/lib/api';
 import { theme } from '@/lib/theme';
 import { Alert, Badge, Button, PageLayout } from '@/components';
+import { useTeamConfig } from '@/lib/teamConfig';
+import { resolvePostTokens } from '@/lib/feedTokens';
 
 interface FeedPost {
   id:            string;
@@ -44,6 +46,7 @@ const AUDIENCE_BADGE: Record<string, 'green' | 'gold' | 'gray'> = {
 export default function FeedPostPage() {
   const { id }        = useParams<{ id: string }>();
   const router        = useRouter();
+  const teamConfig    = useTeamConfig();
   const [post,  setPost]  = useState<FeedPost | null>(null);
   const [stats, setStats] = useState<ReadStats | null>(null);
   const [loading,  setLoading]  = useState(true);
@@ -102,7 +105,11 @@ export default function FeedPostPage() {
     weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   });
 
-  const safeHtml = DOMPurify.sanitize(post.bodyHtml, {
+  const resolvedHtml = post.isWelcomePost
+    ? resolvePostTokens(post.bodyHtml, teamConfig)
+    : post.bodyHtml;
+
+  const safeHtml = DOMPurify.sanitize(resolvedHtml, {
     ALLOWED_TAGS: ['b','i','em','strong','a','p','ul','ol','li','br','h1','h2','h3','span','div'],
     ALLOWED_ATTR: ['href','style','target'],
   });
@@ -133,7 +140,7 @@ export default function FeedPostPage() {
           {/* Title */}
           {post.title && (
             <h1 style={{ fontSize: 22, fontWeight: 700, color: theme.gray900, margin: '0 0 16px 0' }}>
-              {post.title}
+              {post.isWelcomePost ? resolvePostTokens(post.title, teamConfig) : post.title}
             </h1>
           )}
 

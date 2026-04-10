@@ -827,7 +827,7 @@ async function getTenantEmailConfig(user: import('@cfb-crm/types').AuthTokenPayl
 
   const { rows } = await globalDb.execute(
     'dbo.sp_GetTeamConfig',
-    { TeamId: user.teamId }
+    { TeamId: user.currentTeamId }
   );
 
   const cfg = rows[0] as Record<string, unknown> | undefined;

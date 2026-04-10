@@ -467,7 +467,9 @@ BEGIN
     ('008_consolidate_dbo_schema.sql'),
     ('009_users_status_consolidation.sql'),
     ('010_campaign_completed_at.sql'),
-    ('011_drop_current_country.sql');
+    ('011_drop_current_country.sql'),
+    ('012_email_infrastructure.sql'),
+    ('013_welcome_post_seed.sql');
 
   PRINT 'Created dbo.migration_history (all historical migrations pre-marked)';
 END
@@ -582,6 +584,173 @@ EXEC sp_executesql @sql,
   @TeamId, @ClientName, @ClientAbbr, @Sport, @Level, @Positions, @AcademicYears;
 
 PRINT 'team_config seeded/confirmed for: ' + @ClientAbbr;
+GO
+
+-- ============================================================
+-- STEP 20 — EMAIL INFRASTRUCTURE
+-- outreach_campaigns email columns, email_unsubscribes,
+-- feed_posts, and feed_post_reads.
+-- (Mirrors migration 012_email_infrastructure.sql)
+-- ============================================================
+
+-- Email columns on outreach_campaigns
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='outreach_campaigns' AND COLUMN_NAME='subject_line')
+  ALTER TABLE dbo.outreach_campaigns ADD subject_line NVARCHAR(500) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='outreach_campaigns' AND COLUMN_NAME='body_html')
+  ALTER TABLE dbo.outreach_campaigns ADD body_html NVARCHAR(MAX) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='outreach_campaigns' AND COLUMN_NAME='from_name')
+  ALTER TABLE dbo.outreach_campaigns ADD from_name NVARCHAR(200) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='outreach_campaigns' AND COLUMN_NAME='reply_to_email')
+  ALTER TABLE dbo.outreach_campaigns ADD reply_to_email NVARCHAR(255) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='outreach_campaigns' AND COLUMN_NAME='campaign_type')
+  ALTER TABLE dbo.outreach_campaigns ADD campaign_type NVARCHAR(20) NOT NULL DEFAULT 'outreach';
+GO
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='outreach_campaigns' AND COLUMN_NAME='physical_address')
+  ALTER TABLE dbo.outreach_campaigns ADD physical_address NVARCHAR(500) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='outreach_campaigns' AND COLUMN_NAME='started_at')
+  ALTER TABLE dbo.outreach_campaigns ADD started_at DATETIME2 NULL;
+GO
+
+-- Email dispatch columns on outreach_messages
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='outreach_messages' AND COLUMN_NAME='email_address')
+  ALTER TABLE dbo.outreach_messages ADD email_address NVARCHAR(255) NULL;
+GO
+IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA='dbo' AND TABLE_NAME='outreach_messages' AND COLUMN_NAME='unsubscribe_token')
+  ALTER TABLE dbo.outreach_messages ADD unsubscribe_token UNIQUEIDENTIFIER NULL;
+GO
+
+-- CAN-SPAM opt-out store
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='email_unsubscribes' AND schema_id=SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.email_unsubscribes (
+    id              UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    user_id         UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.users(id) ON DELETE CASCADE,
+    token           UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+    channel         NVARCHAR(20)     NOT NULL DEFAULT 'email',
+    unsubscribed_at DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT uq_unsub_user_channel UNIQUE (user_id, channel)
+  );
+  CREATE UNIQUE INDEX uix_email_unsubscribes_token ON dbo.email_unsubscribes(token);
+  PRINT 'Created dbo.email_unsubscribes';
+END
+GO
+
+-- Newsfeed posts
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='feed_posts' AND schema_id=SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.feed_posts (
+    id              UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    created_by      UNIQUEIDENTIFIER NOT NULL,
+    title           NVARCHAR(300)    NULL,
+    body_html       NVARCHAR(MAX)    NOT NULL,
+    audience        NVARCHAR(30)     NOT NULL DEFAULT 'all',
+    audience_json   NVARCHAR(MAX)    NULL,
+    sport_id        UNIQUEIDENTIFIER NULL REFERENCES dbo.sports(id),
+    is_pinned       BIT              NOT NULL DEFAULT 0,
+    is_welcome_post BIT              NOT NULL DEFAULT 0,
+    campaign_id     UNIQUEIDENTIFIER NULL REFERENCES dbo.outreach_campaigns(id),
+    published_at    DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+    created_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+    updated_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
+  );
+  CREATE INDEX idx_feed_posts_audience ON dbo.feed_posts(audience);
+  CREATE INDEX idx_feed_posts_sport    ON dbo.feed_posts(sport_id);
+  CREATE INDEX idx_feed_posts_pinned   ON dbo.feed_posts(is_pinned, published_at DESC);
+  PRINT 'Created dbo.feed_posts';
+END
+GO
+
+-- Read receipts
+IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name='feed_post_reads' AND schema_id=SCHEMA_ID('dbo'))
+BEGIN
+  CREATE TABLE dbo.feed_post_reads (
+    id      UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+    post_id UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.feed_posts(id) ON DELETE CASCADE,
+    user_id UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.users(id),
+    read_at DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+    CONSTRAINT uq_post_read UNIQUE (post_id, user_id)
+  );
+  CREATE INDEX idx_feed_reads_post ON dbo.feed_post_reads(post_id);
+  CREATE INDEX idx_feed_reads_user ON dbo.feed_post_reads(user_id);
+  PRINT 'Created dbo.feed_post_reads';
+END
+GO
+
+-- ============================================================
+-- STEP 21 — SEED WELCOME POST
+--
+-- Inserts a pinned welcome post visible to all roles.
+-- Body HTML uses white-label tokens resolved at render time
+-- by the web app via useTeamConfig():
+--   {{TEAM_NAME}}     -> team name from GlobalDB team_config
+--   {{PRIMARY_COLOR}} -> team primary color (hex)
+--   {{ACCENT_COLOR}}  -> team accent color (hex)
+--   {{SPORT_EMOJI}}   -> sport-specific emoji
+--
+-- Emoji stored as HTML decimal entities to avoid sqlcmd
+-- encoding issues with supplementary Unicode characters.
+--
+-- created_by = 00000000-0000-0000-0000-000000000001 (system sentinel)
+-- ============================================================
+IF NOT EXISTS (SELECT 1 FROM dbo.feed_posts WHERE is_welcome_post = 1)
+BEGIN
+  DECLARE @WelcomeHtml NVARCHAR(MAX) =
+    N'<div style="background:{{PRIMARY_COLOR}};border-radius:12px;padding:32px 28px;text-align:center;margin-bottom:20px;">'
+  + N'<div style="font-size:52px;margin-bottom:12px;">{{SPORT_EMOJI}}</div>'
+  + N'<h1 style="color:#ffffff;font-size:24px;font-weight:800;margin:0 0 8px 0;letter-spacing:-0.3px;">Welcome to {{TEAM_NAME}}</h1>'
+  + N'<p style="color:rgba(255,255,255,0.75);font-size:15px;margin:0;line-height:1.5;">Your team management platform is live and ready to go.</p>'
+  + N'</div>'
+  + N'<p style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 16px 0;">Everything your staff needs to run your program, in one place:</p>'
+  + N'<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">'
+  + N'<div style="display:flex;gap:14px;align-items:flex-start;padding:14px 16px;background:#f9fafb;border-radius:10px;border-left:4px solid {{ACCENT_COLOR}};">'
+  + N'<span style="font-size:20px;flex-shrink:0;margin-top:1px;">{{SPORT_EMOJI}}</span>'
+  + N'<div><strong style="color:#111827;display:block;margin-bottom:3px;font-size:14px;">Roster</strong>'
+  + N'<span style="font-size:13px;color:#6b7280;line-height:1.5;">Add and manage active players &#8212; positions, jersey numbers, academic years, and contact info.</span>'
+  + N'</div></div>'
+  + N'<div style="display:flex;gap:14px;align-items:flex-start;padding:14px 16px;background:#f9fafb;border-radius:10px;border-left:4px solid {{ACCENT_COLOR}};">'
+  + N'<span style="font-size:20px;flex-shrink:0;margin-top:1px;">&#127891;</span>'
+  + N'<div><strong style="color:#111827;display:block;margin-bottom:3px;font-size:14px;">Alumni CRM</strong>'
+  + N'<span style="font-size:13px;color:#6b7280;line-height:1.5;">Stay connected with graduates. Log interactions, track employment, and keep lifelong relationships strong.</span>'
+  + N'</div></div>'
+  + N'<div style="display:flex;gap:14px;align-items:flex-start;padding:14px 16px;background:#f9fafb;border-radius:10px;border-left:4px solid {{ACCENT_COLOR}};">'
+  + N'<span style="font-size:20px;flex-shrink:0;margin-top:1px;">&#128236;</span>'
+  + N'<div><strong style="color:#111827;display:block;margin-bottom:3px;font-size:14px;">Communications</strong>'
+  + N'<span style="font-size:13px;color:#6b7280;line-height:1.5;">Send targeted emails to players or alumni, post to this feed, and track open rates &#8212; all in one hub.</span>'
+  + N'</div></div>'
+  + N'<div style="display:flex;gap:14px;align-items:flex-start;padding:14px 16px;background:#f9fafb;border-radius:10px;border-left:4px solid {{ACCENT_COLOR}};">'
+  + N'<span style="font-size:20px;flex-shrink:0;margin-top:1px;">&#9881;</span>'
+  + N'<div><strong style="color:#111827;display:block;margin-bottom:3px;font-size:14px;">Team Settings</strong>'
+  + N'<span style="font-size:13px;color:#6b7280;line-height:1.5;">Customize team colors, positions, and labels &#8212; changes apply instantly across the entire platform.</span>'
+  + N'</div></div>'
+  + N'</div>'
+  + N'<p style="font-size:12px;color:#9ca3af;text-align:center;border-top:1px solid #e5e7eb;padding-top:14px;margin:0;">This post was pinned automatically when your account was set up.</p>';
+
+  INSERT INTO dbo.feed_posts (
+    id,
+    created_by,
+    title,
+    body_html,
+    audience,
+    is_pinned,
+    is_welcome_post
+  )
+  VALUES (
+    NEWID(),
+    CAST('00000000-0000-0000-0000-000000000001' AS UNIQUEIDENTIFIER),
+    N'Welcome to {{TEAM_NAME}}',
+    @WelcomeHtml,
+    N'all',
+    1,
+    1
+  );
+
+  PRINT 'Seeded welcome post';
+END
 GO
 
 -- ============================================================
