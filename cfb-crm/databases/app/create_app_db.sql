@@ -112,7 +112,6 @@ BEGIN
     home_town               NVARCHAR(100)     NULL,
     home_state              NVARCHAR(50)      NULL,
     high_school             NVARCHAR(150)     NULL,
-    gpa                     DECIMAL(3,2)      NULL,
     major                   NVARCHAR(100)     NULL,
     phone                   NVARCHAR(20)      NULL,
     personal_email          NVARCHAR(255)     NULL,
@@ -121,6 +120,12 @@ BEGIN
     snapchat                NVARCHAR(100)     NULL,
     emergency_contact_name  NVARCHAR(150)     NULL,
     emergency_contact_phone NVARCHAR(20)      NULL,
+    parent1_name            NVARCHAR(150)     NULL,
+    parent1_phone           NVARCHAR(20)      NULL,
+    parent1_email           NVARCHAR(255)     NULL,
+    parent2_name            NVARCHAR(150)     NULL,
+    parent2_phone           NVARCHAR(20)      NULL,
+    parent2_email           NVARCHAR(255)     NULL,
 
     -- ─── Alumni / graduation fields ────────────────────────
     graduation_year         SMALLINT          NULL,
@@ -469,7 +474,8 @@ BEGIN
     ('010_campaign_completed_at.sql'),
     ('011_drop_current_country.sql'),
     ('012_email_infrastructure.sql'),
-    ('013_welcome_post_seed.sql');
+    ('013_welcome_post_seed.sql'),
+    ('014_parent_contacts_remove_gpa.sql');
 
   PRINT 'Created dbo.migration_history (all historical migrations pre-marked)';
 END
@@ -571,7 +577,7 @@ DECLARE @Positions    NVARCHAR(MAX) = CASE @Sport
   ELSE '[]'
 END;
 DECLARE @AcademicYears NVARCHAR(MAX) = CASE @Level
-  WHEN 'college'     THEN '["freshman","sophomore","junior","senior","graduate"]'
+  WHEN 'college'     THEN '["freshman","rs-freshman","sophomore","rs-sophomore","junior","rs-junior","senior","rs-senior","graduate","graduate-transfer"]'
   WHEN 'high_school' THEN '["9th","10th","11th","12th"]'
   WHEN 'club'        THEN '["year1","year2","year3","year4"]'
   ELSE '["freshman","sophomore","junior","senior"]'

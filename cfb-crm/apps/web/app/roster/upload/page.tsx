@@ -18,14 +18,19 @@ interface InviteRow   { name: string; email: string; inviteUrl: string }
 const TEMPLATE_HEADERS = [
   'firstName', 'lastName', 'email', 'jerseyNumber', 'position', 'academicYear',
   'recruitingClass', 'heightFeet', 'heightInches', 'weightLbs',
-  'homeTown', 'homeState', 'highSchool', 'gpa', 'major',
-  'phone', 'emergencyContactName', 'emergencyContactPhone', 'notes',
+  'homeTown', 'homeState', 'highSchool', 'major',
+  'phone', 'emergencyContactName', 'emergencyContactPhone',
+  'parent1Name', 'parent1Phone', 'parent1Email',
+  'parent2Name', 'parent2Phone', 'parent2Email',
+  'notes',
 ];
 
 const TEMPLATE_EXAMPLE = [
   'James', 'Brown', 'james.brown@email.com', 12, 'QB', 'sophomore', 2023, 6, 2, 215,
-  'Tampa', 'FL', 'Plant High School', 3.45, 'Business',
-  '813-555-0100', 'Mary Brown', '813-555-0101', '',
+  'Tampa', 'FL', 'Plant High School', 'Business',
+  '813-555-0100', 'Mary Brown', '813-555-0101',
+  '', '', '', '', '', '',
+  '',
 ];
 
 const VALID_POSITIONS = ['QB','RB','WR','TE','OL','DL','LB','DB','K','P','LS','ATH'];
@@ -122,11 +127,16 @@ export default function RosterUploadPage() {
             homeTown:             row.homeTown?.toString().trim()  || undefined,
             homeState:            row.homeState?.toString().trim() || undefined,
             highSchool:           row.highSchool?.toString().trim()|| undefined,
-            gpa:                  row.gpa ? parseFloat(row.gpa)   : undefined,
             major:                row.major?.toString().trim()     || undefined,
             phone:                row.phone?.toString().trim()     || undefined,
             emergencyContactName: row.emergencyContactName?.toString().trim() || undefined,
             emergencyContactPhone:row.emergencyContactPhone?.toString().trim()|| undefined,
+            parent1Name:          row.parent1Name?.toString().trim()  || undefined,
+            parent1Phone:         row.parent1Phone?.toString().trim() || undefined,
+            parent1Email:         row.parent1Email?.toString().trim() || undefined,
+            parent2Name:          row.parent2Name?.toString().trim()  || undefined,
+            parent2Phone:         row.parent2Phone?.toString().trim() || undefined,
+            parent2Email:         row.parent2Email?.toString().trim() || undefined,
             notes:                row.notes?.toString().trim()     || undefined,
             _rowNum: rowNum,
           };

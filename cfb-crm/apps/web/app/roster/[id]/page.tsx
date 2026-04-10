@@ -30,7 +30,7 @@ const STATUS_BADGE: Record<string, 'green' | 'warning' | 'danger' | 'gray' | 'go
 export default function PlayerDetailPage() {
   const router = useRouter();
   const { id } = useParams<{ id: string }>();
-  const { positions, academicYears } = useTeamConfig();
+  const { positions, academicYears, level } = useTeamConfig();
 
   const [player,  setPlayer]  = useState<Player | null>(null);
   const [stats,   setStats]   = useState<PlayerStat[]>([]);
@@ -63,7 +63,6 @@ export default function PlayerDetailPage() {
         position:               form.position       || undefined,
         academicYear:           form.academicYear   || undefined,
         status:                 form.status         || undefined,
-        gpa:                    form.gpa            ? parseFloat(form.gpa) : undefined,
         major:                  form.major          || undefined,
         phone:                  form.phone          || undefined,
         email:                  form.email          || undefined,
@@ -72,6 +71,12 @@ export default function PlayerDetailPage() {
         weightLbs:              form.weightLbs      ? parseInt(form.weightLbs) : undefined,
         emergencyContactName:   form.emergencyContactName  || undefined,
         emergencyContactPhone:  form.emergencyContactPhone || undefined,
+        parent1Name:            form.parent1Name    || undefined,
+        parent1Phone:           form.parent1Phone   || undefined,
+        parent1Email:           form.parent1Email   || undefined,
+        parent2Name:            form.parent2Name    || undefined,
+        parent2Phone:           form.parent2Phone   || undefined,
+        parent2Email:           form.parent2Email   || undefined,
         notes:                  form.notes          || undefined,
       });
       setAlert({ msg: 'Player updated successfully', type: 'success' });
@@ -151,7 +156,6 @@ export default function PlayerDetailPage() {
             {[
               { label: 'Height', value: player.heightInches ? `${Math.floor(player.heightInches / 12)}'${player.heightInches % 12}"` : '—' },
               { label: 'Weight', value: player.weightLbs ? `${player.weightLbs} lbs` : '—' },
-              { label: 'GPA',    value: player.gpa != null ? player.gpa.toFixed(2) : '—' },
             ].map(({ label, value }) => (
               <div key={label} style={{ textAlign: 'center' }}>
                 <div style={{ fontSize: 20, fontWeight: 700, color: theme.gray900 }}>{value}</div>
@@ -170,14 +174,14 @@ export default function PlayerDetailPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {editing ? (
               <>
-                <Input label="Major" value={form.major ?? ''} onChange={set('major')} />
-                <Input label="GPA" value={form.gpa?.toString() ?? ''} onChange={set('gpa')} type="number" />
+                {level === 'college' && (
+                  <Input label="Major" value={form.major ?? ''} onChange={set('major')} />
+                )}
                 <Select label="Academic Year" value={form.academicYear ?? ''} onChange={set('academicYear')} options={academicYears} />
               </>
             ) : (
               <>
-                <InfoRow label="Major"         value={player.major}        />
-                <InfoRow label="GPA"           value={player.gpa?.toFixed(2)} />
+                {level === 'college' && <InfoRow label="Major" value={player.major} />}
                 <InfoRow label="Academic Year" value={player.academicYear} capitalize />
                 <InfoRow label="High School"   value={player.highSchool}   />
                 <InfoRow label="Hometown"      value={player.homeTown && player.homeState ? `${player.homeTown}, ${player.homeState}` : undefined} />
@@ -247,6 +251,49 @@ export default function PlayerDetailPage() {
               {player.notes || 'No notes.'}
             </p>
           )}
+        </Card>
+
+        {/* Parent / Guardian Contact */}
+        <Card style={{ gridColumn: '1 / -1' }}>
+          <h2 style={{ fontSize: 15, fontWeight: 600, color: theme.gray900, marginBottom: 16, marginTop: 0 }}>Parent / Guardian Contact</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12, marginTop: 0 }}>Parent / Guardian 1</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {editing ? (
+                  <>
+                    <Input label="Name"  value={form.parent1Name  ?? ''} onChange={set('parent1Name')}  />
+                    <Input label="Phone" value={form.parent1Phone ?? ''} onChange={set('parent1Phone')} type="tel" />
+                    <Input label="Email" value={form.parent1Email ?? ''} onChange={set('parent1Email')} type="email" />
+                  </>
+                ) : (
+                  <>
+                    <InfoRow label="Name"  value={player.parent1Name}  />
+                    <InfoRow label="Phone" value={player.parent1Phone} />
+                    <InfoRow label="Email" value={player.parent1Email} />
+                  </>
+                )}
+              </div>
+            </div>
+            <div>
+              <p style={{ fontSize: 12, fontWeight: 600, color: theme.gray500, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 12, marginTop: 0 }}>Parent / Guardian 2</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {editing ? (
+                  <>
+                    <Input label="Name"  value={form.parent2Name  ?? ''} onChange={set('parent2Name')}  />
+                    <Input label="Phone" value={form.parent2Phone ?? ''} onChange={set('parent2Phone')} type="tel" />
+                    <Input label="Email" value={form.parent2Email ?? ''} onChange={set('parent2Email')} type="email" />
+                  </>
+                ) : (
+                  <>
+                    <InfoRow label="Name"  value={player.parent2Name}  />
+                    <InfoRow label="Phone" value={player.parent2Phone} />
+                    <InfoRow label="Email" value={player.parent2Email} />
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
         </Card>
 
         {/* Social Media */}
