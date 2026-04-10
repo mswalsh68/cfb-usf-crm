@@ -973,11 +973,16 @@ GO
 CREATE OR ALTER PROCEDURE dbo.sp_CreateCampaign
   @Name            NVARCHAR(200),
   @Description     NVARCHAR(MAX)    = NULL,
-  @TargetAudience  NVARCHAR(20),
+  @TargetAudience  NVARCHAR(30),
   @AudienceFilters NVARCHAR(MAX)    = NULL,
   @ScheduledAt     DATETIME2        = NULL,
   @CreatedBy       UNIQUEIDENTIFIER,
   @SportId         UNIQUEIDENTIFIER = NULL,
+  @SubjectLine     NVARCHAR(500)    = NULL,
+  @BodyHtml        NVARCHAR(MAX)    = NULL,
+  @FromName        NVARCHAR(200)    = NULL,
+  @ReplyToEmail    NVARCHAR(255)    = NULL,
+  @PhysicalAddress NVARCHAR(500)    = NULL,
   @NewCampaignId   UNIQUEIDENTIFIER OUTPUT,
   @ErrorCode       NVARCHAR(50)     OUTPUT,
   @RequestingUserId   UNIQUEIDENTIFIER = NULL,
@@ -995,16 +1000,25 @@ BEGIN
   SET @ErrorCode = NULL;
 
   IF LEN(LTRIM(RTRIM(@Name))) = 0 BEGIN SET @ErrorCode = 'NAME_REQUIRED'; RETURN; END
-  IF @TargetAudience NOT IN ('all','byClass','byPosition','byStatus','custom') BEGIN SET @ErrorCode = 'INVALID_TARGET_AUDIENCE'; RETURN; END
-  IF @TargetAudience = 'custom' AND (@AudienceFilters IS NULL OR LEN(@AudienceFilters) < 2) BEGIN SET @ErrorCode = 'CUSTOM_AUDIENCE_REQUIRES_FILTERS'; RETURN; END
-  IF @ScheduledAt IS NOT NULL AND @ScheduledAt < SYSUTCDATETIME() BEGIN SET @ErrorCode = 'SCHEDULED_DATE_IN_PAST'; RETURN; END
+  IF @TargetAudience NOT IN ('all','players_only','alumni_only','byClass','byPosition','byGradYear','custom')
+    BEGIN SET @ErrorCode = 'INVALID_TARGET_AUDIENCE'; RETURN; END
+  IF @TargetAudience = 'custom' AND (@AudienceFilters IS NULL OR LEN(@AudienceFilters) < 2)
+    BEGIN SET @ErrorCode = 'CUSTOM_AUDIENCE_REQUIRES_FILTERS'; RETURN; END
+  IF @ScheduledAt IS NOT NULL AND @ScheduledAt < SYSUTCDATETIME()
+    BEGIN SET @ErrorCode = 'SCHEDULED_DATE_IN_PAST'; RETURN; END
 
   SET @NewCampaignId = NEWID();
 
-  INSERT INTO dbo.outreach_campaigns
-    (id, sport_id, name, description, target_audience, audience_filters, scheduled_at, created_by)
-  VALUES
-    (@NewCampaignId, @SportId, @Name, @Description, @TargetAudience, @AudienceFilters, @ScheduledAt, @CreatedBy);
+  INSERT INTO dbo.outreach_campaigns (
+    id, sport_id, name, description, target_audience, audience_filters,
+    scheduled_at, subject_line, body_html, from_name, reply_to_email,
+    physical_address, created_by
+  )
+  VALUES (
+    @NewCampaignId, @SportId, @Name, @Description, @TargetAudience, @AudienceFilters,
+    @ScheduledAt, @SubjectLine, @BodyHtml, @FromName, @ReplyToEmail,
+    @PhysicalAddress, @CreatedBy
+  );
 END;
 GO
 
@@ -1090,7 +1104,11 @@ GO
 
 -- ============================================================
 -- sp_ResolveAudienceForCampaign
--- position filter now reads directly from dbo.users.position
+-- Resolves recipients for a campaign, using vwPlayers and
+-- vwAlumni views as the authoritative audience source.
+-- Audience types: all, players_only, alumni_only, byClass,
+--   byPosition, byGradYear, custom
+-- Returns opt-out status so callers can suppress unsubscribes.
 -- ============================================================
 CREATE OR ALTER PROCEDURE dbo.sp_ResolveAudienceForCampaign
   @CampaignId UNIQUEIDENTIFIER,
@@ -1109,7 +1127,7 @@ BEGIN
   END
   SET @ErrorCode = NULL;
 
-  DECLARE @Audience    NVARCHAR(20);
+  DECLARE @Audience    NVARCHAR(30);
   DECLARE @FiltersJson NVARCHAR(MAX);
 
   SELECT @Audience = target_audience, @FiltersJson = audience_filters
@@ -1118,27 +1136,65 @@ BEGIN
 
   IF @Audience IS NULL BEGIN SET @ErrorCode = 'CAMPAIGN_NOT_FOUND'; RETURN; END
 
-  DECLARE @FilterGradYear SMALLINT     = TRY_CAST(JSON_VALUE(@FiltersJson, '$.gradYear')  AS SMALLINT);
-  DECLARE @FilterPosition NVARCHAR(10) = JSON_VALUE(@FiltersJson, '$.position');
-  DECLARE @FilterStatus   NVARCHAR(20) = JSON_VALUE(@FiltersJson, '$.status');
+  DECLARE @FilterGradYear  SMALLINT     = TRY_CAST(JSON_VALUE(@FiltersJson, '$.gradYear')  AS SMALLINT);
+  DECLARE @FilterPosition  NVARCHAR(10) = JSON_VALUE(@FiltersJson, '$.position');
+  DECLARE @FilterGradYears NVARCHAR(MAX)= JSON_QUERY(@FiltersJson,  '$.gradYears');
+  DECLARE @FilterPositions NVARCHAR(MAX)= JSON_QUERY(@FiltersJson,  '$.positions');
 
   SELECT
     u.id              AS userId,
     u.first_name      AS firstName,
     u.last_name       AS lastName,
     u.personal_email  AS personalEmail,
-    u.phone
+    u.phone,
+    u.status_id       AS statusId,
+    CASE WHEN eu.id IS NOT NULL THEN 1 ELSE 0 END AS isUnsubscribed
   FROM dbo.users u
-  WHERE u.status_id = 2
+  LEFT JOIN dbo.email_unsubscribes eu ON eu.user_id = u.id AND eu.channel = 'email'
+  WHERE u.status_id IN (1, 2)
+    AND u.personal_email IS NOT NULL
     AND (
+      -- all: both players and alumni
       @Audience = 'all'
-      OR (@Audience = 'byClass'    AND u.graduation_year = @FilterGradYear)
-      OR (@Audience = 'byPosition' AND u.position        = @FilterPosition)
-      OR (@Audience = 'byStatus'   AND u.status_id       = TRY_CAST(@FilterStatus AS INT))
+
+      -- players only
+      OR (@Audience = 'players_only'
+          AND u.status_id = 1)
+
+      -- alumni only
+      OR (@Audience = 'alumni_only'
+          AND u.status_id = 2)
+
+      -- by graduation year (alumni)
+      OR (@Audience = 'byGradYear'
+          AND u.status_id = 2
+          AND (
+            @FilterGradYear IS NOT NULL AND u.graduation_year = @FilterGradYear
+            OR @FilterGradYears IS NOT NULL AND EXISTS (
+              SELECT 1 FROM OPENJSON(@FilterGradYears)
+              WHERE CAST([value] AS SMALLINT) = u.graduation_year
+            )
+          ))
+
+      -- by recruiting class (players)
+      OR (@Audience = 'byClass'
+          AND u.status_id = 1
+          AND u.recruiting_class = @FilterGradYear)
+
+      -- by position (players and alumni)
+      OR (@Audience = 'byPosition'
+          AND (
+            @FilterPosition IS NOT NULL AND u.position = @FilterPosition
+            OR @FilterPositions IS NOT NULL AND EXISTS (
+              SELECT 1 FROM OPENJSON(@FilterPositions)
+              WHERE CAST([value] AS NVARCHAR(10)) = u.position
+            )
+          ))
+
+      -- custom: AND-chain any provided filters
       OR (@Audience = 'custom'
-          AND (@FilterGradYear IS NULL OR u.graduation_year = @FilterGradYear)
-          AND (@FilterPosition IS NULL OR u.position        = @FilterPosition)
-      )
+          AND (@FilterGradYear  IS NULL OR u.graduation_year = @FilterGradYear)
+          AND (@FilterPosition  IS NULL OR u.position        = @FilterPosition))
     );
 END;
 GO
@@ -1572,5 +1628,764 @@ BEGIN
   FROM   dbo.sports
   WHERE  is_active = 1
   ORDER  BY name;
+END;
+GO
+
+-- ============================================================
+-- sp_DispatchEmailCampaign
+-- Queues outreach_messages for all eligible (non-unsubscribed)
+-- recipients and marks the campaign as active.
+-- Send-limit enforcement: caller passes remaining headroom
+-- (read from GlobalDB team_config before calling this SP).
+-- Returns queued messages for the API to hand to email provider.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_DispatchEmailCampaign
+  @CampaignId       UNIQUEIDENTIFIER,
+  @DailyRemaining   INT,
+  @MonthlyRemaining INT,
+  @QueuedCount      INT OUTPUT,
+  @ErrorCode        NVARCHAR(50) OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_uid;
+    EXEC sp_set_session_context N'user_role', @_role;
+  END
+  SET @ErrorCode   = NULL;
+  SET @QueuedCount = 0;
+
+  -- Validate campaign
+  DECLARE @CampaignStatus NVARCHAR(20);
+  DECLARE @Audience       NVARCHAR(30);
+  DECLARE @FiltersJson    NVARCHAR(MAX);
+  DECLARE @BodyHtml       NVARCHAR(MAX);
+  DECLARE @SubjectLine    NVARCHAR(500);
+
+  SELECT
+    @CampaignStatus = status,
+    @Audience       = target_audience,
+    @FiltersJson    = audience_filters,
+    @BodyHtml       = body_html,
+    @SubjectLine    = subject_line
+  FROM dbo.outreach_campaigns
+  WHERE id = @CampaignId;
+
+  IF @CampaignStatus IS NULL BEGIN SET @ErrorCode = 'CAMPAIGN_NOT_FOUND'; RETURN; END
+  IF @CampaignStatus NOT IN ('draft', 'scheduled') BEGIN SET @ErrorCode = 'INVALID_CAMPAIGN_STATUS'; RETURN; END
+
+  -- Build recipient list: resolve audience inline using same logic as sp_ResolveAudienceForCampaign
+  DECLARE @FilterGradYear  SMALLINT     = TRY_CAST(JSON_VALUE(@FiltersJson, '$.gradYear')  AS SMALLINT);
+  DECLARE @FilterPosition  NVARCHAR(10) = JSON_VALUE(@FiltersJson, '$.position');
+  DECLARE @FilterGradYears NVARCHAR(MAX)= JSON_QUERY(@FiltersJson, '$.gradYears');
+  DECLARE @FilterPositions NVARCHAR(MAX)= JSON_QUERY(@FiltersJson, '$.positions');
+
+  -- Collect eligible recipients into temp table
+  SELECT
+    u.id              AS userId,
+    u.personal_email  AS emailAddress,
+    u.first_name      AS firstName,
+    NEWID()           AS unsubToken
+  INTO #recipients
+  FROM dbo.users u
+  LEFT JOIN dbo.email_unsubscribes eu ON eu.user_id = u.id AND eu.channel = 'email'
+  WHERE u.status_id IN (1, 2)
+    AND u.personal_email IS NOT NULL
+    AND eu.id IS NULL   -- exclude unsubscribed
+    AND NOT EXISTS (
+      SELECT 1 FROM dbo.outreach_messages om
+      WHERE om.campaign_id = @CampaignId AND om.user_id = u.id
+    )
+    AND (
+      @Audience = 'all'
+      OR (@Audience = 'players_only' AND u.status_id = 1)
+      OR (@Audience = 'alumni_only'  AND u.status_id = 2)
+      OR (@Audience = 'byGradYear'   AND u.status_id = 2 AND (
+            (@FilterGradYear IS NOT NULL AND u.graduation_year = @FilterGradYear)
+            OR (@FilterGradYears IS NOT NULL AND EXISTS (
+              SELECT 1 FROM OPENJSON(@FilterGradYears) WHERE CAST([value] AS SMALLINT) = u.graduation_year
+            ))
+          ))
+      OR (@Audience = 'byClass'    AND u.status_id = 1 AND u.recruiting_class = @FilterGradYear)
+      OR (@Audience = 'byPosition' AND (
+            (@FilterPosition IS NOT NULL AND u.position = @FilterPosition)
+            OR (@FilterPositions IS NOT NULL AND EXISTS (
+              SELECT 1 FROM OPENJSON(@FilterPositions) WHERE CAST([value] AS NVARCHAR(10)) = u.position
+            ))
+          ))
+      OR (@Audience = 'custom'
+          AND (@FilterGradYear IS NULL OR u.graduation_year = @FilterGradYear)
+          AND (@FilterPosition IS NULL OR u.position        = @FilterPosition))
+    );
+
+  SET @QueuedCount = (SELECT COUNT(*) FROM #recipients);
+
+  IF @QueuedCount = 0 BEGIN SET @ErrorCode = 'NO_ELIGIBLE_RECIPIENTS'; DROP TABLE #recipients; RETURN; END
+  IF @QueuedCount > @DailyRemaining   BEGIN SET @ErrorCode = 'DAILY_LIMIT_EXCEEDED';   DROP TABLE #recipients; RETURN; END
+  IF @QueuedCount > @MonthlyRemaining BEGIN SET @ErrorCode = 'MONTHLY_LIMIT_EXCEEDED'; DROP TABLE #recipients; RETURN; END
+
+  -- Insert queued messages
+  INSERT INTO dbo.outreach_messages (campaign_id, user_id, channel, status, email_address, unsubscribe_token)
+  SELECT
+    @CampaignId,
+    r.userId,
+    'email',
+    'queued',
+    r.emailAddress,
+    r.unsubToken
+  FROM #recipients r;
+
+  -- Mark campaign active
+  UPDATE dbo.outreach_campaigns
+  SET status = 'active', started_at = SYSUTCDATETIME(), updated_at = SYSUTCDATETIME()
+  WHERE id = @CampaignId;
+
+  -- Return queued messages for API to dispatch to email provider
+  SELECT
+    om.id                AS messageId,
+    om.user_id           AS userId,
+    r.firstName,
+    om.email_address     AS emailAddress,
+    om.unsubscribe_token AS unsubscribeToken
+  FROM dbo.outreach_messages om
+  JOIN #recipients r ON r.userId = om.user_id
+  WHERE om.campaign_id = @CampaignId AND om.status = 'queued';
+
+  DROP TABLE #recipients;
+END;
+GO
+
+-- ============================================================
+-- sp_MarkEmailSent
+-- Called by API after provider confirms delivery.
+-- Accepts JSON array of message IDs for bulk marking.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_MarkEmailSent
+  @MessageIdsJson NVARCHAR(MAX),
+  @ErrorCode      NVARCHAR(50) OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET @ErrorCode = NULL;
+
+  UPDATE om
+  SET    om.status  = 'sent',
+         om.sent_at = SYSUTCDATETIME()
+  FROM   dbo.outreach_messages om
+  JOIN   OPENJSON(@MessageIdsJson) j ON CAST(j.[value] AS UNIQUEIDENTIFIER) = om.id
+  WHERE  om.status = 'queued';
+
+  -- Mark campaign completed if all messages sent
+  UPDATE oc
+  SET    oc.status       = 'completed',
+         oc.completed_at = SYSUTCDATETIME(),
+         oc.updated_at   = SYSUTCDATETIME()
+  FROM   dbo.outreach_campaigns oc
+  WHERE  oc.status = 'active'
+    AND NOT EXISTS (
+      SELECT 1 FROM dbo.outreach_messages om2
+      WHERE om2.campaign_id = oc.id AND om2.status = 'queued'
+    );
+END;
+GO
+
+-- ============================================================
+-- sp_MarkEmailOpened
+-- Called via tracking-pixel webhook. Uses unsubscribe_token
+-- as the identifier (safe to expose in img src URL hash).
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_MarkEmailOpened
+  @MessageId UNIQUEIDENTIFIER,
+  @ErrorCode NVARCHAR(50) OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET @ErrorCode = NULL;
+
+  IF NOT EXISTS (SELECT 1 FROM dbo.outreach_messages WHERE id = @MessageId)
+  BEGIN
+    SET @ErrorCode = 'MESSAGE_NOT_FOUND';
+    RETURN;
+  END
+
+  UPDATE dbo.outreach_messages
+  SET opened_at = ISNULL(opened_at, SYSUTCDATETIME()),
+      status    = CASE WHEN status = 'sent' THEN 'responded' ELSE status END
+  WHERE id = @MessageId;
+END;
+GO
+
+-- ============================================================
+-- sp_ProcessUnsubscribe
+-- Called when recipient clicks the unsubscribe link.
+-- Token is from outreach_messages.unsubscribe_token.
+-- No auth required — public endpoint.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_ProcessUnsubscribe
+  @Token     UNIQUEIDENTIFIER,
+  @ErrorCode NVARCHAR(50) OUTPUT
+AS
+BEGIN
+  SET NOCOUNT ON;
+  SET @ErrorCode = NULL;
+
+  DECLARE @UserId UNIQUEIDENTIFIER;
+  SELECT @UserId = user_id
+  FROM   dbo.outreach_messages
+  WHERE  unsubscribe_token = @Token;
+
+  IF @UserId IS NULL
+  BEGIN
+    SET @ErrorCode = 'INVALID_TOKEN';
+    RETURN;
+  END
+
+  -- Idempotent upsert
+  IF NOT EXISTS (
+    SELECT 1 FROM dbo.email_unsubscribes
+    WHERE user_id = @UserId AND channel = 'email'
+  )
+  BEGIN
+    INSERT INTO dbo.email_unsubscribes (user_id, token, channel)
+    VALUES (@UserId, NEWID(), 'email');
+  END
+
+  -- Return team info so the web page can display branded confirmation
+  SELECT u.first_name AS firstName
+  FROM   dbo.users u
+  WHERE  u.id = @UserId;
+END;
+GO
+
+-- ============================================================
+-- sp_GetCampaignDetail
+-- Returns a single campaign with aggregated send stats.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_GetCampaignDetail
+  @CampaignId UNIQUEIDENTIFIER,
+  @ErrorCode  NVARCHAR(50) OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_uid;
+    EXEC sp_set_session_context N'user_role', @_role;
+  END
+  SET @ErrorCode = NULL;
+
+  IF NOT EXISTS (SELECT 1 FROM dbo.outreach_campaigns WHERE id = @CampaignId)
+  BEGIN
+    SET @ErrorCode = 'CAMPAIGN_NOT_FOUND';
+    RETURN;
+  END
+
+  SELECT
+    oc.id,
+    oc.name,
+    oc.description,
+    oc.target_audience  AS targetAudience,
+    oc.audience_filters AS audienceFilters,
+    oc.status,
+    oc.campaign_type    AS campaignType,
+    oc.subject_line     AS subjectLine,
+    oc.scheduled_at     AS scheduledAt,
+    oc.started_at       AS startedAt,
+    oc.completed_at     AS completedAt,
+    oc.created_at       AS createdAt,
+    -- Stats
+    SUM(CASE WHEN om.status IN ('queued','sent','responded') THEN 1 ELSE 0 END) AS totalQueued,
+    SUM(CASE WHEN om.status IN ('sent','responded')          THEN 1 ELSE 0 END) AS totalSent,
+    SUM(CASE WHEN om.opened_at IS NOT NULL                   THEN 1 ELSE 0 END) AS totalOpened,
+    (
+      SELECT COUNT(*) FROM dbo.email_unsubscribes eu2
+      JOIN dbo.outreach_messages om2 ON om2.user_id = eu2.user_id
+      WHERE om2.campaign_id = oc.id
+    ) AS unsubscribeCount,
+    CASE
+      WHEN SUM(CASE WHEN om.status IN ('sent','responded') THEN 1 ELSE 0 END) = 0 THEN 0
+      ELSE CAST(
+        100.0 * SUM(CASE WHEN om.opened_at IS NOT NULL THEN 1 ELSE 0 END)
+        / NULLIF(SUM(CASE WHEN om.status IN ('sent','responded') THEN 1 ELSE 0 END), 0)
+      AS DECIMAL(5,1))
+    END AS openRatePct
+  FROM dbo.outreach_campaigns oc
+  LEFT JOIN dbo.outreach_messages om ON om.campaign_id = oc.id
+  WHERE oc.id = @CampaignId
+  GROUP BY
+    oc.id, oc.name, oc.description, oc.target_audience, oc.audience_filters,
+    oc.status, oc.campaign_type, oc.subject_line, oc.scheduled_at,
+    oc.started_at, oc.completed_at, oc.created_at;
+END;
+GO
+
+-- ============================================================
+-- sp_CancelCampaign
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_CancelCampaign
+  @CampaignId UNIQUEIDENTIFIER,
+  @ErrorCode  NVARCHAR(50) OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_uid;
+    EXEC sp_set_session_context N'user_role', @_role;
+  END
+  SET @ErrorCode = NULL;
+
+  DECLARE @CurStatus NVARCHAR(20);
+  SELECT @CurStatus = status FROM dbo.outreach_campaigns WHERE id = @CampaignId;
+
+  IF @CurStatus IS NULL BEGIN SET @ErrorCode = 'CAMPAIGN_NOT_FOUND'; RETURN; END
+  IF @CurStatus NOT IN ('draft','scheduled') BEGIN SET @ErrorCode = 'CANNOT_CANCEL'; RETURN; END
+
+  UPDATE dbo.outreach_campaigns
+  SET status = 'cancelled', updated_at = SYSUTCDATETIME()
+  WHERE id = @CampaignId;
+END;
+GO
+
+-- ============================================================
+-- sp_CreatePost
+-- Creates a feed post. If @AlsoEmail = 1, also creates a
+-- draft outreach_campaign so the API can dispatch it.
+-- Single source of truth for post + email pairing.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_CreatePost
+  @CreatedBy    UNIQUEIDENTIFIER,
+  @BodyHtml     NVARCHAR(MAX),
+  @Audience     NVARCHAR(30),
+  @Title        NVARCHAR(300)    = NULL,
+  @AudienceJson NVARCHAR(MAX)    = NULL,
+  @SportId      UNIQUEIDENTIFIER = NULL,
+  @IsPinned     BIT              = 0,
+  @AlsoEmail    BIT              = 0,
+  @EmailSubject NVARCHAR(500)    = NULL,
+  @NewPostId    UNIQUEIDENTIFIER OUTPUT,
+  @CampaignId   UNIQUEIDENTIFIER OUTPUT,
+  @ErrorCode    NVARCHAR(50)     OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_uid;
+    EXEC sp_set_session_context N'user_role', @_role;
+  END
+  SET @ErrorCode  = NULL;
+  SET @NewPostId  = NULL;
+  SET @CampaignId = NULL;
+
+  IF @Audience NOT IN ('all','players_only','alumni_only','by_position','by_grad_year','custom')
+  BEGIN
+    SET @ErrorCode = 'INVALID_AUDIENCE';
+    RETURN;
+  END
+
+  IF @AlsoEmail = 1 AND @EmailSubject IS NULL
+  BEGIN
+    SET @ErrorCode = 'EMAIL_SUBJECT_REQUIRED';
+    RETURN;
+  END
+
+  SET @NewPostId = NEWID();
+
+  INSERT INTO dbo.feed_posts (
+    id, created_by, title, body_html, audience, audience_json,
+    sport_id, is_pinned, published_at
+  )
+  VALUES (
+    @NewPostId, @CreatedBy, @Title, @BodyHtml, @Audience, @AudienceJson,
+    @SportId, ISNULL(@IsPinned, 0), SYSUTCDATETIME()
+  );
+
+  -- Map post audience → campaign audience value
+  -- feed uses 'by_position'/'by_grad_year'; campaigns use 'byPosition'/'byGradYear'
+  DECLARE @CampaignAudience NVARCHAR(30) = CASE @Audience
+    WHEN 'by_position' THEN 'byPosition'
+    WHEN 'by_grad_year' THEN 'byGradYear'
+    ELSE @Audience
+  END;
+
+  IF @AlsoEmail = 1
+  BEGIN
+    SET @CampaignId = NEWID();
+    INSERT INTO dbo.outreach_campaigns (
+      id, name, description, target_audience, audience_filters,
+      status, campaign_type, subject_line, body_html, sport_id, created_by
+    )
+    VALUES (
+      @CampaignId,
+      ISNULL(@Title, LEFT(@BodyHtml, 100)),
+      N'Auto-created from feed post',
+      @CampaignAudience,
+      @AudienceJson,
+      'draft',
+      'post_notification',
+      @EmailSubject,
+      @BodyHtml,
+      @SportId,
+      @CreatedBy
+    );
+
+    -- Link campaign back to post
+    UPDATE dbo.feed_posts SET campaign_id = @CampaignId WHERE id = @NewPostId;
+  END
+END;
+GO
+
+-- ============================================================
+-- sp_GetFeed
+-- Returns feed posts visible to the requesting user.
+-- Audience wall is enforced at the DB layer — viewer status_id
+-- is resolved from dbo.users, never trusted from the caller.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_GetFeed
+  @ViewerUserId UNIQUEIDENTIFIER,
+  @SportId      UNIQUEIDENTIFIER = NULL,
+  @Page         INT              = 1,
+  @PageSize     INT              = 20,
+  @TotalCount   INT              OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_uid;
+    EXEC sp_set_session_context N'user_role', @_role;
+  END
+  SET @TotalCount = 0;
+
+  -- Resolve viewer status from DB — never trust a caller-supplied value
+  DECLARE @ViewerStatusId INT;
+  SELECT @ViewerStatusId = status_id FROM dbo.users WHERE id = @ViewerUserId;
+  -- NULL status means staff/admin (no users row in AppDB) — sees all posts
+  -- statusId = 0 is treated as admin for visibility purposes
+
+  DECLARE @Offset INT = (@Page - 1) * @PageSize;
+  IF @Offset < 0 SET @Offset = 0;
+
+  -- Audience visibility predicate (reused for count and data)
+  -- A post is visible when its audience matches the viewer's status
+  ;WITH visible_posts AS (
+    SELECT fp.*
+    FROM dbo.feed_posts fp
+    WHERE
+      (fp.sport_id IS NULL OR fp.sport_id = @SportId OR @SportId IS NULL)
+      AND (
+        -- Staff (no record in users OR viewer is a global_admin) see everything
+        @ViewerStatusId IS NULL
+
+        -- Audience: all → everyone
+        OR fp.audience = 'all'
+
+        -- players_only → only current players
+        OR (fp.audience = 'players_only' AND @ViewerStatusId = 1)
+
+        -- alumni_only → only alumni
+        OR (fp.audience = 'alumni_only'  AND @ViewerStatusId = 2)
+
+        -- by_position → viewers whose position matches
+        OR (fp.audience = 'by_position' AND EXISTS (
+              SELECT 1 FROM dbo.users u2
+              WHERE u2.id = @ViewerUserId
+                AND fp.audience_json IS NOT NULL
+                AND EXISTS (
+                  SELECT 1 FROM OPENJSON(fp.audience_json, '$.positions')
+                  WHERE CAST([value] AS NVARCHAR(10)) = u2.position
+                )
+            ))
+
+        -- by_grad_year → alumni whose grad year matches
+        OR (fp.audience = 'by_grad_year' AND @ViewerStatusId = 2 AND EXISTS (
+              SELECT 1 FROM dbo.users u2
+              WHERE u2.id = @ViewerUserId
+                AND fp.audience_json IS NOT NULL
+                AND EXISTS (
+                  SELECT 1 FROM OPENJSON(fp.audience_json, '$.gradYears')
+                  WHERE CAST([value] AS SMALLINT) = u2.graduation_year
+                )
+            ))
+
+        -- custom: AND-chain position + grad year
+        OR (fp.audience = 'custom' AND fp.audience_json IS NOT NULL AND (
+              (JSON_VALUE(fp.audience_json, '$.position') IS NULL
+               OR JSON_VALUE(fp.audience_json, '$.position') = (
+                    SELECT u2.position FROM dbo.users u2 WHERE u2.id = @ViewerUserId))
+              AND
+              (JSON_VALUE(fp.audience_json, '$.gradYear') IS NULL
+               OR CAST(JSON_VALUE(fp.audience_json, '$.gradYear') AS SMALLINT) = (
+                    SELECT u2.graduation_year FROM dbo.users u2 WHERE u2.id = @ViewerUserId))
+           ))
+      )
+  )
+  SELECT @TotalCount = COUNT(*) FROM visible_posts;
+
+  ;WITH visible_posts AS (
+    SELECT fp.*
+    FROM dbo.feed_posts fp
+    WHERE
+      (fp.sport_id IS NULL OR fp.sport_id = @SportId OR @SportId IS NULL)
+      AND (
+        @ViewerStatusId IS NULL
+        OR fp.audience = 'all'
+        OR (fp.audience = 'players_only' AND @ViewerStatusId = 1)
+        OR (fp.audience = 'alumni_only'  AND @ViewerStatusId = 2)
+        OR (fp.audience = 'by_position' AND EXISTS (
+              SELECT 1 FROM dbo.users u2
+              WHERE u2.id = @ViewerUserId
+                AND fp.audience_json IS NOT NULL
+                AND EXISTS (
+                  SELECT 1 FROM OPENJSON(fp.audience_json, '$.positions')
+                  WHERE CAST([value] AS NVARCHAR(10)) = u2.position
+                )
+            ))
+        OR (fp.audience = 'by_grad_year' AND @ViewerStatusId = 2 AND EXISTS (
+              SELECT 1 FROM dbo.users u2
+              WHERE u2.id = @ViewerUserId
+                AND fp.audience_json IS NOT NULL
+                AND EXISTS (
+                  SELECT 1 FROM OPENJSON(fp.audience_json, '$.gradYears')
+                  WHERE CAST([value] AS SMALLINT) = u2.graduation_year
+                )
+            ))
+        OR (fp.audience = 'custom' AND fp.audience_json IS NOT NULL AND (
+              (JSON_VALUE(fp.audience_json, '$.position') IS NULL
+               OR JSON_VALUE(fp.audience_json, '$.position') = (
+                    SELECT u2.position FROM dbo.users u2 WHERE u2.id = @ViewerUserId))
+              AND
+              (JSON_VALUE(fp.audience_json, '$.gradYear') IS NULL
+               OR CAST(JSON_VALUE(fp.audience_json, '$.gradYear') AS SMALLINT) = (
+                    SELECT u2.graduation_year FROM dbo.users u2 WHERE u2.id = @ViewerUserId))
+           ))
+      )
+  )
+  SELECT
+    vp.id,
+    vp.title,
+    vp.body_html       AS bodyHtml,
+    vp.audience,
+    vp.audience_json   AS audienceJson,
+    vp.sport_id        AS sportId,
+    vp.is_pinned       AS isPinned,
+    vp.is_welcome_post AS isWelcomePost,
+    vp.campaign_id     AS campaignId,
+    vp.created_by      AS createdBy,
+    vp.published_at    AS publishedAt,
+    vp.created_at      AS createdAt,
+    CASE WHEN fpr.id IS NOT NULL THEN 1 ELSE 0 END AS isRead
+  FROM visible_posts vp
+  LEFT JOIN dbo.feed_post_reads fpr
+    ON fpr.post_id = vp.id AND fpr.user_id = @ViewerUserId
+  ORDER BY
+    vp.is_pinned DESC,
+    vp.published_at DESC
+  OFFSET @Offset ROWS
+  FETCH NEXT @PageSize ROWS ONLY;
+END;
+GO
+
+-- ============================================================
+-- sp_GetFeedPost
+-- Returns a single post if the viewer is authorized to see it.
+-- Same audience predicate as sp_GetFeed.
+-- Empty result = unauthorized (API maps to 404, no info leak).
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_GetFeedPost
+  @PostId       UNIQUEIDENTIFIER,
+  @ViewerUserId UNIQUEIDENTIFIER,
+  @ErrorCode    NVARCHAR(50) OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_uid;
+    EXEC sp_set_session_context N'user_role', @_role;
+  END
+  SET @ErrorCode = NULL;
+
+  DECLARE @ViewerStatusId INT;
+  SELECT @ViewerStatusId = status_id FROM dbo.users WHERE id = @ViewerUserId;
+
+  SELECT
+    fp.id,
+    fp.title,
+    fp.body_html       AS bodyHtml,
+    fp.audience,
+    fp.audience_json   AS audienceJson,
+    fp.sport_id        AS sportId,
+    fp.is_pinned       AS isPinned,
+    fp.is_welcome_post AS isWelcomePost,
+    fp.campaign_id     AS campaignId,
+    fp.created_by      AS createdBy,
+    fp.published_at    AS publishedAt,
+    fp.created_at      AS createdAt,
+    CASE WHEN fpr.id IS NOT NULL THEN 1 ELSE 0 END AS isRead
+  FROM dbo.feed_posts fp
+  LEFT JOIN dbo.feed_post_reads fpr
+    ON fpr.post_id = fp.id AND fpr.user_id = @ViewerUserId
+  WHERE fp.id = @PostId
+    AND (
+      @ViewerStatusId IS NULL
+      OR fp.audience = 'all'
+      OR (fp.audience = 'players_only' AND @ViewerStatusId = 1)
+      OR (fp.audience = 'alumni_only'  AND @ViewerStatusId = 2)
+      OR (fp.audience = 'by_position' AND EXISTS (
+            SELECT 1 FROM dbo.users u2
+            WHERE u2.id = @ViewerUserId
+              AND fp.audience_json IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM OPENJSON(fp.audience_json, '$.positions')
+                WHERE CAST([value] AS NVARCHAR(10)) = u2.position
+              )
+          ))
+      OR (fp.audience = 'by_grad_year' AND @ViewerStatusId = 2 AND EXISTS (
+            SELECT 1 FROM dbo.users u2
+            WHERE u2.id = @ViewerUserId
+              AND fp.audience_json IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM OPENJSON(fp.audience_json, '$.gradYears')
+                WHERE CAST([value] AS SMALLINT) = u2.graduation_year
+              )
+          ))
+      OR (fp.audience = 'custom' AND fp.audience_json IS NOT NULL AND (
+            (JSON_VALUE(fp.audience_json, '$.position') IS NULL
+             OR JSON_VALUE(fp.audience_json, '$.position') = (
+                  SELECT u2.position FROM dbo.users u2 WHERE u2.id = @ViewerUserId))
+            AND
+            (JSON_VALUE(fp.audience_json, '$.gradYear') IS NULL
+             OR CAST(JSON_VALUE(fp.audience_json, '$.gradYear') AS SMALLINT) = (
+                  SELECT u2.graduation_year FROM dbo.users u2 WHERE u2.id = @ViewerUserId))
+         ))
+    );
+END;
+GO
+
+-- ============================================================
+-- sp_MarkPostRead
+-- Idempotent: UNIQUE constraint on (post_id, user_id) handles
+-- concurrent calls. No error if already read.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_MarkPostRead
+  @PostId UNIQUEIDENTIFIER,
+  @UserId UNIQUEIDENTIFIER
+AS
+BEGIN
+  SET NOCOUNT ON;
+
+  IF NOT EXISTS (SELECT 1 FROM dbo.feed_posts WHERE id = @PostId)
+    RETURN;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM dbo.feed_post_reads
+    WHERE post_id = @PostId AND user_id = @UserId
+  )
+  BEGIN
+    INSERT INTO dbo.feed_post_reads (post_id, user_id)
+    VALUES (@PostId, @UserId);
+  END
+END;
+GO
+
+-- ============================================================
+-- sp_GetPostReadStats
+-- Admin-only. Returns read-through rate for a post.
+-- totalEligible = count of users who match the post's audience.
+-- ============================================================
+CREATE OR ALTER PROCEDURE dbo.sp_GetPostReadStats
+  @PostId    UNIQUEIDENTIFIER,
+  @ErrorCode NVARCHAR(50) OUTPUT,
+  @RequestingUserId   UNIQUEIDENTIFIER = NULL,
+  @RequestingUserRole NVARCHAR(50)     = NULL
+AS
+BEGIN
+  SET NOCOUNT ON;
+  IF @RequestingUserId IS NOT NULL
+  BEGIN
+    DECLARE @_uid  NVARCHAR(100) = CAST(@RequestingUserId AS NVARCHAR(100));
+    DECLARE @_role NVARCHAR(50)  = ISNULL(@RequestingUserRole, N'');
+    EXEC sp_set_session_context N'user_id',   @_uid;
+    EXEC sp_set_session_context N'user_role', @_role;
+  END
+  SET @ErrorCode = NULL;
+
+  DECLARE @Audience    NVARCHAR(30);
+  DECLARE @AudienceJson NVARCHAR(MAX);
+  DECLARE @SportId     UNIQUEIDENTIFIER;
+
+  SELECT @Audience = audience, @AudienceJson = audience_json, @SportId = sport_id
+  FROM   dbo.feed_posts
+  WHERE  id = @PostId;
+
+  IF @Audience IS NULL BEGIN SET @ErrorCode = 'POST_NOT_FOUND'; RETURN; END
+
+  DECLARE @FilterGradYear  SMALLINT     = TRY_CAST(JSON_VALUE(@AudienceJson, '$.gradYear')  AS SMALLINT);
+  DECLARE @FilterPosition  NVARCHAR(10) = JSON_VALUE(@AudienceJson, '$.position');
+  DECLARE @FilterGradYears NVARCHAR(MAX)= JSON_QUERY(@AudienceJson, '$.gradYears');
+  DECLARE @FilterPositions NVARCHAR(MAX)= JSON_QUERY(@AudienceJson, '$.positions');
+
+  DECLARE @TotalEligible INT;
+  SELECT @TotalEligible = COUNT(*)
+  FROM dbo.users u
+  WHERE u.status_id IN (1, 2)
+    AND (@SportId IS NULL OR u.sport_id = @SportId)
+    AND (
+      @Audience = 'all'
+      OR (@Audience = 'players_only' AND u.status_id = 1)
+      OR (@Audience = 'alumni_only'  AND u.status_id = 2)
+      OR (@Audience = 'by_grad_year' AND u.status_id = 2 AND (
+            (@FilterGradYear IS NOT NULL AND u.graduation_year = @FilterGradYear)
+            OR (@FilterGradYears IS NOT NULL AND EXISTS (
+              SELECT 1 FROM OPENJSON(@FilterGradYears) WHERE CAST([value] AS SMALLINT) = u.graduation_year
+            ))
+          ))
+      OR (@Audience = 'by_position' AND (
+            (@FilterPosition IS NOT NULL AND u.position = @FilterPosition)
+            OR (@FilterPositions IS NOT NULL AND EXISTS (
+              SELECT 1 FROM OPENJSON(@FilterPositions) WHERE CAST([value] AS NVARCHAR(10)) = u.position
+            ))
+          ))
+      OR (@Audience = 'custom'
+          AND (@FilterGradYear IS NULL OR u.graduation_year = @FilterGradYear)
+          AND (@FilterPosition IS NULL OR u.position        = @FilterPosition))
+    );
+
+  DECLARE @TotalRead INT;
+  SELECT @TotalRead = COUNT(*) FROM dbo.feed_post_reads WHERE post_id = @PostId;
+
+  SELECT
+    @TotalEligible AS totalEligible,
+    @TotalRead     AS totalRead,
+    CASE WHEN @TotalEligible = 0 THEN 0
+         ELSE CAST(100.0 * @TotalRead / @TotalEligible AS DECIMAL(5,1))
+    END AS readThroughRatePct;
 END;
 GO

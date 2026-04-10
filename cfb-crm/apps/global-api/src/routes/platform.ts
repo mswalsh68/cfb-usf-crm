@@ -260,6 +260,33 @@ platformRouter.post('/onboard-client', async (req, res) => {
       return res.status(500).json({ success: false, error: `Step 5 (seed team config) failed: ${err instanceof Error ? err.message : String(err)}` });
     }
 
+    // ── Step 5b: Seed welcome post in AppDB ─────────────────────────────────
+    // Welcome post uses white-label tokens substituted here before insert.
+    // is_welcome_post = 1 so the check is idempotent on re-run.
+    try {
+      const welcomeTitle = `Welcome to ${clientName.trim()}!`;
+      const welcomeBody  = `<p>Welcome to the <strong style="color:${colorPrimary}">${clientName.trim()}</strong> team portal. `
+        + `This is your central hub for team news, roster information, and alumni connections.</p>`
+        + `<p>Your coaching staff will use this feed to share updates, announcements, and highlights with you. `
+        + `Check back regularly to stay in the loop.</p>`;
+      const appPool3 = await connectToDb(safeDbName);
+      try {
+        await appPool3.request()
+          .input('Title',    sql.NVarChar, welcomeTitle)
+          .input('BodyHtml', sql.NVarChar, welcomeBody)
+          .query(`
+            IF NOT EXISTS (SELECT 1 FROM dbo.feed_posts WHERE is_welcome_post = 1)
+              INSERT INTO dbo.feed_posts (created_by, title, body_html, audience, is_pinned, is_welcome_post)
+              VALUES ('00000000-0000-0000-0000-000000000000', @Title, @BodyHtml, 'all', 1, 1);
+          `);
+      } finally {
+        await appPool3.close();
+      }
+    } catch (err) {
+      console.error('[onboard Step 5b: seed welcome post]', err);
+      // Non-fatal — log and continue
+    }
+
     // ── Step 6: Handle admin user ────────────────────────────────────────────
     let resolvedAdminEmail: string;
 
@@ -655,6 +682,79 @@ async function applyAppDbSchema(pool: mssql.ConnectionPool): Promise<void> {
       created_at  DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
     )`,
 
+    // email_unsubscribes — CAN-SPAM opt-out store (migration 012)
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'email_unsubscribes' AND schema_id = SCHEMA_ID('dbo'))
+    BEGIN
+      CREATE TABLE dbo.email_unsubscribes (
+        id              UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+        user_id         UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.users(id) ON DELETE CASCADE,
+        token           UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID(),
+        channel         NVARCHAR(20)     NOT NULL DEFAULT 'email',
+        unsubscribed_at DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT uq_unsub_user_channel UNIQUE (user_id, channel)
+      );
+      CREATE UNIQUE INDEX uix_email_unsubscribes_token ON dbo.email_unsubscribes(token);
+    END`,
+
+    // Extend outreach_campaigns with email fields (migration 012)
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'subject_line')
+      ALTER TABLE dbo.outreach_campaigns ADD subject_line NVARCHAR(500) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'body_html')
+      ALTER TABLE dbo.outreach_campaigns ADD body_html NVARCHAR(MAX) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'from_name')
+      ALTER TABLE dbo.outreach_campaigns ADD from_name NVARCHAR(200) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'reply_to_email')
+      ALTER TABLE dbo.outreach_campaigns ADD reply_to_email NVARCHAR(255) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'campaign_type')
+      ALTER TABLE dbo.outreach_campaigns ADD campaign_type NVARCHAR(20) NOT NULL DEFAULT 'outreach'`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'physical_address')
+      ALTER TABLE dbo.outreach_campaigns ADD physical_address NVARCHAR(500) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_campaigns' AND COLUMN_NAME = 'started_at')
+      ALTER TABLE dbo.outreach_campaigns ADD started_at DATETIME2 NULL`,
+
+    // Extend outreach_messages with email dispatch fields (migration 012)
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_messages' AND COLUMN_NAME = 'email_address')
+      ALTER TABLE dbo.outreach_messages ADD email_address NVARCHAR(255) NULL`,
+    `IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'dbo' AND TABLE_NAME = 'outreach_messages' AND COLUMN_NAME = 'unsubscribe_token')
+      ALTER TABLE dbo.outreach_messages ADD unsubscribe_token UNIQUEIDENTIFIER NULL`,
+
+    // feed_posts — newsfeed (migration 012)
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'feed_posts' AND schema_id = SCHEMA_ID('dbo'))
+    BEGIN
+      CREATE TABLE dbo.feed_posts (
+        id              UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+        created_by      UNIQUEIDENTIFIER NOT NULL,
+        title           NVARCHAR(300)    NULL,
+        body_html       NVARCHAR(MAX)    NOT NULL,
+        audience        NVARCHAR(30)     NOT NULL DEFAULT 'all',
+        audience_json   NVARCHAR(MAX)    NULL,
+        sport_id        UNIQUEIDENTIFIER NULL REFERENCES dbo.sports(id),
+        is_pinned       BIT              NOT NULL DEFAULT 0,
+        is_welcome_post BIT              NOT NULL DEFAULT 0,
+        campaign_id     UNIQUEIDENTIFIER NULL REFERENCES dbo.outreach_campaigns(id),
+        published_at    DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+        created_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+        updated_at      DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME()
+      );
+      CREATE INDEX idx_feed_posts_audience ON dbo.feed_posts(audience);
+      CREATE INDEX idx_feed_posts_sport    ON dbo.feed_posts(sport_id);
+      CREATE INDEX idx_feed_posts_pinned   ON dbo.feed_posts(is_pinned, published_at DESC);
+    END`,
+
+    // feed_post_reads — read receipts (migration 012)
+    `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'feed_post_reads' AND schema_id = SCHEMA_ID('dbo'))
+    BEGIN
+      CREATE TABLE dbo.feed_post_reads (
+        id      UNIQUEIDENTIFIER NOT NULL DEFAULT NEWID() PRIMARY KEY,
+        post_id UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.feed_posts(id) ON DELETE CASCADE,
+        user_id UNIQUEIDENTIFIER NOT NULL REFERENCES dbo.users(id),
+        read_at DATETIME2        NOT NULL DEFAULT SYSUTCDATETIME(),
+        CONSTRAINT uq_post_read UNIQUE (post_id, user_id)
+      );
+      CREATE INDEX idx_feed_reads_post ON dbo.feed_post_reads(post_id);
+      CREATE INDEX idx_feed_reads_user ON dbo.feed_post_reads(user_id);
+    END`,
+
     // migration_history — column name MUST be migration_name to match ll-db-deploy tool
     `IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'migration_history' AND schema_id = SCHEMA_ID('dbo'))
     BEGIN
@@ -676,7 +776,8 @@ async function applyAppDbSchema(pool: mssql.ConnectionPool): Promise<void> {
         ('008_consolidate_dbo_schema.sql'),
         ('009_users_status_consolidation.sql'),
         ('010_campaign_completed_at.sql'),
-        ('011_drop_current_country.sql');
+        ('011_drop_current_country.sql'),
+        ('012_email_infrastructure.sql');
     END`,
 
     // sp_GetSports — needed by GET /sports on app-api

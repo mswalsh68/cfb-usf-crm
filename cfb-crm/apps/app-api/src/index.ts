@@ -72,11 +72,36 @@ const logInteractionSchema = z.object({
 
 const createCampaignSchema = z.object({
   name:            z.string().min(1),
-  targetAudience:  z.enum(['all', 'byClass', 'byPosition', 'byStatus', 'custom']),
+  targetAudience:  z.enum(['all', 'players_only', 'alumni_only', 'byClass', 'byPosition', 'byGradYear', 'custom']),
   description:     z.string().nullable().optional(),
   audienceFilters: z.record(z.unknown()).nullable().optional(),
   scheduledAt:     z.string().datetime({ offset: true }).nullable().optional(),
+  subjectLine:     z.string().max(500).nullable().optional(),
+  bodyHtml:        z.string().nullable().optional(),
+  fromName:        z.string().max(200).nullable().optional(),
+  replyToEmail:    z.string().email().nullable().optional(),
+  physicalAddress: z.string().max(500).nullable().optional(),
+}).refine(d => !d.subjectLine || !!d.bodyHtml, {
+  message: 'bodyHtml is required when subjectLine is provided',
+  path: ['bodyHtml'],
 });
+
+const createPostSchema = z.object({
+  title:        z.string().max(300).optional(),
+  bodyHtml:     z.string().min(1),
+  audience:     z.enum(['all', 'players_only', 'alumni_only', 'by_position', 'by_grad_year', 'custom']),
+  audienceJson: z.record(z.unknown()).optional(),
+  sportId:      z.string().uuid().optional(),
+  isPinned:     z.boolean().optional().default(false),
+  alsoEmail:    z.boolean().optional().default(false),
+  emailSubject: z.string().max(500).optional(),
+}).refine(d => !d.alsoEmail || !!d.emailSubject, {
+  message: 'emailSubject is required when alsoEmail is true',
+  path: ['emailSubject'],
+});
+
+const unsubscribeSchema = z.object({ token: z.string().uuid() });
+const markOpenedSchema  = z.object({ messageId: z.string().uuid() });
 
 function validate<T>(schema: z.ZodType<T>, body: unknown, res: express.Response): T | null {
   const result = schema.safeParse(body);
@@ -189,6 +214,21 @@ function alumniWrite(req: express.Request, res: express.Response, next: express.
 function alumniAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const role = req.user ? getAppRole(req.user, 'alumni') : null;
   if (!isAdmin(role)) return res.status(403).json({ success: false, error: 'Admin access required' });
+  next();
+}
+
+// ─── Feed access guards ───────────────────────────────────────
+// Feed is accessible to anyone with roster OR alumni app access
+function feedAccess(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!req.user || (!hasAppAccess(req.user, 'roster') && !hasAppAccess(req.user, 'alumni')))
+    return res.status(403).json({ success: false, error: 'Feed access required' });
+  next();
+}
+function feedWrite(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const rosterRole = req.user ? getAppRole(req.user, 'roster') : null;
+  const alumniRole = req.user ? getAppRole(req.user, 'alumni') : null;
+  if (!canWrite(rosterRole) && !canWrite(alumniRole))
+    return res.status(403).json({ success: false, error: 'Write access required' });
   next();
 }
 
@@ -641,6 +681,108 @@ app.post('/alumni/bulk', auth, alumniAccess, alumniWrite, async (req, res) => {
 });
 
 // ══════════════════════════════════════════════════════════════
+// FEED ROUTES
+// ══════════════════════════════════════════════════════════════
+
+// GET /feed
+app.get('/feed', auth, feedAccess, async (req, res) => {
+  try {
+    const db   = appDb(req.user!);
+    const page = parsePage(req.query.page as string);
+    const pageSize = parsePageSize(req.query.pageSize as string);
+    const sportId  = (req.query.sportId as string) || null;
+    const { rows, output } = await db.execute(
+      'dbo.sp_GetFeed',
+      {
+        ViewerUserId: req.user!.sub,
+        SportId:      sportId,
+        Page:         page,
+        PageSize:     pageSize,
+        ...reqCtx(req),
+      },
+      { TotalCount: 'int' }
+    );
+    return res.json({ success: true, data: rows, total: output.TotalCount, page, pageSize });
+  } catch (err) { console.error('[GET /feed]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// POST /feed
+app.post('/feed', auth, feedAccess, feedWrite, async (req, res) => {
+  const body = validate(createPostSchema, req.body, res);
+  if (!body) return;
+  try {
+    const db = appDb(req.user!);
+    const { output } = await db.execute(
+      'dbo.sp_CreatePost',
+      {
+        CreatedBy:    req.user!.sub,
+        BodyHtml:     body.bodyHtml,
+        Audience:     body.audience,
+        Title:        body.title        ?? null,
+        AudienceJson: body.audienceJson ? JSON.stringify(body.audienceJson) : null,
+        SportId:      body.sportId      ?? null,
+        IsPinned:     body.isPinned     ?? false,
+        AlsoEmail:    body.alsoEmail    ?? false,
+        EmailSubject: body.emailSubject ?? null,
+        ...reqCtx(req),
+      },
+      { NewPostId: 'uniqueidentifier', CampaignId: 'uniqueidentifier', ErrorCode: 'nvarchar50' }
+    );
+    if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
+
+    // If alsoEmail + campaign was created, dispatch immediately
+    if (body.alsoEmail && output.CampaignId) {
+      try {
+        await dispatchCampaign(req.user!, output.CampaignId as string);
+      } catch (emailErr) {
+        console.error('[POST /feed] email dispatch failed (post created):', emailErr);
+        // Post is created; email failure is non-fatal but logged
+      }
+    }
+
+    return res.status(201).json({ success: true, data: { postId: output.NewPostId, campaignId: output.CampaignId } });
+  } catch (err) { console.error('[POST /feed]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// GET /feed/:id
+app.get('/feed/:id', auth, feedAccess, async (req, res) => {
+  try {
+    const db = appDb(req.user!);
+    const { rows, output } = await db.execute(
+      'dbo.sp_GetFeedPost',
+      { PostId: req.params.id, ViewerUserId: req.user!.sub, ...reqCtx(req) },
+      { ErrorCode: 'nvarchar50' }
+    );
+    if (output.ErrorCode) return res.status(404).json({ success: false, error: output.ErrorCode });
+    if (!rows.length)     return res.status(404).json({ success: false, error: 'NOT_FOUND' });
+    return res.json({ success: true, data: rows[0] });
+  } catch (err) { console.error('[GET /feed/:id]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// POST /feed/:id/read
+app.post('/feed/:id/read', auth, feedAccess, async (req, res) => {
+  try {
+    const db = appDb(req.user!);
+    await db.execute('dbo.sp_MarkPostRead', { PostId: req.params.id, UserId: req.user!.sub });
+    return res.status(202).json({ success: true });
+  } catch (err) { console.error('[POST /feed/:id/read]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// GET /feed/:id/stats  (admin/writer only)
+app.get('/feed/:id/stats', auth, feedAccess, feedWrite, async (req, res) => {
+  try {
+    const db = appDb(req.user!);
+    const { rows, output } = await db.execute(
+      'dbo.sp_GetPostReadStats',
+      { PostId: req.params.id, ...reqCtx(req) },
+      { ErrorCode: 'nvarchar50' }
+    );
+    if (output.ErrorCode) return res.status(404).json({ success: false, error: output.ErrorCode });
+    return res.json({ success: true, data: rows[0] });
+  } catch (err) { console.error('[GET /feed/:id/stats]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// ══════════════════════════════════════════════════════════════
 // CAMPAIGNS & STATS
 // ══════════════════════════════════════════════════════════════
 
@@ -667,6 +809,11 @@ app.post('/campaigns', auth, alumniAccess, alumniAdmin, async (req, res) => {
         TargetAudience:  body.targetAudience,
         AudienceFilters: body.audienceFilters ? JSON.stringify(body.audienceFilters) : null,
         ScheduledAt:     body.scheduledAt ? new Date(body.scheduledAt) : null,
+        SubjectLine:     body.subjectLine     ?? null,
+        BodyHtml:        body.bodyHtml        ?? null,
+        FromName:        body.fromName        ?? null,
+        ReplyToEmail:    body.replyToEmail    ?? null,
+        PhysicalAddress: body.physicalAddress ?? null,
         CreatedBy:       req.user!.sub,
         ...reqCtx(req),
       },
@@ -675,6 +822,120 @@ app.post('/campaigns', auth, alumniAccess, alumniAdmin, async (req, res) => {
     if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
     return res.status(201).json({ success: true, data: { id: output.NewCampaignId } });
   } catch (err) { console.error('[POST /campaigns]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// ─── Campaign dispatch helper ─────────────────────────────────
+// Shared by POST /campaigns/:id/dispatch and POST /feed (alsoEmail)
+async function dispatchCampaign(user: import('@cfb-crm/types').AuthTokenPayload, campaignId: string): Promise<void> {
+  const db = appDb(user);
+
+  // Read send limits from GlobalDB via env-configured connection
+  // For now, use conservative defaults; extend with GlobalDB lookup when needed
+  const dailyRemaining   = parseInt(process.env.EMAIL_DAILY_LIMIT   ?? '500');
+  const monthlyRemaining = parseInt(process.env.EMAIL_MONTHLY_LIMIT ?? '5000');
+
+  const { rows: queuedRows, output: dispatchOutput } = await db.execute(
+    'dbo.sp_DispatchEmailCampaign',
+    {
+      CampaignId:       campaignId,
+      DailyRemaining:   dailyRemaining,
+      MonthlyRemaining: monthlyRemaining,
+      RequestingUserId:   user.sub,
+      RequestingUserRole: user.globalRole || '',
+    },
+    { QueuedCount: 'int', ErrorCode: 'nvarchar50' }
+  );
+
+  if (dispatchOutput.ErrorCode) {
+    throw new Error(dispatchOutput.ErrorCode as string);
+  }
+
+  const messages = queuedRows as Array<{
+    messageId: string; userId: string; firstName: string;
+    emailAddress: string; unsubscribeToken: string;
+  }>;
+
+  if (!messages.length) return;
+
+  const { sendBulkEmail } = await import('./lib/emailProvider');
+
+  const fromName    = process.env.EMAIL_FROM_NAME    ?? 'Team Portal';
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS ?? 'noreply@example.com';
+  const physAddr    = process.env.EMAIL_PHYSICAL_ADDRESS ?? '123 Main St, City, ST 00000';
+
+  // Get subject and body from campaign record for this batch
+  const { rows: campaignRows } = await db.execute(
+    'dbo.sp_GetCampaignDetail',
+    { CampaignId: campaignId, RequestingUserId: user.sub, RequestingUserRole: user.globalRole || '' },
+    { ErrorCode: 'nvarchar50' }
+  );
+  const campaign = campaignRows[0] as { subjectLine?: string; bodyHtml?: string } | undefined;
+
+  const emailPayloads = messages.map(m => ({
+    messageId:        m.messageId,
+    to:               m.emailAddress,
+    firstName:        m.firstName,
+    fromName,
+    fromAddress,
+    subject:          campaign?.subjectLine ?? '(no subject)',
+    htmlBody:         campaign?.bodyHtml    ?? '',
+    unsubscribeToken: m.unsubscribeToken,
+    physicalAddress:  physAddr,
+  }));
+
+  const results = await sendBulkEmail(emailPayloads);
+  const sentIds = results.filter(r => r.success).map(r => r.messageId);
+
+  if (sentIds.length > 0) {
+    await db.execute(
+      'dbo.sp_MarkEmailSent',
+      { MessageIdsJson: JSON.stringify(sentIds) },
+      { ErrorCode: 'nvarchar50' }
+    );
+  }
+}
+
+// GET /campaigns/:id
+app.get('/campaigns/:id', auth, alumniAccess, async (req, res) => {
+  try {
+    const db = appDb(req.user!);
+    const { rows, output } = await db.execute(
+      'dbo.sp_GetCampaignDetail',
+      { CampaignId: req.params.id, ...reqCtx(req) },
+      { ErrorCode: 'nvarchar50' }
+    );
+    if (output.ErrorCode) return res.status(404).json({ success: false, error: output.ErrorCode });
+    if (!rows.length)     return res.status(404).json({ success: false, error: 'NOT_FOUND' });
+    return res.json({ success: true, data: rows[0] });
+  } catch (err) { console.error('[GET /campaigns/:id]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// POST /campaigns/:id/dispatch
+app.post('/campaigns/:id/dispatch', auth, alumniAccess, alumniAdmin, async (req, res) => {
+  try {
+    await dispatchCampaign(req.user!, req.params.id);
+    return res.json({ success: true, message: 'Campaign dispatched' });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Server error';
+    const status = ['CAMPAIGN_NOT_FOUND','INVALID_CAMPAIGN_STATUS','NO_ELIGIBLE_RECIPIENTS',
+                    'DAILY_LIMIT_EXCEEDED','MONTHLY_LIMIT_EXCEEDED'].includes(msg) ? 400 : 500;
+    console.error('[POST /campaigns/:id/dispatch]', err);
+    return res.status(status).json({ success: false, error: msg });
+  }
+});
+
+// POST /campaigns/:id/cancel
+app.post('/campaigns/:id/cancel', auth, alumniAccess, alumniAdmin, async (req, res) => {
+  try {
+    const db = appDb(req.user!);
+    const { output } = await db.execute(
+      'dbo.sp_CancelCampaign',
+      { CampaignId: req.params.id, ...reqCtx(req) },
+      { ErrorCode: 'nvarchar50' }
+    );
+    if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
+    return res.json({ success: true, message: 'Campaign cancelled' });
+  } catch (err) { console.error('[POST /campaigns/:id/cancel]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // GET /stats
@@ -686,6 +947,70 @@ app.get('/stats', auth, alumniAccess, async (req, res) => {
     if (row?.classCounts) row.classCounts = JSON.parse(row.classCounts as string);
     return res.json({ success: true, data: row });
   } catch (err) { console.error('[GET /stats]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// ══════════════════════════════════════════════════════════════
+// PUBLIC ENDPOINTS (no auth)
+// ══════════════════════════════════════════════════════════════
+
+// POST /unsubscribe — CAN-SPAM opt-out, public (no JWT required)
+app.post('/unsubscribe', async (req, res) => {
+  const body = validate(unsubscribeSchema, req.body, res);
+  if (!body) return;
+  // We need a DB connection but have no user context — use health DB to
+  // get the server, then use any known AppDB? The unsubscribe token lives in
+  // a specific tenant's AppDB. We handle this by accepting an optional
+  // appDb header or reading it from the token lookup across all DBs.
+  // For v1: require the tenant's appDb name as a query param or body field.
+  // The unsubscribe URL is constructed as: /unsubscribe?token=X&db=DevLegacyLinkApp
+  const appDbName = (req.query.db as string) || (req.body.db as string);
+  if (!appDbName || !/^[A-Za-z][A-Za-z0-9_]{0,149}$/.test(appDbName)) {
+    return res.status(400).json({ success: false, error: 'db parameter required' });
+  }
+  try {
+    const db = createExecutor({
+      server:    process.env.DB_SERVER!,
+      database:  appDbName,
+      user:      process.env.DB_USER,
+      password:  process.env.DB_PASS,
+      encrypt:   process.env.DB_ENCRYPT === 'true',
+      trustCert: process.env.DB_TRUST_CERT === 'true',
+    });
+    const { rows, output } = await db.execute(
+      'dbo.sp_ProcessUnsubscribe',
+      { Token: body.token },
+      { ErrorCode: 'nvarchar50' }
+    );
+    if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
+    return res.json({ success: true, data: rows[0] ?? null });
+  } catch (err) { console.error('[POST /unsubscribe]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
+});
+
+// POST /email/opened — tracking pixel webhook, public
+app.post('/email/opened', async (req, res) => {
+  const body = validate(markOpenedSchema, req.body, res);
+  if (!body) return;
+  const appDbName = (req.query.db as string) || (req.body.db as string);
+  if (!appDbName || !/^[A-Za-z][A-Za-z0-9_]{0,149}$/.test(appDbName)) {
+    return res.status(400).json({ success: false, error: 'db parameter required' });
+  }
+  try {
+    const db = createExecutor({
+      server:    process.env.DB_SERVER!,
+      database:  appDbName,
+      user:      process.env.DB_USER,
+      password:  process.env.DB_PASS,
+      encrypt:   process.env.DB_ENCRYPT === 'true',
+      trustCert: process.env.DB_TRUST_CERT === 'true',
+    });
+    const { output } = await db.execute(
+      'dbo.sp_MarkEmailOpened',
+      { MessageId: body.messageId },
+      { ErrorCode: 'nvarchar50' }
+    );
+    if (output.ErrorCode) return res.status(400).json({ success: false, error: output.ErrorCode });
+    return res.json({ success: true });
+  } catch (err) { console.error('[POST /email/opened]', err); return res.status(500).json({ success: false, error: 'Server error' }); }
 });
 
 // ══════════════════════════════════════════════════════════════
