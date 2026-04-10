@@ -3,7 +3,7 @@
 -- Run against: CfbGlobal. Safe to run twice (idempotent).
 -- ============================================================
 
-USE CfbGlobal;
+USE LegacyLinkGlobal;
 GO
 
 -- ADMIN: Set these before running
